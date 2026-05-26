@@ -412,7 +412,186 @@ function PlayerSpot({ pos, player, onClick, isDragOver, onDragOver, onDragLeave,
 }
 
 // ─── MAIN APP (after login) ───────────────────────────────────────────────────
-function MainApp({ user, isAdmin, onLogout }) {
+// ─── ADMIN TEAM EDITOR ────────────────────────────────────────────────────────
+function AdminTeamEditor({ teamData, allFormations, onClose }) {
+  const [showAddPlayer, setShowAddPlayer] = useState(false);
+  const [pickModal, setPickModal] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [localData, setLocalData] = useState(teamData);
+  const dragSubIdx = useRef(null);
+  const [dragOverPos, setDragOverPos] = useState(null);
+
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, "teams", teamData.uid), snap => {
+      if (snap.exists()) setLocalData({ uid: snap.id, ...snap.data() });
+    });
+    return unsub;
+  }, [teamData.uid]);
+
+  const saveTeamField = async (patch) => {
+    setSaving(true);
+    await updateDoc(doc(db, "teams", localData.uid), patch);
+    setSaving(false);
+  };
+
+  const lineup = localData.lineups?.[0] || { formation:"4-3-3", starters:{}, subs:Array(7).fill(null) };
+  const squad = localData.squad || [];
+  const positions = allFormations[lineup.formation] || allFormations["4-3-3"];
+
+  const updateLineup = async (fn) => {
+    const nl = (localData.lineups||[]).map((l,i) => i===0 ? {...l,...fn(l)} : l);
+    if (!nl.length) nl.push({ id:"a", name:"Alineación A", formation:"4-3-3", starters:{}, subs:Array(7).fill(null) });
+    await saveTeamField({ lineups: nl });
+  };
+
+  const handlePick = async (player) => {
+    if (!pickModal) return;
+    if (pickModal.type==="starter") await updateLineup(l=>({starters:{...l.starters,[pickModal.posId]:player}}));
+    else await updateLineup(l=>{const s=[...l.subs];s[pickModal.subIdx]=player;return{subs:s};});
+    setPickModal(null);
+  };
+
+  const handleDrop = async (posId) => {
+    if (dragSubIdx.current===null) return;
+    const idx=dragSubIdx.current;
+    await updateLineup(l=>{const sub=l.subs[idx];if(!sub) return l;const evicted=l.starters[posId]||null;const s=[...l.subs];s[idx]=evicted;return{starters:{...l.starters,[posId]:sub},subs:s};});
+    dragSubIdx.current=null; setDragOverPos(null);
+  };
+
+  return (
+    <div style={{ marginTop:12, background:C.card, border:`2px solid ${C.accent}`, borderRadius:14, overflow:"hidden" }}>
+      <div style={{ padding:"11px 14px", borderBottom:`1px solid ${C.border}`, display:"flex", alignItems:"center", gap:10, background:C.accentLight }}>
+        <div style={{ width:3,height:16,background:C.accent,borderRadius:2 }}/>
+        <span style={{ fontSize:14,fontWeight:800,color:C.text,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1 }}>{localData.teamName}</span>
+        {saving&&<span style={{ fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif" }}>Guardando…</span>}
+        <div style={{ marginLeft:"auto", display:"flex", gap:5, flexWrap:"wrap" }}>
+          {Object.keys(allFormations).map(f=>(
+            <button key={f} onClick={()=>updateLineup(()=>({formation:f,starters:{}}))}
+              style={{ padding:"3px 8px",borderRadius:6,border:`1.5px solid ${lineup.formation===f?C.accent:C.borderDark}`,background:lineup.formation===f?C.accent:C.inputBg,color:lineup.formation===f?"#fff":C.textMid,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"monospace" }}>
+              {f}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ padding:"12px 14px 14px", display:"flex", gap:14, flexWrap:"wrap" }}>
+        {/* Field */}
+        <div style={{ flex:"1 1 220px" }}>
+          <div style={{ position:"relative",width:"100%",paddingBottom:"133%",borderRadius:14,overflow:"hidden",boxShadow:"0 8px 24px rgba(0,0,0,0.12)" }}>
+            <div style={{ position:"absolute",inset:0,background:"linear-gradient(180deg,#1a5c2a 0%,#1e6b30 25%,#1a5c2a 50%,#1e6b30 75%,#1a5c2a 100%)" }}/>
+            <svg style={{ position:"absolute",top:0,left:0,width:"100%",height:"100%" }} viewBox="0 0 100 133" preserveAspectRatio="none">
+              {[0,1,2,3,4,5,6,7,8,9,10,11,12].map(i=><rect key={i} x="0" y={i*10.25} width="100" height="10.25" fill={i%2===0?"rgba(0,0,0,0.06)":"rgba(255,255,255,0.03)"}/>)}
+              <rect x="4" y="2.5" width="92" height="128" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="0.7"/>
+              <line x1="4" y1="66" x2="96" y2="66" stroke="rgba(255,255,255,0.5)" strokeWidth="0.7"/>
+              <circle cx="50" cy="66" r="13" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="0.7"/>
+              <circle cx="50" cy="66" r="1" fill="rgba(255,255,255,0.6)"/>
+              <rect x="22" y="2.5" width="56" height="20" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="0.6"/>
+              <rect x="22" y="110.5" width="56" height="20" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="0.6"/>
+            </svg>
+            {positions.map(pos=>(
+              <div key={pos.id}
+                style={{ position:"absolute",left:`${pos.x}%`,top:`${pos.y}%`,transform:"translate(-50%,-50%)",zIndex:10,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:4 }}
+                onDragOver={e=>{e.preventDefault();setDragOverPos(pos.id);}}
+                onDragLeave={()=>setDragOverPos(null)}
+                onDrop={e=>{e.preventDefault();handleDrop(pos.id);}}
+                onClick={()=>setPickModal({type:"starter",posId:pos.id,posLabel:pos.label})}>
+                {lineup.starters?.[pos.id] ? (
+                  <>
+                    <Avatar name={lineup.starters[pos.id].name} nat={lineup.starters[pos.id].nat} size={46}/>
+                    <div style={{ background:"rgba(44,31,14,0.75)",borderRadius:6,padding:"2px 7px",textAlign:"center",maxWidth:76 }}>
+                      <div style={{ color:"#fff",fontSize:8.5,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontFamily:"'Bebas Neue',sans-serif" }}>{lineup.starters[pos.id].name.split(" ").slice(-1)[0].toUpperCase()}</div>
+                      <div style={{ color:"#e8c87a",fontSize:7,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontFamily:"'DM Sans',sans-serif" }}>{lineup.starters[pos.id].role}</div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ width:46,height:46,borderRadius:"50%",border:`2px dashed ${dragOverPos===pos.id?"rgba(122,92,56,0.8)":"rgba(255,255,255,0.5)"}`,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(255,255,255,0.1)",transform:dragOverPos===pos.id?"scale(1.1)":"scale(1)",transition:"all .2s" }}>
+                      <span style={{ color:"rgba(255,255,255,0.6)",fontSize:18 }}>+</span>
+                    </div>
+                    <span style={{ color:"rgba(255,255,255,0.5)",fontSize:8.5,fontWeight:700,fontFamily:"'Bebas Neue',sans-serif" }}>{pos.label}</span>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Right: bench + squad */}
+        <div style={{ flex:"0 0 175px",minWidth:160,display:"flex",flexDirection:"column",gap:10 }}>
+          {/* Bench */}
+          <div style={{ background:"#f5f0e8",border:`1px solid ${C.border}`,borderRadius:12,padding:"11px 10px 12px" }}>
+            <div style={{ display:"flex",alignItems:"center",gap:6,marginBottom:9 }}>
+              <div style={{ width:3,height:13,background:C.accent,borderRadius:2 }}/>
+              <span style={{ fontSize:11,fontWeight:800,color:C.text,textTransform:"uppercase",letterSpacing:1,fontFamily:"'Bebas Neue',sans-serif" }}>BANCA</span>
+              <span style={{ marginLeft:"auto",fontSize:9,color:C.accent,fontFamily:"monospace" }}>{(lineup.subs||[]).filter(Boolean).length}/7</span>
+            </div>
+            <div style={{ display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:5 }}>
+              {(lineup.subs||Array(7).fill(null)).map((sub,i)=>(
+                <div key={i} draggable={!!sub} onDragStart={()=>{dragSubIdx.current=i;}}
+                  onClick={()=>setPickModal({type:"sub",subIdx:i,posLabel:`Suplente ${i+1}`})}
+                  style={{ display:"flex",flexDirection:"column",alignItems:"center",background:sub?C.inputBg:C.bg,border:`1px solid ${sub?C.borderDark:C.border}`,borderRadius:8,padding:"6px 2px 5px",cursor:"pointer",gap:3 }}
+                  onMouseEnter={e=>{e.currentTarget.style.borderColor=C.accent;}}
+                  onMouseLeave={e=>{e.currentTarget.style.borderColor=sub?C.borderDark:C.border;}}>
+                  {sub ? (
+                    <>
+                      <div style={{ position:"relative",display:"flex",justifyContent:"center",width:"100%" }}>
+                        <div style={{ width:28,height:28,borderRadius:"50%",background:`linear-gradient(135deg,${C.accent},#3a2010)`,border:"2px solid rgba(255,255,255,0.9)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center" }}>
+                          <span style={{ fontSize:7.5,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif" }}>{sub.name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()}</span>
+                          <span style={{ fontSize:7,lineHeight:1 }}>{sub.nat}</span>
+                        </div>
+                        <div style={{ position:"absolute",bottom:-4,left:"50%",transform:"translateX(-50%)",background:C.accent,borderRadius:3,padding:"0 3px" }}>
+                          <span style={{ fontSize:5.5,fontWeight:900,color:"#fff",fontFamily:"monospace" }}>{sub.pos}</span>
+                        </div>
+                      </div>
+                      <div style={{ textAlign:"center",width:"100%",paddingTop:4 }}>
+                        <div style={{ fontSize:6.5,fontWeight:800,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"'Bebas Neue',sans-serif" }}>{sub.name.split(" ").slice(-1)[0].toUpperCase()}</div>
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ width:28,height:28,borderRadius:"50%",border:`1.5px dashed ${C.borderDark}`,display:"flex",alignItems:"center",justifyContent:"center" }}>
+                      <span style={{ color:C.borderDark,fontSize:14 }}>+</span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Squad */}
+          <div style={{ background:"#f5f0e8",border:`1px solid ${C.border}`,borderRadius:12,padding:"11px 10px 12px" }}>
+            <div style={{ display:"flex",alignItems:"center",gap:6,marginBottom:8 }}>
+              <div style={{ width:3,height:13,background:C.borderDark,borderRadius:2 }}/>
+              <span style={{ fontSize:10,fontWeight:800,color:C.textLight,textTransform:"uppercase",letterSpacing:0.5,fontFamily:"'Bebas Neue',sans-serif" }}>PLANTILLA</span>
+              <span style={{ marginLeft:"auto",fontSize:9,color:C.textFaint,fontFamily:"monospace" }}>{squad.length}/26</span>
+            </div>
+            <button onClick={()=>setShowAddPlayer(true)}
+              style={{ width:"100%",padding:"6px",background:C.accent,color:"#fff",border:"none",borderRadius:7,fontSize:11,fontWeight:700,cursor:"pointer",marginBottom:7,fontFamily:"'DM Sans',sans-serif" }}>
+              + Agregar jugador
+            </button>
+            <div style={{ maxHeight:160,overflowY:"auto",display:"flex",flexDirection:"column",gap:3 }}>
+              {squad.map(p=>(
+                <div key={p.id} style={{ display:"flex",alignItems:"center",gap:5,padding:"4px 6px",borderRadius:6,background:C.inputBg }}>
+                  <span style={{ fontSize:11 }}>{p.nat}</span>
+                  <div style={{ flex:1,minWidth:0 }}>
+                    <div style={{ fontSize:10,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"'DM Sans',sans-serif" }}>{p.name}</div>
+                    <div style={{ fontSize:7.5,color:C.textLight,fontFamily:"monospace" }}>{p.pos}</div>
+                  </div>
+                  <button onClick={async()=>{const ns=squad.filter(s=>s.id!==p.id);await saveTeamField({squad:ns});}}
+                    style={{ background:"none",border:"none",color:"#ffaaaa",cursor:"pointer",fontSize:13,padding:0,flexShrink:0 }}>✕</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {showAddPlayer&&<AddPlayerModal currentCount={squad.length} onAdd={async p=>{await saveTeamField({squad:[...squad,p]});setShowAddPlayer(false);}} onClose={()=>setShowAddPlayer(false)}/>}
+      {pickModal&&<PickFromSquad squad={squad} posLabel={pickModal.posLabel} onPick={handlePick} onClose={()=>setPickModal(null)}/>}
+    </div>
+  );
+}
+
+// ─── MAIN APP ─────────────────────────────────────────────────────────────────
   const [teamData, setTeamData] = useState(null);
   const [allTeams, setAllTeams] = useState([]);
   const [viewingTeam, setViewingTeam] = useState(null); // admin: team being viewed
@@ -540,9 +719,8 @@ function MainApp({ user, isAdmin, onLogout }) {
         <span style={{ fontSize:20 }}>⚽</span>
         {viewingTeam ? (
           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-            <button onClick={() => setViewingTeam(null)} style={{ background:C.inputBg, border:`1px solid ${C.border}`, borderRadius:7, padding:"4px 10px", color:C.textMid, fontSize:11, cursor:"pointer", fontFamily:"'DM Sans',sans-serif" }}>← Volver</button>
             <h1 style={{ fontSize:15, fontWeight:800, color:C.text, margin:0, fontFamily:"'Bebas Neue',sans-serif", letterSpacing:1 }}>{viewingTeam.teamName}</h1>
-            <span style={{ fontSize:10, background:C.accentLight, color:C.accent, padding:"2px 7px", borderRadius:10, fontWeight:700, fontFamily:"'DM Sans',sans-serif" }}>Solo lectura</span>
+            <span style={{ fontSize:10, background:C.accentLight, color:C.accent, padding:"2px 7px", borderRadius:10, fontWeight:700, fontFamily:"'DM Sans',sans-serif" }}>Admin editando</span>
           </div>
         ) : (
           <h1 style={{ fontSize:17, fontWeight:800, color:C.text, margin:0, letterSpacing:1, fontFamily:"'Bebas Neue',sans-serif" }}>
@@ -574,8 +752,8 @@ function MainApp({ user, isAdmin, onLogout }) {
         </div>
       </div>
 
-      {/* ADMIN: team list */}
-      {isAdmin && !viewingTeam && (
+      {/* ADMIN: team list + edit */}
+      {isAdmin && (
         <div style={{ width:"100%", maxWidth:680, padding:"10px 16px 0" }}>
           <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:12, padding:"12px 14px" }}>
             <div style={{ fontSize:11, fontWeight:700, color:C.textLight, textTransform:"uppercase", letterSpacing:0.5, marginBottom:10, fontFamily:"'DM Sans',sans-serif" }}>
@@ -583,15 +761,24 @@ function MainApp({ user, isAdmin, onLogout }) {
             </div>
             <div style={{ display:"flex", gap:7, flexWrap:"wrap" }}>
               {allTeams.filter(t=>t.uid!==user.uid).map(t=>(
-                <button key={t.id} onClick={()=>setViewingTeam(t)}
-                  style={{ padding:"6px 13px", borderRadius:8, border:`1px solid ${C.borderDark}`, background:C.inputBg, color:C.textMid, fontSize:11, fontWeight:700, cursor:"pointer", fontFamily:"'DM Sans',sans-serif", display:"flex", alignItems:"center", gap:6 }}>
+                <button key={t.id} onClick={()=>setViewingTeam(viewingTeam?.uid===t.uid ? null : t)}
+                  style={{ padding:"6px 13px", borderRadius:8, border:`1.5px solid ${viewingTeam?.uid===t.uid?C.accent:C.borderDark}`, background:viewingTeam?.uid===t.uid?C.accent:C.inputBg, color:viewingTeam?.uid===t.uid?"#fff":C.textMid, fontSize:11, fontWeight:700, cursor:"pointer", fontFamily:"'DM Sans',sans-serif", display:"flex", alignItems:"center", gap:6 }}>
                   ⚽ {t.teamName}
-                  <span style={{ fontSize:9, color:C.textFaint }}>{(t.squad||[]).length} jug.</span>
+                  <span style={{ fontSize:9, color:viewingTeam?.uid===t.uid?"rgba(255,255,255,0.7)":C.textFaint }}>{(t.squad||[]).length} jug.</span>
                 </button>
               ))}
               {allTeams.filter(t=>t.uid!==user.uid).length===0&&<span style={{ fontSize:12, color:C.textFaint, fontFamily:"'DM Sans',sans-serif" }}>Aún no hay otros equipos registrados.</span>}
             </div>
           </div>
+
+          {/* Admin editing another team */}
+          {viewingTeam && (
+            <AdminTeamEditor
+              teamData={viewingTeam}
+              allFormations={allFormations}
+              onClose={()=>setViewingTeam(null)}
+            />
+          )}
         </div>
       )}
 
