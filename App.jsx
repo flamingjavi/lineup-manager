@@ -355,19 +355,19 @@ function PlayerSpot({pos,player,readOnly,onClick,onRemove,isDragOver,onDragOver,
           <div style={{position:"relative"}}
             draggable={!readOnly}
             onDragStart={readOnly?undefined:e=>{e.stopPropagation();onDragStart&&onDragStart(pos.id);}}>
-            <div onClick={readOnly?undefined:()=>setShowMenu(v=>!v)}>
+            <div onClick={readOnly?undefined:e=>{e.stopPropagation();setShowMenu(v=>!v);}}>
               <Avatar name={player.name} size={50}/>
               {isDragOver&&<div style={{position:"absolute",inset:-2,borderRadius:"50%",border:`2px dashed ${C.accent}`,pointerEvents:"none"}}/>}
             </div>
             {showMenu&&!readOnly&&(
-              <div style={{position:"absolute",top:"110%",left:"50%",transform:"translateX(-50%)",background:C.card,border:`1.5px solid ${C.accent}`,borderRadius:10,overflow:"hidden",boxShadow:"0 8px 24px rgba(0,0,0,0.2)",zIndex:50,minWidth:110}}>
-                <div onClick={()=>{setShowMenu(false);onClick(pos.id,pos.label);}}
-                  style={{padding:"9px 14px",fontSize:12,fontWeight:700,color:C.text,cursor:"pointer",borderBottom:`1px solid ${C.border}`,fontFamily:"'DM Sans',sans-serif"}}
+              <div style={{position:"absolute",top:"110%",left:"50%",transform:"translateX(-50%)",background:C.card,border:`1.5px solid ${C.accent}`,borderRadius:10,overflow:"hidden",boxShadow:"0 8px 24px rgba(0,0,0,0.2)",zIndex:50,minWidth:120}}>
+                <div onClick={e=>{e.stopPropagation();setShowMenu(false);onClick(pos.id,pos.label);}}
+                  style={{padding:"11px 16px",fontSize:13,fontWeight:700,color:C.text,cursor:"pointer",borderBottom:`1px solid ${C.border}`,fontFamily:"'DM Sans',sans-serif"}}
                   onMouseEnter={e=>e.currentTarget.style.background=C.inputBg} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
                   🔄 Cambiar
                 </div>
-                <div onClick={()=>{setShowMenu(false);onRemove(pos.id);}}
-                  style={{padding:"9px 14px",fontSize:12,fontWeight:700,color:"#c0392b",cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}
+                <div onClick={e=>{e.stopPropagation();setShowMenu(false);onRemove(pos.id);}}
+                  style={{padding:"11px 16px",fontSize:13,fontWeight:700,color:"#c0392b",cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}
                   onMouseEnter={e=>e.currentTarget.style.background="#fff5f5"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
                   ✕ Quitar
                 </div>
@@ -375,7 +375,7 @@ function PlayerSpot({pos,player,readOnly,onClick,onRemove,isDragOver,onDragOver,
             )}
           </div>
           <div style={{background:"rgba(26,20,8,0.78)",backdropFilter:"blur(4px)",borderRadius:7,padding:"3px 9px",textAlign:"center",maxWidth:84}}
-            onClick={readOnly?undefined:()=>setShowMenu(v=>!v)}>
+            onClick={readOnly?undefined:e=>{e.stopPropagation();setShowMenu(v=>!v);}}>
             <div style={{color:"#fff",fontSize:9,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",letterSpacing:0.3,fontFamily:"'Bebas Neue',sans-serif"}}>{player.name.split(" ").slice(-1)[0].toUpperCase()}</div>
             <div style={{color:C.gold,fontSize:7.5,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontFamily:"'DM Sans',sans-serif"}}>{player.pos}</div>
           </div>
@@ -795,29 +795,48 @@ function MainApp({user,isAdmin,onLogout}){
                   onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.borderDark}/>
               </div>
             </div>
-            <div onClick={()=>{setShowAddPlayer(true);setShowSettings(false);}}
-              style={{padding:"13px 16px",display:"flex",alignItems:"center",gap:12,cursor:"pointer"}}
-              onMouseEnter={e=>e.currentTarget.style.background=C.inputBg} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-              <span style={{fontSize:16}}>👥</span>
-              <div style={{flex:1}}>
-                <div style={{fontSize:13,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>Gestionar plantilla</div>
-                <div style={{fontSize:11,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{squad.length}/26 jugadores</div>
+            {/* Squad management inline */}
+            <div style={{padding:"12px 16px"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                <span style={{fontSize:14}}>👥</span>
+                <div style={{fontSize:13,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>Plantilla</div>
+                <span style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{squad.length}/26 jugadores</span>
+                <button onClick={()=>setShowAddPlayer(true)}
+                  style={{marginLeft:"auto",padding:"6px 13px",background:C.accent,color:"#fff",border:"none",borderRadius:8,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                  + Agregar
+                </button>
               </div>
-              <span style={{color:C.textFaint,fontSize:16}}>›</span>
+              <div style={{display:"flex",flexDirection:"column",gap:5,maxHeight:280,overflowY:"auto"}}>
+                {squad.length===0&&<div style={{textAlign:"center",color:C.textFaint,fontSize:12,padding:"16px 0",fontFamily:"'DM Sans',sans-serif"}}>No hay jugadores. Agrega desde el botón de arriba.</div>}
+                {squad.map(p=>(
+                  <div key={p.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",borderRadius:9,background:C.inputBg,border:`1px solid ${C.border}`}}>
+                    <Avatar name={p.name} size={34}/>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:12,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"'DM Sans',sans-serif"}}>{p.name}</div>
+                      <div style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{p.team||"—"} · <span style={{fontFamily:"monospace",color:C.accent,fontWeight:700}}>{p.pos}</span>{p.age?` · ${p.age}a`:""}</div>
+                    </div>
+                    <button onClick={async()=>{
+                      const ns=squad.filter(s=>s.id!==p.id);
+                      await saveTeam({squad:ns});
+                    }} style={{background:"none",border:"none",color:"#d4846a",cursor:"pointer",fontSize:16,padding:"4px",flexShrink:0,borderRadius:6}}
+                    onMouseEnter={e=>e.currentTarget.style.color="#c0392b"} onMouseLeave={e=>e.currentTarget.style.color="#d4846a"}>✕</button>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )}
 
         {/* FIELD + BENCH */}
         <div style={{paddingTop:12,display:"flex",gap:14,flexWrap:"wrap"}}>
-          <div style={{flex:"1 1 250px"}}>
+          <div style={{flex:"1 1 260px",minWidth:240}}>
             <Field positions={positions} lineup={activeLineup} readOnly={false}
               onClickPos={(id,label)=>setPickModal({type:"starter",posId:id,posLabel:label})}
               onRemovePos={handleRemovePos}
               dragOverPos={dragOverPos} onDragOver={setDragOverPos} onDragLeave={()=>setDragOverPos(null)} onDrop={handleDrop}
               onDragStartPos={posId=>{dragFromPosId.current=posId;dragSubIdx.current=null;}}/>
           </div>
-          <div style={{flex:"0 0 175px",minWidth:160}}>
+          <div style={{width:"100%",order:3}}>
             <Bench subs={activeLineup?.subs} readOnly={false}
               onClickSub={i=>setPickModal({type:"sub",subIdx:i,posLabel:`Suplente ${i+1}`})}
               onDragStart={i=>{dragSubIdx.current=i;dragFromPosId.current=null;}}/>
