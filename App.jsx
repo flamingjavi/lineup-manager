@@ -339,27 +339,47 @@ function PickFromSquad({squad,posLabel,onPick,onClose}){
 }
 
 // ─── PLAYER SPOT ──────────────────────────────────────────────────────────────
-function PlayerSpot({pos,player,readOnly,onClick,isDragOver,onDragOver,onDragLeave,onDrop}){
+function PlayerSpot({pos,player,readOnly,onClick,onRemove,isDragOver,onDragOver,onDragLeave,onDrop,onDragStart}){
+  const[showMenu,setShowMenu]=useState(false);
   return(
-    <div style={{position:"absolute",left:`${pos.x}%`,top:`${pos.y}%`,transform:"translate(-50%,-50%)",zIndex:10,cursor:readOnly?"default":"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:4}}
+    <div style={{position:"absolute",left:`${pos.x}%`,top:`${pos.y}%`,transform:"translate(-50%,-50%)",zIndex:showMenu?30:10,cursor:readOnly?"default":"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:4}}
       onDragOver={readOnly?undefined:e=>{e.preventDefault();onDragOver(pos.id);}}
       onDragLeave={readOnly?undefined:onDragLeave}
-      onDrop={readOnly?undefined:e=>{e.preventDefault();onDrop(pos.id);}}
-      onClick={readOnly?undefined:()=>onClick(pos.id,pos.label)}>
+      onDrop={readOnly?undefined:e=>{e.preventDefault();onDrop(pos.id);}}>
       {player?(
         <>
-          <div style={{position:"relative"}}>
-            <Avatar name={player.name} size={50}/>
-            {isDragOver&&<div style={{position:"absolute",inset:-2,borderRadius:"50%",border:`2px dashed ${C.accent}`,pointerEvents:"none"}}/>}
+          <div style={{position:"relative"}}
+            draggable={!readOnly}
+            onDragStart={readOnly?undefined:e=>{e.stopPropagation();onDragStart&&onDragStart(pos.id);}}>
+            <div onClick={readOnly?undefined:()=>setShowMenu(v=>!v)}>
+              <Avatar name={player.name} size={50}/>
+              {isDragOver&&<div style={{position:"absolute",inset:-2,borderRadius:"50%",border:`2px dashed ${C.accent}`,pointerEvents:"none"}}/>}
+            </div>
+            {showMenu&&!readOnly&&(
+              <div style={{position:"absolute",top:"110%",left:"50%",transform:"translateX(-50%)",background:C.card,border:`1.5px solid ${C.accent}`,borderRadius:10,overflow:"hidden",boxShadow:"0 8px 24px rgba(0,0,0,0.2)",zIndex:50,minWidth:110}}>
+                <div onClick={()=>{setShowMenu(false);onClick(pos.id,pos.label);}}
+                  style={{padding:"9px 14px",fontSize:12,fontWeight:700,color:C.text,cursor:"pointer",borderBottom:`1px solid ${C.border}`,fontFamily:"'DM Sans',sans-serif"}}
+                  onMouseEnter={e=>e.currentTarget.style.background=C.inputBg} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                  🔄 Cambiar
+                </div>
+                <div onClick={()=>{setShowMenu(false);onRemove(pos.id);}}
+                  style={{padding:"9px 14px",fontSize:12,fontWeight:700,color:"#c0392b",cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}
+                  onMouseEnter={e=>e.currentTarget.style.background="#fff5f5"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                  ✕ Quitar
+                </div>
+              </div>
+            )}
           </div>
-          <div style={{background:"rgba(26,20,8,0.78)",backdropFilter:"blur(4px)",borderRadius:7,padding:"3px 9px",textAlign:"center",maxWidth:84}}>
+          <div style={{background:"rgba(26,20,8,0.78)",backdropFilter:"blur(4px)",borderRadius:7,padding:"3px 9px",textAlign:"center",maxWidth:84}}
+            onClick={readOnly?undefined:()=>setShowMenu(v=>!v)}>
             <div style={{color:"#fff",fontSize:9,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",letterSpacing:0.3,fontFamily:"'Bebas Neue',sans-serif"}}>{player.name.split(" ").slice(-1)[0].toUpperCase()}</div>
             <div style={{color:C.gold,fontSize:7.5,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontFamily:"'DM Sans',sans-serif"}}>{player.pos}</div>
           </div>
         </>
       ):(
         <>
-          <div style={{width:50,height:50,borderRadius:"50%",border:`2px dashed ${readOnly?"rgba(255,255,255,0.2)":"rgba(255,255,255,0.55)"}`,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(255,255,255,0.08)",transition:"all .2s",transform:isDragOver?"scale(1.12)":"scale(1)"}}>
+          <div onClick={readOnly?undefined:()=>onClick(pos.id,pos.label)}
+            style={{width:50,height:50,borderRadius:"50%",border:`2px dashed ${readOnly?"rgba(255,255,255,0.2)":"rgba(255,255,255,0.55)"}`,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(255,255,255,0.08)",transition:"all .2s",transform:isDragOver?"scale(1.12)":"scale(1)"}}>
             {!readOnly&&<span style={{color:"rgba(255,255,255,0.65)",fontSize:20}}>+</span>}
           </div>
           <span style={{color:"rgba(255,255,255,0.55)",fontSize:9,fontWeight:700,letterSpacing:0.5,fontFamily:"'Bebas Neue',sans-serif"}}>{pos.label}</span>
@@ -370,7 +390,7 @@ function PlayerSpot({pos,player,readOnly,onClick,isDragOver,onDragOver,onDragLea
 }
 
 // ─── FIELD ────────────────────────────────────────────────────────────────────
-function Field({positions,lineup,readOnly,onClickPos,dragOverPos,onDragOver,onDragLeave,onDrop}){
+function Field({positions,lineup,readOnly,onClickPos,onRemovePos,dragOverPos,onDragOver,onDragLeave,onDrop,onDragStartPos}){
   return(
     <div style={{position:"relative",width:"100%",paddingBottom:"133%",borderRadius:16,overflow:"hidden",boxShadow:"0 16px 48px rgba(0,0,0,0.18)"}}>
       <div style={{position:"absolute",inset:0,background:"linear-gradient(180deg,#1a5c2a 0%,#1e6b30 25%,#1a5c2a 50%,#1e6b30 75%,#1a5c2a 100%)"}}/>
@@ -387,8 +407,13 @@ function Field({positions,lineup,readOnly,onClickPos,dragOverPos,onDragOver,onDr
       </svg>
       {positions.map(pos=>(
         <PlayerSpot key={pos.id} pos={pos} player={lineup?.starters?.[pos.id]} readOnly={readOnly}
-          onClick={onClickPos||(() =>{})} isDragOver={dragOverPos===pos.id}
-          onDragOver={onDragOver||(() =>{})} onDragLeave={onDragLeave||(() =>{})} onDrop={onDrop||(() =>{})}/>
+          onClick={onClickPos||(() =>{})}
+          onRemove={onRemovePos||(() =>{})}
+          isDragOver={dragOverPos===pos.id}
+          onDragOver={onDragOver||(() =>{})}
+          onDragLeave={onDragLeave||(() =>{})}
+          onDrop={onDrop||(() =>{})}
+          onDragStart={onDragStartPos||(() =>{})}/>
       ))}
       {readOnly&&<div style={{position:"absolute",top:8,right:8,background:"rgba(26,20,8,0.72)",color:C.gold,fontSize:9,fontWeight:700,padding:"3px 9px",borderRadius:8,fontFamily:"'DM Sans',sans-serif"}}>👁 Solo lectura</div>}
     </div>
@@ -554,9 +579,7 @@ function MainApp({user,isAdmin,onLogout}){
   const[saving,setSaving]=useState(false);
   const[saved,setSaved]=useState(false);
   const dragSubIdx=useRef(null);
-
-  useEffect(()=>{
-    const ref=doc(db,"teams",user.uid);
+  const dragFromPosId=useRef(null);
     const unsub=onSnapshot(ref,snap=>{
       if(snap.exists()) setTeamData(snap.data());
       else{
@@ -598,10 +621,28 @@ function MainApp({user,isAdmin,onLogout}){
   };
 
   const handleDrop=async posId=>{
+    // Field to field drag
+    if(dragFromPosId.current!==null){
+      const fromId=dragFromPosId.current;
+      dragFromPosId.current=null;
+      if(fromId===posId){setDragOverPos(null);return;}
+      await updateActive(l=>{
+        const fromPlayer=l.starters[fromId];
+        const toPlayer=l.starters[posId];
+        return{starters:{...l.starters,[posId]:fromPlayer,[fromId]:toPlayer||null}};
+      });
+      setDragOverPos(null);
+      return;
+    }
+    // Bench to field drag
     if(dragSubIdx.current===null) return;
     const idx=dragSubIdx.current;
     await updateActive(l=>{const sub=l.subs[idx];if(!sub) return l;const evicted=l.starters[posId]||null;const s=[...l.subs];s[idx]=evicted;return{starters:{...l.starters,[posId]:sub},subs:s};});
     dragSubIdx.current=null;setDragOverPos(null);
+  };
+
+  const handleRemovePos=async posId=>{
+    await updateActive(l=>{const s={...l.starters};delete s[posId];return{starters:s};});
   };
 
   const addLineup=async()=>{
@@ -729,7 +770,9 @@ function MainApp({user,isAdmin,onLogout}){
           <div style={{flex:"1 1 250px"}}>
             <Field positions={positions} lineup={activeLineup} readOnly={false}
               onClickPos={(id,label)=>setPickModal({type:"starter",posId:id,posLabel:label})}
-              dragOverPos={dragOverPos} onDragOver={setDragOverPos} onDragLeave={()=>setDragOverPos(null)} onDrop={handleDrop}/>
+              onRemovePos={handleRemovePos}
+              dragOverPos={dragOverPos} onDragOver={setDragOverPos} onDragLeave={()=>setDragOverPos(null)} onDrop={handleDrop}
+              onDragStartPos={posId=>{dragFromPosId.current=posId;dragSubIdx.current=null;}}/>
           </div>
           <div style={{flex:"0 0 175px",minWidth:160}}>
             <Bench subs={activeLineup?.subs} readOnly={false}
