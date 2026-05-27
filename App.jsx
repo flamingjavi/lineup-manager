@@ -303,7 +303,7 @@ function AddPlayerModal({onAdd,onClose,currentCount}){
 }
 
 // ─── PICK FROM SQUAD ──────────────────────────────────────────────────────────
-function PickFromSquad({squad,posLabel,onPick,onClose}){
+function PickFromSquad({squad,posLabel,onPick,onClose,usedIds}){
   const[filter,setFilter]=useState("");
   const filtered=squad.filter(p=>p.name.toLowerCase().includes(filter.toLowerCase())||p.pos.toLowerCase().includes(filter.toLowerCase()));
   return(
@@ -320,18 +320,22 @@ function PickFromSquad({squad,posLabel,onPick,onClose}){
         </div>
         <div style={{overflowY:"auto",flex:1}}>
           {squad.length===0&&<div style={{padding:"32px",textAlign:"center",color:C.textFaint,fontSize:13,fontFamily:"'DM Sans',sans-serif"}}>Plantilla vacía. Agrega jugadores desde ⚙️</div>}
-          {filtered.map(p=>(
-            <div key={p.id} onClick={()=>onPick(p)}
-              style={{display:"flex",alignItems:"center",gap:11,padding:"10px 18px",cursor:"pointer",borderBottom:`1px solid ${C.border}`,transition:"background .1s"}}
-              onMouseEnter={e=>e.currentTarget.style.background=C.inputBg} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-              <Avatar name={p.name} size={38}/>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:13,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"'DM Sans',sans-serif"}}>{p.name}</div>
-                <div style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{p.team||"—"}{p.age?` · ${p.age}a`:""}</div>
+          {filtered.map(p=>{
+            const isUsed=usedIds?.includes(p.id);
+            return(
+              <div key={p.id} onClick={()=>!isUsed&&onPick(p)}
+                style={{display:"flex",alignItems:"center",gap:11,padding:"10px 18px",cursor:isUsed?"not-allowed":"pointer",borderBottom:`1px solid ${C.border}`,transition:"background .1s",opacity:isUsed?0.35:1}}
+                onMouseEnter={e=>{if(!isUsed) e.currentTarget.style.background=C.inputBg;}} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                <Avatar name={p.name} size={38}/>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:13,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"'DM Sans',sans-serif"}}>{p.name}</div>
+                  <div style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{p.team||"—"}{p.age?` · ${p.age}a`:""}</div>
+                  {isUsed&&<span style={{fontSize:9,color:C.accent,fontFamily:"'DM Sans',sans-serif",fontWeight:600}}>Ya en la alineación</span>}
+                </div>
+                <span style={{fontSize:10,fontWeight:700,color:C.accent,background:C.goldLight,padding:"3px 8px",borderRadius:6,fontFamily:"monospace",border:`1px solid ${C.border}`}}>{p.pos}</span>
               </div>
-              <span style={{fontSize:10,fontWeight:700,color:C.accent,background:C.goldLight,padding:"3px 8px",borderRadius:6,fontFamily:"monospace",border:`1px solid ${C.border}`}}>{p.pos}</span>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>
@@ -432,7 +436,7 @@ function Bench({subs,readOnly,onClickSub,onDragStart}){
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:6}}>
         {(subs||Array(7).fill(null)).map((sub,i)=>(
-          <div key={i} draggable={!!sub&&!readOnly} onDragStart={()=>onDragStart&&onDragStart(i)}
+          <div key={i} draggable={!!sub&&!readOnly} onDragStart={()=>{onDragStart&&onDragStart(i);}}
             onClick={readOnly?undefined:()=>onClickSub&&onClickSub(i)}
             style={{display:"flex",flexDirection:"column",alignItems:"center",background:sub?C.inputBg:C.bg,border:`1px solid ${sub?C.borderDark:C.border}`,borderRadius:10,padding:"8px 2px 7px",cursor:readOnly?"default":"pointer",transition:"all .15s",userSelect:"none",gap:4}}
             onMouseEnter={e=>{if(!readOnly){e.currentTarget.style.background="#f0e5c0";e.currentTarget.style.borderColor=C.accent;}}}
@@ -580,6 +584,9 @@ function MainApp({user,isAdmin,onLogout}){
   const[saved,setSaved]=useState(false);
   const dragSubIdx=useRef(null);
   const dragFromPosId=useRef(null);
+
+  useEffect(()=>{
+    const ref=doc(db,"teams",user.uid);
     const unsub=onSnapshot(ref,snap=>{
       if(snap.exists()) setTeamData(snap.data());
       else{
@@ -615,8 +622,30 @@ function MainApp({user,isAdmin,onLogout}){
 
   const handlePick=async player=>{
     if(!pickModal) return;
-    if(pickModal.type==="starter") await updateActive(l=>({starters:{...l.starters,[pickModal.posId]:player}}));
-    else await updateActive(l=>{const s=[...l.subs];s[pickModal.subIdx]=player;return{subs:s};});
+    if(pickModal.type==="starter"){
+      await updateActive(l=>{
+        // Remove player from any other position first
+        const newStarters={...l.starters};
+        Object.keys(newStarters).forEach(k=>{
+          if(newStarters[k]?.id===player.id) delete newStarters[k];
+        });
+        // Also remove from subs if present
+        const newSubs=l.subs.map(s=>s?.id===player.id?null:s);
+        newStarters[pickModal.posId]=player;
+        return{starters:newStarters,subs:newSubs};
+      });
+    } else {
+      await updateActive(l=>{
+        // Remove from starters if present
+        const newStarters={...l.starters};
+        Object.keys(newStarters).forEach(k=>{
+          if(newStarters[k]?.id===player.id) delete newStarters[k];
+        });
+        // Remove from other sub slots
+        const newSubs=l.subs.map((s,i)=>i===pickModal.subIdx?player:(s?.id===player.id?null:s));
+        return{starters:newStarters,subs:newSubs};
+      });
+    }
     setPickModal(null);
   };
 
@@ -628,8 +657,12 @@ function MainApp({user,isAdmin,onLogout}){
       if(fromId===posId){setDragOverPos(null);return;}
       await updateActive(l=>{
         const fromPlayer=l.starters[fromId];
-        const toPlayer=l.starters[posId];
-        return{starters:{...l.starters,[posId]:fromPlayer,[fromId]:toPlayer||null}};
+        const toPlayer=l.starters[posId]||null;
+        const newStarters={...l.starters};
+        newStarters[posId]=fromPlayer;
+        if(toPlayer) newStarters[fromId]=toPlayer;
+        else delete newStarters[fromId];
+        return{starters:newStarters};
       });
       setDragOverPos(null);
       return;
@@ -637,7 +670,17 @@ function MainApp({user,isAdmin,onLogout}){
     // Bench to field drag
     if(dragSubIdx.current===null) return;
     const idx=dragSubIdx.current;
-    await updateActive(l=>{const sub=l.subs[idx];if(!sub) return l;const evicted=l.starters[posId]||null;const s=[...l.subs];s[idx]=evicted;return{starters:{...l.starters,[posId]:sub},subs:s};});
+    await updateActive(l=>{
+      const sub=l.subs[idx];if(!sub) return l;
+      const evicted=l.starters[posId]||null;
+      // Remove sub player from any starter slot
+      const newStarters={...l.starters};
+      Object.keys(newStarters).forEach(k=>{if(newStarters[k]?.id===sub.id) delete newStarters[k];});
+      newStarters[posId]=sub;
+      const newSubs=[...l.subs];
+      newSubs[idx]=evicted;
+      return{starters:newStarters,subs:newSubs};
+    });
     dragSubIdx.current=null;setDragOverPos(null);
   };
 
@@ -777,13 +820,14 @@ function MainApp({user,isAdmin,onLogout}){
           <div style={{flex:"0 0 175px",minWidth:160}}>
             <Bench subs={activeLineup?.subs} readOnly={false}
               onClickSub={i=>setPickModal({type:"sub",subIdx:i,posLabel:`Suplente ${i+1}`})}
-              onDragStart={i=>{dragSubIdx.current=i;}}/>
+              onDragStart={i=>{dragSubIdx.current=i;dragFromPosId.current=null;}}/>
           </div>
         </div>
       </div>
 
       {showAddPlayer&&<AddPlayerModal currentCount={squad.length} onAdd={async p=>{await saveTeam({squad:[...squad,p]});setShowAddPlayer(false);}} onClose={()=>setShowAddPlayer(false)}/>}
-      {pickModal&&<PickFromSquad squad={squad} posLabel={pickModal.posLabel} onPick={handlePick} onClose={()=>setPickModal(null)}/>}
+      {pickModal&&<PickFromSquad squad={squad} posLabel={pickModal.posLabel} onPick={handlePick} onClose={()=>setPickModal(null)}
+        usedIds={[...Object.values(activeLineup?.starters||{}).filter(Boolean).map(p=>p.id),...(activeLineup?.subs||[]).filter(Boolean).map(p=>p.id)]}/>}
     </div>
   );
 }
