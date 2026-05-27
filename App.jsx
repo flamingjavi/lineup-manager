@@ -5,20 +5,20 @@ import { doc, getDoc, setDoc, updateDoc, onSnapshot, collection, getDocs, delete
 
 // ─── COLORES ──────────────────────────────────────────────────────────────────
 const C = {
-  bg:"#faf7f0",
-  card:"#fff9ef",
-  border:"#e8d9b5",
-  borderDark:"#d4b87a",
-  accent:"#c49a2a",
-  accentDark:"#a07c1a",
-  accentLight:"rgba(196,154,42,0.1)",
-  text:"#1a1408",
-  textMid:"#4a3a10",
-  textLight:"#8a7040",
-  textFaint:"#b89a50",
-  inputBg:"#f5edd8",
-  gold:"#d4a82a",
-  goldLight:"rgba(212,168,42,0.15)",
+  bg:"#f8f8f8",
+  card:"#ffffff",
+  border:"#e0e0e0",
+  borderDark:"#c0c0c0",
+  accent:"#F5C518",
+  accentDark:"#d4a800",
+  accentLight:"rgba(245,197,24,0.15)",
+  text:"#1a1a1a",
+  textMid:"#3a3a3a",
+  textLight:"#707070",
+  textFaint:"#a0a0a0",
+  inputBg:"#f4f4f4",
+  gold:"#F5C518",
+  goldLight:"rgba(245,197,24,0.12)",
 };
 
 // ─── FORMACIONES FC26 ─────────────────────────────────────────────────────────
@@ -155,7 +155,7 @@ function AuthScreen({onAuth}){
       <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:24,padding:"36px 32px",width:"100%",maxWidth:400,boxShadow:"0 12px 48px rgba(196,154,42,0.12)"}}>
         <div style={{textAlign:"center",marginBottom:32}}>
           <div style={{fontSize:44,marginBottom:14}}>⚽</div>
-          <h1 style={{fontSize:26,fontWeight:800,color:C.text,margin:"0 0 8px",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:2}}>LINEUP MANAGER</h1>
+          <h1 style={{fontSize:22,fontWeight:800,color:C.text,margin:"0 0 8px",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:2}}>FEDERACIÓN LIGA SIMULADA</h1>
           <p style={{fontSize:12,color:C.textLight,margin:0,fontFamily:"'DM Sans',sans-serif"}}>{mode==="login"?"Inicia sesión para gestionar tu equipo":"Crea tu cuenta y equipo"}</p>
         </div>
         <div style={{display:"flex",background:C.inputBg,borderRadius:12,padding:4,marginBottom:24,border:`1px solid ${C.border}`}}>
@@ -476,6 +476,7 @@ function AdminTeamEditor({teamData}){
   const[pickModal,setPickModal]=useState(null);
   const[saving,setSaving]=useState(false);
   const[localData,setLocalData]=useState(teamData);
+  const[showReserves,setShowReserves]=useState(false);
   const dragSubIdx=useRef(null);
   const[dragOverPos,setDragOverPos]=useState(null);
 
@@ -517,6 +518,10 @@ function AdminTeamEditor({teamData}){
         <div style={{width:3,height:16,background:C.accent,borderRadius:2}}/>
         <span style={{fontSize:14,fontWeight:800,color:C.text,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>{localData.teamName}</span>
         {saving&&<span style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>Guardando…</span>}
+        <button onClick={()=>setShowReserves(true)}
+          style={{padding:"4px 10px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+          Ver reservas
+        </button>
         <div style={{marginLeft:"auto",display:"flex",gap:4,flexWrap:"wrap"}}>
           {Object.keys(FORMATIONS).map(f=>(
             <button key={f} onClick={()=>updateLineup(()=>({formation:f,starters:{}}))}
@@ -563,6 +568,33 @@ function AdminTeamEditor({teamData}){
       </div>
       {showAddPlayer&&<AddPlayerModal currentCount={squad.length} onAdd={async p=>{await save({squad:[...squad,p]});setShowAddPlayer(false);}} onClose={()=>setShowAddPlayer(false)}/>}
       {pickModal&&<PickFromSquad squad={squad} posLabel={pickModal.posLabel} onPick={handlePick} onClose={()=>setPickModal(null)}/>}
+      {/* RESERVES MODAL FOR ADMIN */}
+      {showReserves&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(8px)"}} onClick={()=>setShowReserves(false)}>
+          <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:22,width:"100%",maxWidth:400,maxHeight:"80vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 24px 60px rgba(0,0,0,0.15)"}} onClick={e=>e.stopPropagation()}>
+            <div style={{padding:"14px 18px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+              <span style={{fontSize:14,fontWeight:800,color:C.text,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>RESERVAS — {localData.teamName}</span>
+              <button onClick={()=>setShowReserves(false)} style={{marginLeft:"auto",background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:"50%",width:28,height:28,color:C.textMid,cursor:"pointer",fontSize:15,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+            </div>
+            <div style={{overflowY:"auto",flex:1,padding:"10px 14px 16px",display:"flex",flexDirection:"column",gap:6}}>
+              {(()=>{
+                const usedIds=[...Object.values(lineup.starters||{}).filter(Boolean).map(p=>p.id),...(lineup.subs||[]).filter(Boolean).map(p=>p.id)];
+                const reserves=squad.filter(p=>!usedIds.includes(p.id));
+                if(reserves.length===0) return <div style={{textAlign:"center",color:C.textFaint,fontSize:13,padding:"24px 0",fontFamily:"'DM Sans',sans-serif"}}>No hay reservas — todos los jugadores están convocados.</div>;
+                return reserves.map(p=>(
+                  <div key={p.id} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 11px",borderRadius:10,background:C.inputBg,border:`1px solid ${C.border}`}}>
+                    <Avatar name={p.name} size={36}/>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:13,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"'DM Sans',sans-serif"}}>{p.name}</div>
+                      <div style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{p.team||"—"} · <span style={{fontFamily:"monospace",color:C.accent,fontWeight:700}}>{p.pos}</span></div>
+                    </div>
+                  </div>
+                ));
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -709,8 +741,8 @@ function MainApp({user,isAdmin,onLogout}){
 
       {/* TOP BAR */}
       <div style={{width:"100%",background:C.card,borderBottom:`1px solid ${C.border}`,padding:"11px 16px",display:"flex",alignItems:"center",gap:8,position:"sticky",top:0,zIndex:100,boxShadow:`0 2px 16px rgba(196,154,42,0.08)`}}>
-        <span style={{fontSize:20}}>⚽</span>
-        <h1 style={{fontSize:17,fontWeight:800,color:C.text,margin:0,letterSpacing:1,fontFamily:"'Bebas Neue',sans-serif"}}>{teamData.teamName}</h1>
+        <span style={{fontSize:20}}>🏆</span>
+        <h1 style={{fontSize:15,fontWeight:800,color:C.text,margin:0,letterSpacing:1,fontFamily:"'Bebas Neue',sans-serif"}}>{teamData.teamName}</h1>
         {isAdmin&&<span style={{fontSize:9,background:C.accent,color:"#fff",padding:"2px 8px",borderRadius:10,fontWeight:700,fontFamily:"'DM Sans',sans-serif",letterSpacing:0.5}}>ADMIN</span>}
         <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
           {saving&&<span style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>Guardando…</span>}
@@ -811,7 +843,7 @@ function MainApp({user,isAdmin,onLogout}){
           </div>
         )}
 
-        {/* FIELD + BENCH */}
+        {/* FIELD + BENCH + RESERVES */}
         <div style={{paddingTop:12,display:"flex",gap:14,flexWrap:"wrap"}}>
           <div style={{flex:"1 1 260px",minWidth:240}}>
             <Field positions={positions} lineup={activeLineup} readOnly={false}
@@ -822,15 +854,73 @@ function MainApp({user,isAdmin,onLogout}){
           </div>
           <div style={{width:"100%",order:3}}>
             <Bench subs={activeLineup?.subs} readOnly={false}
-              onClickSub={i=>setPickModal({type:"sub",subIdx:i,posLabel:`Suplente ${i+1}`})}
+              onClickSub={i=>{
+                const sub=activeLineup?.subs?.[i];
+                if(sub) setPickModal({type:"subMenu",subIdx:i,posLabel:`Suplente ${i+1}`,currentPlayer:sub});
+                else setPickModal({type:"sub",subIdx:i,posLabel:`Suplente ${i+1}`});
+              }}
               onDragStart={i=>{dragSubIdx.current=i;dragFromPosId.current=null;}}/>
           </div>
+          {/* RESERVES */}
+          {(()=>{
+            const usedIds=[
+              ...Object.values(activeLineup?.starters||{}).filter(Boolean).map(p=>p.id),
+              ...(activeLineup?.subs||[]).filter(Boolean).map(p=>p.id)
+            ];
+            const reserves=squad.filter(p=>!usedIds.includes(p.id));
+            if(reserves.length===0) return null;
+            return(
+              <div style={{width:"100%",order:4,background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"13px 14px",boxShadow:`0 2px 12px rgba(0,0,0,0.04)`}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:11}}>
+                  <div style={{width:3,height:16,background:C.borderDark,borderRadius:2}}/>
+                  <span style={{fontSize:13,fontWeight:800,color:C.textLight,letterSpacing:1.5,fontFamily:"'Bebas Neue',sans-serif"}}>RESERVAS</span>
+                  <span style={{marginLeft:"auto",fontSize:10,color:C.textLight,background:C.inputBg,padding:"2px 8px",borderRadius:20,fontWeight:700,fontFamily:"'DM Sans',sans-serif",border:`1px solid ${C.border}`}}>{reserves.length}</span>
+                </div>
+                <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                  {reserves.map(p=>(
+                    <div key={p.id} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",borderRadius:10,background:C.inputBg,border:`1px solid ${C.border}`}}>
+                      <Avatar name={p.name} size={32}/>
+                      <div>
+                        <div style={{fontSize:11,fontWeight:700,color:C.textMid,fontFamily:"'DM Sans',sans-serif"}}>{p.name}</div>
+                        <div style={{fontSize:9,color:C.textLight,fontFamily:"monospace"}}>{p.pos}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </div>
 
       {showAddPlayer&&<AddPlayerModal currentCount={squad.length} onAdd={async p=>{await saveTeam({squad:[...squad,p]});setShowAddPlayer(false);}} onClose={()=>setShowAddPlayer(false)}/>}
       {pickModal&&<PickFromSquad squad={squad} posLabel={pickModal.posLabel} onPick={handlePick} onClose={()=>setPickModal(null)}
         usedIds={[...Object.values(activeLineup?.starters||{}).filter(Boolean).map(p=>p.id),...(activeLineup?.subs||[]).filter(Boolean).map(p=>p.id)]}/>}
+
+      {/* SUB MENU MODAL */}
+      {pickModal?.type==="subMenu"&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(8px)"}} onClick={()=>setPickModal(null)}>
+          <div style={{background:C.card,border:`1.5px solid ${C.accent}`,borderRadius:16,overflow:"hidden",boxShadow:"0 16px 48px rgba(0,0,0,0.2)",minWidth:200}} onClick={e=>e.stopPropagation()}>
+            <div style={{padding:"11px 16px",borderBottom:`1px solid ${C.border}`,background:C.goldLight}}>
+              <div style={{fontSize:13,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{pickModal.currentPlayer?.name}</div>
+              <div style={{fontSize:10,color:C.textLight,fontFamily:"monospace"}}>{pickModal.currentPlayer?.pos}</div>
+            </div>
+            <div onClick={()=>{const m={...pickModal,type:"sub"};setPickModal(m);}}
+              style={{padding:"13px 18px",fontSize:13,fontWeight:700,color:C.text,cursor:"pointer",borderBottom:`1px solid ${C.border}`,fontFamily:"'DM Sans',sans-serif"}}
+              onMouseEnter={e=>e.currentTarget.style.background=C.inputBg} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+              🔄 Cambiar
+            </div>
+            <div onClick={async()=>{
+              await updateActive(l=>{const s=[...l.subs];s[pickModal.subIdx]=null;return{subs:s};});
+              setPickModal(null);
+            }}
+              style={{padding:"13px 18px",fontSize:13,fontWeight:700,color:"#c0392b",cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}
+              onMouseEnter={e=>e.currentTarget.style.background="#fff5f5"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+              ✕ Quitar de banca
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* SQUAD MANAGER MODAL */}
       {showSquadManager&&(
