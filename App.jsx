@@ -720,7 +720,17 @@ function MainApp({user,isAdmin,onLogout}){
   const positions=FORMATIONS[activeLineup?.formation]||FORMATIONS["4-3-3"];
   const filled=Object.values(activeLineup?.starters||{}).filter(Boolean).length;
 
-  const updateActive=async fn=>{const nl=lineups.map(l=>l.id===activeLineupId?{...l,...fn(l)}:l);await saveTeam({lineups:nl});};
+  const updateActive=async fn=>{
+    const targetId=activeLineup?.id||activeLineupId;
+    const nl=lineups.map(l=>l.id===targetId?{...l,...fn(l)}:l);
+    if(!nl.some(l=>l.id===targetId)&&lineups.length>0){
+      // fallback: update first lineup
+      const nl2=[{...lineups[0],...fn(lineups[0])},...lineups.slice(1)];
+      await saveTeam({lineups:nl2});
+      return;
+    }
+    await saveTeam({lineups:nl});
+  };
 
   const handlePick=async player=>{
     if(!pickModal) return;
