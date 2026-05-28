@@ -414,7 +414,7 @@ function PlayerSpot({pos,player,readOnly,onClick,onRemove,isDragOver,onDragOver,
             draggable={!readOnly}
             onDragStart={readOnly?undefined:e=>{e.stopPropagation();onDragStart&&onDragStart(pos.id);}}>
             <div onClick={readOnly?undefined:e=>{e.stopPropagation();setShowMenu(v=>!v);}}>
-              <Avatar name={player.name} size={50}/>
+              <Avatar name={player.name} size={38}/>
               {isDragOver&&<div style={{position:"absolute",inset:-2,borderRadius:"50%",border:`2px dashed ${C.accent}`,pointerEvents:"none"}}/>}
             </div>
             {showMenu&&!readOnly&&(
@@ -432,9 +432,9 @@ function PlayerSpot({pos,player,readOnly,onClick,onRemove,isDragOver,onDragOver,
               </div>
             )}
           </div>
-          <div style={{background:"rgba(26,20,8,0.78)",backdropFilter:"blur(4px)",borderRadius:7,padding:"3px 9px",textAlign:"center",maxWidth:84}}
+            <div style={{background:"rgba(26,20,8,0.78)",backdropFilter:"blur(4px)",borderRadius:5,padding:"2px 7px",textAlign:"center",maxWidth:72}}
             onClick={readOnly?undefined:e=>{e.stopPropagation();setShowMenu(v=>!v);}}>
-            <div style={{color:"#fff",fontSize:9,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",letterSpacing:0.3,fontFamily:"'Bebas Neue',sans-serif"}}>{player.name.split(" ").slice(-1)[0].toUpperCase()}</div>
+            <div style={{color:"#fff",fontSize:8,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",letterSpacing:0.3,fontFamily:"'Bebas Neue',sans-serif"}}>{player.name.split(" ").slice(-1)[0].toUpperCase()}</div>
             <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:2}}>
               {(()=>{
                 const playerPrimaryPos=player.primaryPos||player.pos?.split("/")?.[0];
@@ -451,8 +451,8 @@ function PlayerSpot({pos,player,readOnly,onClick,onRemove,isDragOver,onDragOver,
       ):(
         <>
           <div onClick={readOnly?undefined:()=>onClick(pos.id,pos.label)}
-            style={{width:50,height:50,borderRadius:"50%",border:`2px dashed ${readOnly?"rgba(255,255,255,0.2)":"rgba(255,255,255,0.55)"}`,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(255,255,255,0.08)",transition:"all .2s",transform:isDragOver?"scale(1.12)":"scale(1)"}}>
-            {!readOnly&&<span style={{color:"rgba(255,255,255,0.65)",fontSize:20}}>+</span>}
+            style={{width:38,height:38,borderRadius:"50%",border:`2px dashed ${readOnly?"rgba(255,255,255,0.2)":"rgba(255,255,255,0.55)"}`,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(255,255,255,0.08)",transition:"all .2s",transform:isDragOver?"scale(1.12)":"scale(1)"}}>
+            {!readOnly&&<span style={{color:"rgba(255,255,255,0.65)",fontSize:16}}>+</span>}
           </div>
           <span style={{color:"rgba(255,255,255,0.55)",fontSize:9,fontWeight:700,letterSpacing:0.5,fontFamily:"'Bebas Neue',sans-serif"}}>{pos.label}</span>
         </>
@@ -1209,23 +1209,25 @@ function MainApp({user,isAdmin,onLogout}){
                   lastTeam=p.teamName;
                   return(
                     <div key={key}>
-                      {showTeamHeader&&<div style={{padding:"6px 0 4px",borderBottom:`1px solid ${C.border}`,marginBottom:4,marginTop:lastTeam?8:0}}>
-                        <span style={{fontSize:11,fontWeight:800,color:C.text,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>⚽ {p.teamName}</span>
+                      {showTeamHeader&&<div style={{padding:"8px 2px 3px",borderBottom:`1px solid ${C.border}`,marginBottom:3,marginTop:lastTeam?10:0}}>
+                        <span style={{fontSize:10,fontWeight:800,color:C.textMid,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>⚽ {p.teamName}</span>
                       </div>}
-                      <div style={{display:"flex",alignItems:"center",gap:10,padding:"7px 8px",borderRadius:9,background:C.inputBg,border:`1px solid ${C.border}`,marginBottom:4}}>
-                        <Avatar name={p.name} size={30}/>
-                        <div style={{flex:1,minWidth:0}}>
-                          <div style={{fontSize:12,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"'DM Sans',sans-serif"}}>{p.name}</div>
-                          {(p.country||p.overall)&&<div style={{fontSize:9,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{p.country||""}{p.overall?` · ${p.overall}⭐`:""}</div>}
+                      <div style={{display:"flex",alignItems:"center",gap:8,padding:"5px 8px",borderRadius:8,background:C.inputBg,border:`1px solid ${C.border}`,marginBottom:3}}>
+                        <div style={{width:26,height:26,borderRadius:"50%",background:`linear-gradient(135deg,${C.accentDark},${C.accent})`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                          <span style={{fontSize:9,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif"}}>{p.name?.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()}</span>
                         </div>
-                        <span style={{fontSize:9,fontWeight:700,color:C.accent,background:C.goldLight,padding:"2px 7px",borderRadius:6,fontFamily:"monospace",border:`1px solid ${C.border}`}}>{p.pos}</span>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:11,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"'DM Sans',sans-serif"}}>{p.name}</div>
+                          {(p.country||p.overall)&&<div style={{fontSize:9,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{[p.country,p.overall?`${p.overall}⭐`:null].filter(Boolean).join(" · ")}</div>}
+                        </div>
+                        <span style={{fontSize:8,fontWeight:700,color:C.accent,background:C.goldLight,padding:"2px 6px",borderRadius:5,fontFamily:"monospace",border:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{p.pos?.split("/")?.[0]}</span>
                         <button onClick={async e=>{
                           e.stopPropagation();
-                          if(!window.confirm(`¿Eliminar a ${p.name} del pool? Esto lo liberará para otros equipos.`)) return;
+                          if(!window.confirm(`¿Eliminar a ${p.name} del pool?`)) return;
                           const poolRef=doc(db,"pool","players");
                           const snap=await getDoc(poolRef);
                           if(snap.exists()){const d={...snap.data()};delete d[key];await setDoc(poolRef,d);}
-                        }} style={{background:"#fff5f5",border:"1px solid #ffcccc",borderRadius:7,color:"#c0392b",cursor:"pointer",fontSize:11,padding:"4px 8px",flexShrink:0,fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>✕</button>
+                        }} style={{background:"none",border:"none",color:"#ffaaaa",cursor:"pointer",fontSize:12,padding:"2px 4px",flexShrink:0}}>✕</button>
                       </div>
                     </div>
                   );
