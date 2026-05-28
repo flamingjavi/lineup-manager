@@ -222,12 +222,14 @@ function AddPlayerModal({onAdd,onClose,currentCount,pool,teamName}){
 
   const handleManual=()=>{
     if(!mName.trim()){setMErr("Nombre obligatorio.");return;}
-    if(mPos.length===0){setMErr("Selecciona al menos una posición.");return;}
+    if(mPos.length===0){setMErr("Selecciona al menos una posición preferida.");return;}
     const poolKey=`name_${mName.trim().toLowerCase().replace(/\s+/g,"_")}`;
     const taken=getTakenBy(poolKey);
     if(taken){setMErr(`Ya registrado por ${taken}.`);return;}
     setMErr("");
-    onAdd({id:`p_${Date.now()}`,name:mName.trim(),pos:mPos.join("/"),team:mTeam.trim()||"—",age:mAge?parseInt(mAge):null,poolKey});
+    const primaryPos=mPos[0];
+    const secondaryPos=mPos.slice(1).join("/");
+    onAdd({id:`p_${Date.now()}`,name:mName.trim(),pos:mPos.join("/"),primaryPos,secondaryPos:secondaryPos||null,team:mTeam.trim()||"—",age:mAge?parseInt(mAge):null,poolKey});
   };
 
   return(
@@ -263,7 +265,7 @@ function AddPlayerModal({onAdd,onClose,currentCount,pool,teamName}){
                 const takenBy=getTakenBy(poolKey);
                 const canAdd=remaining>0&&!takenBy;
                 return(
-                  <div key={p.id} onClick={()=>canAdd&&onAdd({...p,id:poolKey,poolKey})}
+                  <div key={p.id} onClick={()=>canAdd&&onAdd({...p,id:poolKey,poolKey,primaryPos:p.pos,secondaryPos:null})}
                     style={{display:"flex",alignItems:"center",gap:12,padding:"10px 16px",cursor:canAdd?"pointer":"not-allowed",borderBottom:`1px solid ${C.border}`,transition:"background .1s",opacity:canAdd?1:0.45}}
                     onMouseEnter={e=>canAdd&&(e.currentTarget.style.background=C.inputBg)} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
                     <Avatar name={p.name} size={38}/>
@@ -296,15 +298,19 @@ function AddPlayerModal({onAdd,onClose,currentCount,pool,teamName}){
                 style={{width:"100%",padding:"10px 13px",borderRadius:10,border:`1.5px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:13,outline:"none",fontFamily:"monospace"}}
                 onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.borderDark}/>
             </div>
-            <label style={{fontSize:11,fontWeight:600,color:C.textLight,display:"block",marginBottom:8,textTransform:"uppercase",letterSpacing:0.5,fontFamily:"'DM Sans',sans-serif"}}>Posiciones * <span style={{fontSize:9,color:C.textFaint,textTransform:"none"}}>(puedes seleccionar varias)</span></label>
-            <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:16}}>
+            <label style={{fontSize:11,fontWeight:600,color:C.textLight,display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:0.5,fontFamily:"'DM Sans',sans-serif"}}>Posición preferida <span style={{fontSize:9,color:C.textFaint,textTransform:"none"}}>(primera seleccionada)</span></label>
+            <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:8}}>
               {POSITIONS_LIST.map(p=>(
                 <button key={p} onClick={()=>togglePos(p)}
-                  style={{padding:"5px 11px",borderRadius:20,border:`1.5px solid ${mPos.includes(p)?C.accent:C.borderDark}`,background:mPos.includes(p)?C.accent:C.inputBg,color:mPos.includes(p)?"#fff":C.textMid,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"monospace",transition:"all .15s"}}>
-                  {p}
+                  style={{padding:"5px 11px",borderRadius:20,border:`1.5px solid ${mPos[0]===p?"#1a1a1a":mPos.includes(p)?C.accent:C.borderDark}`,background:mPos[0]===p?"#1a1a1a":mPos.includes(p)?C.accentLight:C.inputBg,color:mPos[0]===p?"#fff":mPos.includes(p)?C.accent:C.textMid,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"monospace",transition:"all .15s"}}>
+                  {p}{mPos[0]===p?" ★":""}
                 </button>
               ))}
             </div>
+            {mPos.length>0&&<div style={{fontSize:10,color:C.textLight,marginBottom:16,fontFamily:"'DM Sans',sans-serif"}}>
+              Preferida: <strong style={{color:C.text}}>{mPos[0]}</strong>
+              {mPos.length>1&&<> · Secundarias: <strong style={{color:C.textLight}}>{mPos.slice(1).join(", ")}</strong></>}
+            </div>}
             {mErr&&<p style={{color:"#c0392b",fontSize:12,margin:"0 0 10px",fontFamily:"'DM Sans',sans-serif"}}>⚠ {mErr}</p>}
             <button onClick={handleManual} disabled={remaining<=0}
               style={{width:"100%",padding:"12px",background:remaining>0?C.accent:"#ccc",color:"#fff",border:"none",borderRadius:11,fontSize:14,fontWeight:800,cursor:remaining>0?"pointer":"not-allowed",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>
@@ -646,12 +652,15 @@ function MainApp({user,isAdmin,onLogout}){
   const[allTeams,setAllTeams]=useState([]);
   const[pool,setPool]=useState({});
   const[showPool,setShowPool]=useState(false);
+  const[transferTeam,setTransferTeam]=useState(null);
+  const[showCreateTeam,setShowCreateTeam]=useState(false);
   const[viewingTeam,setViewingTeam]=useState(null);
   const[activeLineupId,setActiveLineupId]=useState("a");
   const[showLineupPanel,setShowLineupPanel]=useState(false);
   const[showFormations,setShowFormations]=useState(false);
   const[showSettings,setShowSettings]=useState(false);
   const[showSquadManager,setShowSquadManager]=useState(false);
+  const[showSquadList,setShowSquadList]=useState(false);
   const[showAddPlayer,setShowAddPlayer]=useState(false);
   const[pickModal,setPickModal]=useState(null);
   const[dragOverPos,setDragOverPos]=useState(null);
@@ -834,6 +843,10 @@ function MainApp({user,isAdmin,onLogout}){
           </button>
           <button onClick={()=>{setShowSettings(v=>!v);setShowLineupPanel(false);setShowFormations(false);}}
             style={{width:30,height:30,borderRadius:8,border:`1.5px solid ${showSettings?C.accent:C.borderDark}`,background:showSettings?C.accent:C.inputBg,cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center"}}>⚙️</button>
+          <button onClick={()=>setShowSquadList(v=>!v)}
+            style={{padding:"5px 9px",borderRadius:8,border:`1.5px solid ${showSquadList?C.accent:C.borderDark}`,background:showSquadList?C.accent:C.inputBg,color:showSquadList?"#fff":C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+            📋
+          </button>
           <button onClick={onLogout} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${C.border}`,background:C.inputBg,color:C.textMid,fontSize:10,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Salir</button>
         </div>
       </div>
@@ -848,17 +861,26 @@ function MainApp({user,isAdmin,onLogout}){
                 <div style={{fontSize:10,fontWeight:700,color:C.textLight,textTransform:"uppercase",letterSpacing:0.5,fontFamily:"'DM Sans',sans-serif"}}>
                   Todos los equipos ({allTeams.length})
                 </div>
-                <button onClick={()=>setShowPool(true)} style={{marginLeft:"auto",padding:"5px 12px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
-                  🌍 Ver pool global
+                <button onClick={()=>setShowPool(true)} style={{marginLeft:"auto",padding:"5px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                  🌍 Pool global
+                </button>
+                <button onClick={()=>setShowCreateTeam(true)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${C.accent}`,background:C.goldLight,color:C.accentDark,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                  + Crear equipo
                 </button>
               </div>
               <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
                 {allTeams.filter(t=>t.uid!==user.uid).map(t=>(
-                  <button key={t.id} onClick={()=>setViewingTeam(viewingTeam?.uid===t.uid?null:t)}
-                    style={{padding:"6px 13px",borderRadius:9,border:`1.5px solid ${viewingTeam?.uid===t.uid?C.accent:C.borderDark}`,background:viewingTeam?.uid===t.uid?C.accent:C.inputBg,color:viewingTeam?.uid===t.uid?"#fff":C.textMid,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",display:"flex",alignItems:"center",gap:6}}>
-                    ⚽ {t.teamName}
-                    <span style={{fontSize:9,color:viewingTeam?.uid===t.uid?"rgba(255,255,255,0.7)":C.textFaint}}>{(t.squad||[]).length} jug.</span>
-                  </button>
+                  <div key={t.id} style={{display:"flex",gap:4,alignItems:"center"}}>
+                    <button onClick={()=>setViewingTeam(viewingTeam?.uid===t.uid?null:t)}
+                      style={{padding:"6px 13px",borderRadius:9,border:`1.5px solid ${viewingTeam?.uid===t.uid?C.accent:C.borderDark}`,background:viewingTeam?.uid===t.uid?C.accent:C.inputBg,color:viewingTeam?.uid===t.uid?"#fff":C.textMid,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",display:"flex",alignItems:"center",gap:6}}>
+                      ⚽ {t.teamName}
+                      <span style={{fontSize:9,color:viewingTeam?.uid===t.uid?"rgba(255,255,255,0.7)":C.textFaint}}>{(t.squad||[]).length} jug.</span>
+                    </button>
+                    <button onClick={()=>setTransferTeam(t)}
+                      style={{padding:"5px 7px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:11,cursor:"pointer"}} title="Transferir equipo">
+                      🔄
+                    </button>
+                  </div>
                 ))}
                 {allTeams.filter(t=>t.uid!==user.uid).length===0&&<span style={{fontSize:12,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Aún no hay otros equipos registrados.</span>}
               </div>
@@ -946,8 +968,8 @@ function MainApp({user,isAdmin,onLogout}){
           </div>
         )}
 
-        {/* FIELD + BENCH + RESERVES — ocultar si admin está viendo otro equipo */}
-        {!viewingTeam&&<div style={{paddingTop:12,display:"flex",gap:14,flexWrap:"wrap"}}>
+        {/* FIELD + BENCH + RESERVES — ocultar si admin está viendo otro equipo o si showSquadList */}
+        {!viewingTeam&&!showSquadList&&<div style={{paddingTop:12,display:"flex",gap:14,flexWrap:"wrap"}}>
           <div style={{flex:"1 1 260px",minWidth:240}}>
             <Field positions={positions} lineup={activeLineup} readOnly={false}
               onClickPos={(id,label)=>setPickModal({type:"starter",posId:id,posLabel:label})}
@@ -1002,6 +1024,87 @@ function MainApp({user,isAdmin,onLogout}){
       {pickModal&&<PickFromSquad squad={squad} posLabel={pickModal.posLabel} onPick={handlePick} onClose={()=>setPickModal(null)}
         usedIds={[...Object.values(activeLineup?.starters||{}).filter(Boolean).map(p=>p.poolKey||p.id),...(activeLineup?.subs||[]).filter(Boolean).map(p=>p.poolKey||p.id)]}/>}
 
+      {/* TRANSFER TEAM MODAL */}
+      {transferTeam&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(8px)"}} onClick={()=>setTransferTeam(null)}>
+          <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:22,width:"100%",maxWidth:420,boxShadow:"0 24px 60px rgba(0,0,0,0.15)"}} onClick={e=>e.stopPropagation()}>
+            <div style={{padding:"14px 18px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:10}}>
+              <span style={{fontSize:14,fontWeight:800,color:C.text,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>TRANSFERIR EQUIPO</span>
+              <button onClick={()=>setTransferTeam(null)} style={{marginLeft:"auto",background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:"50%",width:28,height:28,color:C.textMid,cursor:"pointer",fontSize:15,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+            </div>
+            <div style={{padding:"16px 18px 20px"}}>
+              <div style={{fontSize:12,color:C.textLight,marginBottom:14,fontFamily:"'DM Sans',sans-serif"}}>
+                Equipo: <strong style={{color:C.text}}>{transferTeam.teamName}</strong><br/>
+                Dueño actual: <strong style={{color:C.text}}>{transferTeam.email||"Sin dueño"}</strong>
+              </div>
+              <div style={{fontSize:11,fontWeight:600,color:C.textLight,marginBottom:8,textTransform:"uppercase",fontFamily:"'DM Sans',sans-serif"}}>Asignar a usuario registrado</div>
+              <div style={{display:"flex",flexDirection:"column",gap:6,maxHeight:250,overflowY:"auto",marginBottom:12}}>
+                {allTeams.filter(t=>t.uid&&t.uid!==transferTeam.uid&&t.uid!==user.uid).map(t=>(
+                  <div key={t.id} onClick={async()=>{
+                    if(!window.confirm(`¿Transferir ${transferTeam.teamName} a ${t.teamName} (${t.email})?`)) return;
+                    // Remove uid from old team
+                    await updateDoc(doc(db,"teams",transferTeam.id||transferTeam.uid),{uid:"",email:""});
+                    // Assign to new user — create new team doc with new uid
+                    const newRef=doc(db,"teams",t.uid);
+                    const newSnap=await getDoc(newRef);
+                    if(!newSnap.exists()||newSnap.data().uid!==t.uid){
+                      // Move team data to new uid doc
+                      await setDoc(newRef,{...transferTeam,uid:t.uid,email:t.email,id:t.uid});
+                    }
+                    setTransferTeam(null);
+                    alert(`✅ Equipo transferido a ${t.teamName}`);
+                  }}
+                    style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:10,background:C.inputBg,border:`1px solid ${C.border}`,cursor:"pointer"}}
+                    onMouseEnter={e=>e.currentTarget.style.borderColor=C.accent}
+                    onMouseLeave={e=>e.currentTarget.style.borderColor=C.border}>
+                    <Avatar name={t.teamName} size={32}/>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:12,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{t.teamName}</div>
+                      <div style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{t.email}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <button onClick={async()=>{
+                if(!window.confirm(`¿Quitar dueño de ${transferTeam.teamName}? El equipo quedará disponible para nuevos usuarios.`)) return;
+                await updateDoc(doc(db,"teams",transferTeam.id||transferTeam.uid),{uid:"",email:""});
+                setTransferTeam(null);
+              }} style={{width:"100%",padding:"10px",background:"#fff5f5",color:"#c0392b",border:"1px solid #ffcccc",borderRadius:10,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                Dejar sin dueño
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CREATE TEAM MODAL */}
+      {showCreateTeam&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(8px)"}} onClick={()=>setShowCreateTeam(false)}>
+          <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:22,width:"100%",maxWidth:380,boxShadow:"0 24px 60px rgba(0,0,0,0.15)"}} onClick={e=>e.stopPropagation()}>
+            <div style={{padding:"14px 18px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:10}}>
+              <span style={{fontSize:14,fontWeight:800,color:C.text,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>CREAR EQUIPO VACÍO</span>
+              <button onClick={()=>setShowCreateTeam(false)} style={{marginLeft:"auto",background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:"50%",width:28,height:28,color:C.textMid,cursor:"pointer",fontSize:15,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+            </div>
+            <div style={{padding:"16px 18px 20px"}}>
+              <div style={{fontSize:11,color:C.textLight,marginBottom:12,fontFamily:"'DM Sans',sans-serif"}}>El equipo quedará disponible para que un usuario lo tome al registrarse.</div>
+              <input id="newTeamNameAdmin" placeholder="Nombre del equipo…"
+                style={{width:"100%",padding:"11px 14px",borderRadius:10,border:`1.5px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:14,outline:"none",fontFamily:"'DM Sans',sans-serif",marginBottom:12}}
+                onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.borderDark}/>
+              <button onClick={async()=>{
+                const name=document.getElementById("newTeamNameAdmin").value.trim();
+                if(!name) return;
+                const id=`team_${Date.now()}`;
+                await setDoc(doc(db,"teams",id),{uid:"",email:"",teamName:name,squad:[],lineups:[{id:"a",name:"Alineación A",formation:"4-3-3",starters:{},subs:Array(7).fill(null)}],createdAt:new Date().toISOString()});
+                setShowCreateTeam(false);
+                alert(`✅ Equipo "${name}" creado`);
+              }} style={{width:"100%",padding:"13px",background:C.accent,color:"#fff",border:"none",borderRadius:11,fontSize:15,fontWeight:800,cursor:"pointer",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:2}}>
+                CREAR EQUIPO
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* POOL MODAL */}
       {showPool&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(8px)"}} onClick={()=>setShowPool(false)}>
@@ -1053,6 +1156,54 @@ function MainApp({user,isAdmin,onLogout}){
         </div>
       )}
 
+      {/* SQUAD LIST VIEW */}
+      {!viewingTeam&&showSquadList&&(()=>{
+        const POS_ORDER=["GK","SW","CB","RB","LB","RWB","LWB","CDM","DM","CM","RM","LM","CAM","RAM","LAM","RW","LW","CF","ST"];
+        const sorted=[...squad].sort((a,b)=>{
+          const ai=POS_ORDER.indexOf(a.primaryPos||a.pos?.split("/")?.[0]);
+          const bi=POS_ORDER.indexOf(b.primaryPos||b.pos?.split("/")?.[0]);
+          return(ai===-1?99:ai)-(bi===-1?99:bi);
+        });
+        return(
+          <div style={{paddingTop:12}}>
+            <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,overflow:"hidden",boxShadow:`0 2px 12px rgba(0,0,0,0.04)`}}>
+              <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:8}}>
+                <div style={{width:3,height:16,background:C.accent,borderRadius:2}}/>
+                <span style={{fontSize:14,fontWeight:800,color:C.text,letterSpacing:1,fontFamily:"'Bebas Neue',sans-serif"}}>PLANTILLA GENERAL</span>
+                <span style={{fontSize:10,color:C.textLight,background:C.inputBg,padding:"2px 8px",borderRadius:20,fontFamily:"'DM Sans',sans-serif",border:`1px solid ${C.border}`}}>{squad.length}/26</span>
+              </div>
+              {sorted.length===0&&<div style={{padding:"32px",textAlign:"center",color:C.textFaint,fontSize:13,fontFamily:"'DM Sans',sans-serif"}}>No hay jugadores en la plantilla.</div>}
+              {sorted.map((p,i)=>{
+                const prevPos=i>0?(sorted[i-1].primaryPos||sorted[i-1].pos?.split("/")?.[0]):null;
+                const currPos=p.primaryPos||p.pos?.split("/")?.[0];
+                const showDivider=currPos!==prevPos;
+                return(
+                  <div key={p.id}>
+                    {showDivider&&<div style={{padding:"6px 16px 4px",background:C.inputBg,borderBottom:`1px solid ${C.border}`,borderTop:i>0?`1px solid ${C.border}`:"none"}}>
+                      <span style={{fontSize:10,fontWeight:800,color:C.accent,fontFamily:"monospace",letterSpacing:1}}>{currPos}</span>
+                    </div>}
+                    <div style={{display:"flex",alignItems:"center",gap:12,padding:"10px 16px",borderBottom:`1px solid ${C.border}`}}>
+                      <Avatar name={p.name} size={36}/>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:13,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"'DM Sans',sans-serif"}}>{p.name}</div>
+                        <div style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>
+                          {p.team||"—"}
+                          {p.secondaryPos&&<span style={{color:C.textFaint}}> · {p.secondaryPos}</span>}
+                        </div>
+                      </div>
+                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                        {p.age&&<span style={{fontSize:11,color:C.textLight,fontFamily:"monospace"}}>{p.age}a</span>}
+                        <span style={{fontSize:10,fontWeight:700,color:C.accent,background:C.goldLight,padding:"2px 8px",borderRadius:6,fontFamily:"monospace",border:`1px solid ${C.border}`}}>{currPos}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* SQUAD MANAGER MODAL */}
       {showSquadManager&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(8px)"}} onClick={()=>setShowSquadManager(false)}>
@@ -1092,36 +1243,150 @@ function MainApp({user,isAdmin,onLogout}){
   );
 }
 
-// ─── ROOT ─────────────────────────────────────────────────────────────────────
-export default function App(){
-  const[user,setUser]=useState(null);
-  const[isAdmin,setIsAdmin]=useState(false);
+// ─── TEAM SELECTION SCREEN ────────────────────────────────────────────────────
+function TeamSelectionScreen({user,onDone}){
+  const[teams,setTeams]=useState([]);
   const[loading,setLoading]=useState(true);
+  const[newTeamName,setNewTeamName]=useState("");
+  const[creating,setCreating]=useState(false);
+  const[error,setError]=useState("");
 
   useEffect(()=>{
-    const unsub=onAuthStateChanged(auth,async u=>{
-      setUser(u);
-      if(u){
-        const adminSnap=await getDoc(doc(db,"admins",u.uid));
-        if(adminSnap.exists()){setIsAdmin(true);}
-        else{
-          const allAdmins=await getDocs(collection(db,"admins"));
-          if(allAdmins.empty){await setDoc(doc(db,"admins",u.uid),{email:u.email,uid:u.uid,superAdmin:true});setIsAdmin(true);}
-          else setIsAdmin(false);
-        }
-      }else setIsAdmin(false);
+    const unsub=onSnapshot(collection(db,"teams"),snap=>{
+      const all=snap.docs.map(d=>({id:d.id,...d.data()}));
+      // Only show teams without owner or with no uid
+      setTeams(all.filter(t=>!t.uid||t.uid===""));
       setLoading(false);
     });
     return unsub;
   },[]);
 
+  const takeTeam=async(team)=>{
+    setCreating(true);
+    await updateDoc(doc(db,"teams",team.id),{uid:user.uid,email:user.email});
+    await updateProfile(user,{displayName:team.teamName});
+    onDone();
+  };
+
+  const createTeam=async()=>{
+    if(!newTeamName.trim()){setError("Escribe el nombre de tu equipo.");return;}
+    setCreating(true);
+    const ref=doc(db,"teams",user.uid);
+    await setDoc(ref,{uid:user.uid,email:user.email,teamName:newTeamName.trim(),squad:[],lineups:[{id:"a",name:"Alineación A",formation:"4-3-3",starters:{},subs:Array(7).fill(null)}],createdAt:new Date().toISOString()});
+    await updateProfile(user,{displayName:newTeamName.trim()});
+    onDone();
+  };
+
+  return(
+    <div style={{minHeight:"100vh",background:C.bg,display:"flex",flexDirection:"column",alignItems:"center",padding:"32px 16px"}}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;600;700;800&display=swap');*{box-sizing:border-box}input::placeholder{color:${C.textFaint}}`}</style>
+      <div style={{width:"100%",maxWidth:480}}>
+        <div style={{textAlign:"center",marginBottom:28}}>
+          <div style={{fontSize:13,color:C.textLight,fontFamily:"'DM Sans',sans-serif",marginBottom:6}}>Bienvenido, {user.email}</div>
+          <h1 style={{fontSize:26,fontWeight:800,color:C.text,margin:"0 0 8px",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:2}}>ELIGE TU EQUIPO</h1>
+          <p style={{fontSize:12,color:C.textLight,margin:0,fontFamily:"'DM Sans',sans-serif"}}>Selecciona un equipo disponible o crea uno nuevo</p>
+        </div>
+
+        {/* Available teams */}
+        {loading?(
+          <div style={{textAlign:"center",padding:32,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Cargando equipos…</div>
+        ):(
+          <>
+            {teams.length>0&&(
+              <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:16,marginBottom:16,boxShadow:`0 4px 20px rgba(0,0,0,0.04)`}}>
+                <div style={{fontSize:11,fontWeight:700,color:C.textLight,textTransform:"uppercase",letterSpacing:0.5,marginBottom:12,fontFamily:"'DM Sans',sans-serif"}}>Equipos disponibles</div>
+                <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                  {teams.map(t=>(
+                    <div key={t.id} onClick={()=>!creating&&takeTeam(t)}
+                      style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",borderRadius:11,border:`1.5px solid ${C.border}`,background:C.inputBg,cursor:creating?"not-allowed":"pointer",transition:"all .15s"}}
+                      onMouseEnter={e=>e.currentTarget.style.borderColor=C.accent}
+                      onMouseLeave={e=>e.currentTarget.style.borderColor=C.border}>
+                      <div style={{width:40,height:40,borderRadius:"50%",background:`linear-gradient(135deg,${C.accentDark},${C.accent})`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                        <span style={{fontSize:16,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif"}}>{t.teamName?.[0]||"?"}</span>
+                      </div>
+                      <div style={{flex:1}}>
+                        <div style={{fontSize:14,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{t.teamName}</div>
+                        <div style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{(t.squad||[]).length} jugadores en plantilla</div>
+                      </div>
+                      <span style={{fontSize:11,color:C.accent,fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>Tomar →</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Create new team */}
+            <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:16,boxShadow:`0 4px 20px rgba(0,0,0,0.04)`}}>
+              <div style={{fontSize:11,fontWeight:700,color:C.textLight,textTransform:"uppercase",letterSpacing:0.5,marginBottom:12,fontFamily:"'DM Sans',sans-serif"}}>Crear nuevo equipo</div>
+              <input value={newTeamName} onChange={e=>setNewTeamName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&createTeam()}
+                placeholder="Nombre de tu equipo…"
+                style={{width:"100%",padding:"11px 14px",borderRadius:10,border:`1.5px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:14,outline:"none",fontFamily:"'DM Sans',sans-serif",marginBottom:10}}
+                onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.borderDark}/>
+              {error&&<p style={{color:"#c0392b",fontSize:12,margin:"0 0 8px",fontFamily:"'DM Sans',sans-serif"}}>⚠ {error}</p>}
+              <button onClick={createTeam} disabled={creating}
+                style={{width:"100%",padding:"13px",background:C.accent,color:"#fff",border:"none",borderRadius:11,fontSize:15,fontWeight:800,cursor:"pointer",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:2,opacity:creating?0.6:1}}>
+                {creating?"CREANDO…":"CREAR EQUIPO"}
+              </button>
+            </div>
+          </>
+        )}
+        <button onClick={()=>signOut(auth)} style={{marginTop:20,background:"none",border:"none",color:C.textFaint,fontSize:12,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",width:"100%",textAlign:"center"}}>
+          Cerrar sesión
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── ROOT ─────────────────────────────────────────────────────────────────────
+export default function App(){
+  const[user,setUser]=useState(null);
+  const[isAdmin,setIsAdmin]=useState(false);
+  const[hasTeam,setHasTeam]=useState(false);
+  const[loading,setLoading]=useState(true);
+
+  const checkUserState=async(u)=>{
+    if(!u){setUser(null);setIsAdmin(false);setHasTeam(false);setLoading(false);return;}
+    setUser(u);
+    // Check admin
+    const adminSnap=await getDoc(doc(db,"admins",u.uid));
+    if(adminSnap.exists()){
+      setIsAdmin(true);
+    } else {
+      const allAdmins=await getDocs(collection(db,"admins"));
+      if(allAdmins.empty){
+        await setDoc(doc(db,"admins",u.uid),{email:u.email,uid:u.uid,superAdmin:true});
+        setIsAdmin(true);
+      } else {
+        setIsAdmin(false);
+      }
+    }
+    // Check if user has a team assigned
+    const teamSnap=await getDoc(doc(db,"teams",u.uid));
+    if(teamSnap.exists()&&teamSnap.data().uid===u.uid){
+      setHasTeam(true);
+    } else {
+      // Also check if any team has this uid
+      const teamsSnap=await getDocs(collection(db,"teams"));
+      const myTeam=teamsSnap.docs.find(d=>d.data().uid===u.uid);
+      setHasTeam(!!myTeam);
+    }
+    setLoading(false);
+  };
+
+  useEffect(()=>{
+    const unsub=onAuthStateChanged(auth,checkUserState);
+    return unsub;
+  },[]);
+
   if(loading) return(
-    <div style={{minHeight:"100vh",background:"#faf7f0",display:"flex",alignItems:"center",justifyContent:"center"}}>
-      <div style={{width:36,height:36,border:"3px solid #e8d9b5",borderTopColor:"#c49a2a",borderRadius:"50%",animation:"spin .7s linear infinite"}}/>
+    <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div style={{width:36,height:36,border:`3px solid ${C.border}`,borderTopColor:C.accent,borderRadius:"50%",animation:"spin .7s linear infinite"}}/>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}*{box-sizing:border-box}`}</style>
     </div>
   );
 
-  if(!user) return <AuthScreen onAuth={u=>setUser(u)}/>;
+  if(!user) return <AuthScreen onAuth={u=>checkUserState(u)}/>;
+  if(!hasTeam&&!isAdmin) return <TeamSelectionScreen user={user} onDone={()=>setHasTeam(true)}/>;
   return <MainApp user={user} isAdmin={isAdmin} onLogout={()=>signOut(auth)}/>;
 }
