@@ -388,7 +388,7 @@ function PickFromSquad({squad,posLabel,onPick,onClose,usedIds,posFilter,isBench}
                     <div style={{fontSize:13,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"'DM Sans',sans-serif"}}>{p.name}</div>
                     {isOutOfPos&&<span style={{fontSize:10}}>⚠️</span>}
                   </div>
-                  <div style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{p.country||p.nat||"—"}{p.age?` · ${p.age}a`:""}{p.overall?` · ${p.overall}⭐`:""}</div>
+                  <div style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{p.country||p.nat||""}{(p.country||p.nat)&&p.age?" · ":""}{p.age?`${p.age}a`:""}{p.overall?` · ${p.overall}⭐`:""}</div>
                 </div>
                 <span style={{fontSize:10,fontWeight:700,color:isOutOfPos?"#e67e22":C.accent,background:isOutOfPos?"rgba(230,126,34,0.1)":C.goldLight,padding:"3px 8px",borderRadius:6,fontFamily:"monospace",border:`1px solid ${isOutOfPos?"#e67e22":C.border}`}}>{p.primaryPos||p.pos?.split("/")?.[0]}</span>
               </div>
@@ -781,7 +781,7 @@ function MainApp({user,isAdmin,onLogout}){
     const poolRef=doc(db,"pool","players");
     const snap=await getDoc(poolRef);
     const current=snap.exists()?snap.data():{};
-    await setDoc(poolRef,{...current,[player.poolKey]:{name:player.name,pos:player.pos,teamName:tName,teamUid:user.uid}});
+    await setDoc(poolRef,{...current,[player.poolKey]:{name:player.name,pos:player.pos,country:player.country||null,overall:player.overall||null,teamName:tName,teamUid:user.uid}});
   };
 
   const removeFromPool=async(player)=>{
@@ -1216,9 +1216,16 @@ function MainApp({user,isAdmin,onLogout}){
                         <Avatar name={p.name} size={30}/>
                         <div style={{flex:1,minWidth:0}}>
                           <div style={{fontSize:12,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"'DM Sans',sans-serif"}}>{p.name}</div>
-                          <div style={{fontSize:9,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{p.country||"—"}{p.overall?` · ${p.overall}⭐`:""}</div>
+                          {(p.country||p.overall)&&<div style={{fontSize:9,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{p.country||""}{p.overall?` · ${p.overall}⭐`:""}</div>}
                         </div>
                         <span style={{fontSize:9,fontWeight:700,color:C.accent,background:C.goldLight,padding:"2px 7px",borderRadius:6,fontFamily:"monospace",border:`1px solid ${C.border}`}}>{p.pos}</span>
+                        <button onClick={async e=>{
+                          e.stopPropagation();
+                          if(!window.confirm(`¿Eliminar a ${p.name} del pool? Esto lo liberará para otros equipos.`)) return;
+                          const poolRef=doc(db,"pool","players");
+                          const snap=await getDoc(poolRef);
+                          if(snap.exists()){const d={...snap.data()};delete d[key];await setDoc(poolRef,d);}
+                        }} style={{background:"#fff5f5",border:"1px solid #ffcccc",borderRadius:7,color:"#c0392b",cursor:"pointer",fontSize:11,padding:"4px 8px",flexShrink:0,fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>✕</button>
                       </div>
                     </div>
                   );
