@@ -120,6 +120,7 @@ function searchPlayers(q){
 function AuthScreen({onAuth}){
   const[mode,setMode]=useState("login");
   const[teamName,setTeamName]=useState("");
+  const[teamColor,setTeamColor]=useState("blue");
   const[email,setEmail]=useState("");
   const[password,setPassword]=useState("");
   const[confirmPw,setConfirmPw]=useState("");
@@ -135,6 +136,8 @@ function AuthScreen({onAuth}){
         if(password.length<6){setError("Mínimo 6 caracteres.");setLoading(false);return;}
         const cred=await createUserWithEmailAndPassword(auth,email,password);
         await updateProfile(cred.user,{displayName:teamName.trim()});
+        // Save color to Firestore teams doc
+        await setDoc(doc(db,"teams",cred.user.uid),{uid:cred.user.uid,email:cred.user.email,teamName:teamName.trim(),teamColor,squad:[],lineups:[{id:"a",name:"Alineación A",formation:"4-3-3",starters:{},subs:Array(7).fill(null)}],createdAt:new Date().toISOString()});
         onAuth(cred.user);
       }else{
         const cred=await signInWithEmailAndPassword(auth,email,password);
@@ -168,7 +171,10 @@ function AuthScreen({onAuth}){
         </div>
         {mode==="register"&&(
           <><label style={{fontSize:11,fontWeight:600,color:C.textLight,display:"block",marginBottom:5,textTransform:"uppercase",letterSpacing:0.5,fontFamily:"'DM Sans',sans-serif"}}>Nombre de tu equipo</label>
-          <input value={teamName} onChange={e=>setTeamName(e.target.value)} placeholder="Ej. FC Javier…" style={inp} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.borderDark}/></>
+          <input value={teamName} onChange={e=>setTeamName(e.target.value)} placeholder="Ej. FC Javier…" style={inp} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.borderDark}/>
+          <label style={{fontSize:11,fontWeight:600,color:C.textLight,display:"block",marginBottom:8,textTransform:"uppercase",letterSpacing:0.5,fontFamily:"'DM Sans',sans-serif"}}>Color del equipo</label>
+          <div style={{marginBottom:14}}><ColorPicker selected={teamColor} onChange={setTeamColor}/></div>
+          </>
         )}
         <label style={{fontSize:11,fontWeight:600,color:C.textLight,display:"block",marginBottom:5,textTransform:"uppercase",letterSpacing:0.5,fontFamily:"'DM Sans',sans-serif"}}>Correo electrónico</label>
         <input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="correo@ejemplo.com" style={inp} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.borderDark} onKeyDown={e=>e.key==="Enter"&&handleSubmit()}/>
@@ -189,10 +195,48 @@ function AuthScreen({onAuth}){
 }
 
 // ─── AVATAR ───────────────────────────────────────────────────────────────────
-function Avatar({name,size=50}){
-  const i=name?name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase():"?";
+// ─── PALETA DE COLORES ────────────────────────────────────────────────────────
+const TEAM_COLORS = [
+  {id:"blue",    name:"Azul",       bg:"#1a6bb5", dark:"#0f4a8a"},
+  {id:"red",     name:"Rojo",       bg:"#c0392b", dark:"#922b21"},
+  {id:"green",   name:"Verde",      bg:"#1e8449", dark:"#145a32"},
+  {id:"yellow",  name:"Amarillo",   bg:"#d4ac0d", dark:"#9a7d0a"},
+  {id:"purple",  name:"Morado",     bg:"#7d3c98", dark:"#5b2c6f"},
+  {id:"orange",  name:"Naranja",    bg:"#ca6f1e", dark:"#935116"},
+  {id:"black",   name:"Negro",      bg:"#1c1c1c", dark:"#000000"},
+  {id:"sky",     name:"Celeste",    bg:"#2e86c1", dark:"#1a5276"},
+  {id:"pink",    name:"Rosa",       bg:"#c0498b", dark:"#922b6e"},
+  {id:"brown",   name:"Café",       bg:"#7e5109", dark:"#5d3a07"},
+  {id:"gray",    name:"Gris",       bg:"#616a6b", dark:"#424949"},
+  {id:"lime",    name:"Lima",       bg:"#1d8348", dark:"#196f3d"},
+  {id:"navy",    name:"Marino",     bg:"#1b2631", dark:"#0e1626"},
+  {id:"maroon",  name:"Granate",    bg:"#7b241c", dark:"#5c1a15"},
+  {id:"teal",    name:"Turquesa",   bg:"#148f77", dark:"#0e6655"},
+  {id:"gold",    name:"Dorado",     bg:"#c49a2a", dark:"#a07c1a"},
+];
+
+function getTeamColor(colorId){
+  return TEAM_COLORS.find(c=>c.id===colorId)||TEAM_COLORS[0];
+}
+
+function ColorPicker({selected,onChange}){
   return(
-    <div style={{width:size,height:size,borderRadius:"50%",background:`linear-gradient(135deg,${C.accentDark},${C.accent})`,border:"2.5px solid rgba(255,255,255,0.9)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 3px 10px rgba(0,0,0,0.15)",flexShrink:0}}>
+    <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+      {TEAM_COLORS.map(c=>(
+        <button key={c.id} onClick={()=>onChange(c.id)} title={c.name}
+          style={{width:28,height:28,borderRadius:"50%",background:c.bg,border:selected===c.id?"3px solid #1a1a1a":"2px solid rgba(0,0,0,0.15)",cursor:"pointer",transition:"transform .1s",transform:selected===c.id?"scale(1.2)":"scale(1)"}}>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ─── AVATAR ───────────────────────────────────────────────────────────────────
+function Avatar({name,size=50,colorId}){
+  const i=name?name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase():"?";
+  const color=getTeamColor(colorId);
+  return(
+    <div style={{width:size,height:size,borderRadius:"50%",background:`linear-gradient(135deg,${color.dark},${color.bg})`,border:"2.5px solid rgba(255,255,255,0.9)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 3px 10px rgba(0,0,0,0.15)",flexShrink:0}}>
       <span style={{fontSize:size*0.32,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:0.5}}>{i}</span>
     </div>
   );
@@ -401,7 +445,7 @@ function PickFromSquad({squad,posLabel,onPick,onClose,usedIds,posFilter,isBench}
 }
 
 // ─── PLAYER SPOT ──────────────────────────────────────────────────────────────
-function PlayerSpot({pos,player,readOnly,onClick,onRemove,isDragOver,onDragOver,onDragLeave,onDrop,onDragStart}){
+function PlayerSpot({pos,player,readOnly,onClick,onRemove,isDragOver,onDragOver,onDragLeave,onDrop,onDragStart,teamColor}){
   const[showMenu,setShowMenu]=useState(false);
   return(
     <div style={{position:"absolute",left:`${pos.x}%`,top:`${pos.y}%`,transform:"translate(-50%,-50%)",zIndex:showMenu?30:10,cursor:readOnly?"default":"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:4}}
@@ -414,7 +458,7 @@ function PlayerSpot({pos,player,readOnly,onClick,onRemove,isDragOver,onDragOver,
             draggable={!readOnly}
             onDragStart={readOnly?undefined:e=>{e.stopPropagation();onDragStart&&onDragStart(pos.id);}}>
             <div onClick={readOnly?undefined:e=>{e.stopPropagation();setShowMenu(v=>!v);}}>
-              <Avatar name={player.name} size={38}/>
+              <Avatar name={player.name} size={38} colorId={teamColor}/>
               {isDragOver&&<div style={{position:"absolute",inset:-2,borderRadius:"50%",border:`2px dashed ${C.accent}`,pointerEvents:"none"}}/>}
             </div>
             {showMenu&&!readOnly&&(
@@ -462,7 +506,7 @@ function PlayerSpot({pos,player,readOnly,onClick,onRemove,isDragOver,onDragOver,
 }
 
 // ─── FIELD ────────────────────────────────────────────────────────────────────
-function Field({positions,lineup,readOnly,onClickPos,onRemovePos,dragOverPos,onDragOver,onDragLeave,onDrop,onDragStartPos}){
+function Field({positions,lineup,readOnly,onClickPos,onRemovePos,dragOverPos,onDragOver,onDragLeave,onDrop,onDragStartPos,teamColor}){
   return(
     <div style={{position:"relative",width:"100%",paddingBottom:"133%",borderRadius:16,overflow:"hidden",boxShadow:"0 16px 48px rgba(0,0,0,0.18)"}}>
       <div style={{position:"absolute",inset:0,background:"linear-gradient(180deg,#1a5c2a 0%,#1e6b30 25%,#1a5c2a 50%,#1e6b30 75%,#1a5c2a 100%)"}}/>
@@ -485,7 +529,8 @@ function Field({positions,lineup,readOnly,onClickPos,onRemovePos,dragOverPos,onD
           onDragOver={onDragOver||(() =>{})}
           onDragLeave={onDragLeave||(() =>{})}
           onDrop={onDrop||(() =>{})}
-          onDragStart={onDragStartPos||(() =>{})}/>
+          onDragStart={onDragStartPos||(() =>{})}
+          teamColor={teamColor}/>
       ))}
       {readOnly&&<div style={{position:"absolute",top:8,right:8,background:"rgba(26,20,8,0.72)",color:C.gold,fontSize:9,fontWeight:700,padding:"3px 9px",borderRadius:8,fontFamily:"'DM Sans',sans-serif"}}>👁 Solo lectura</div>}
     </div>
@@ -493,7 +538,8 @@ function Field({positions,lineup,readOnly,onClickPos,onRemovePos,dragOverPos,onD
 }
 
 // ─── BENCH ────────────────────────────────────────────────────────────────────
-function Bench({subs,readOnly,onClickSub,onDragStart}){
+function Bench({subs,readOnly,onClickSub,onDragStart,teamColor}){
+  const color=getTeamColor(teamColor);
   return(
     <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"13px 12px 15px",boxShadow:"0 2px 12px rgba(196,154,42,0.08)"}}>
       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
@@ -512,7 +558,7 @@ function Bench({subs,readOnly,onClickSub,onDragStart}){
             {sub?(
               <>
                 <div style={{position:"relative",display:"flex",justifyContent:"center",width:"100%"}}>
-                  <div style={{width:36,height:36,borderRadius:"50%",background:`linear-gradient(135deg,${C.accentDark},${C.accent})`,border:"2.5px solid rgba(255,255,255,0.9)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 8px rgba(0,0,0,0.12)"}}>
+                  <div style={{width:36,height:36,borderRadius:"50%",background:`linear-gradient(135deg,${color.dark},${color.bg})`,border:"2.5px solid rgba(255,255,255,0.9)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 8px rgba(0,0,0,0.12)"}}>
                     <span style={{fontSize:10,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif"}}>{sub.name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()}</span>
                   </div>
                   <div style={{position:"absolute",bottom:-5,left:"50%",transform:"translateX(-50%)",background:C.accent,borderRadius:4,padding:"0 4px",minWidth:22,textAlign:"center"}}>
@@ -1025,6 +1071,10 @@ function MainApp({user,isAdmin,onLogout}){
                   onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.borderDark}/>
               </div>
             </div>
+            <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`}}>
+              <div style={{fontSize:10,fontWeight:600,color:C.textLight,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8,fontFamily:"'DM Sans',sans-serif"}}>🎨 Color del equipo</div>
+              <ColorPicker selected={teamData.teamColor||"blue"} onChange={color=>saveTeam({teamColor:color})}/>
+            </div>
             {/* Squad management */}
             <div style={{padding:"12px 16px"}}>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
@@ -1047,7 +1097,8 @@ function MainApp({user,isAdmin,onLogout}){
               onClickPos={(id,label)=>setPickModal({type:"starter",posId:id,posLabel:label})}
               onRemovePos={handleRemovePos}
               dragOverPos={dragOverPos} onDragOver={setDragOverPos} onDragLeave={()=>setDragOverPos(null)} onDrop={handleDrop}
-              onDragStartPos={posId=>{dragFromPosId.current=posId;dragSubIdx.current=null;}}/>
+              onDragStartPos={posId=>{dragFromPosId.current=posId;dragSubIdx.current=null;}}
+              teamColor={teamData?.teamColor}/>
           </div>
           <div style={{width:"100%",order:3}}>
             <Bench subs={activeLineup?.subs} readOnly={false}
@@ -1056,7 +1107,8 @@ function MainApp({user,isAdmin,onLogout}){
                 if(sub) setPickModal({type:"subMenu",subIdx:i,posLabel:`Suplente ${i+1}`,currentPlayer:sub});
                 else setPickModal({type:"sub",subIdx:i,posLabel:`Suplente ${i+1}`});
               }}
-              onDragStart={i=>{dragSubIdx.current=i;dragFromPosId.current=null;}}/>
+              onDragStart={i=>{dragSubIdx.current=i;dragFromPosId.current=null;}}
+              teamColor={teamData?.teamColor}/>
           </div>
           {/* RESERVES */}
           {(()=>{
@@ -1361,6 +1413,7 @@ function TeamSelectionScreen({user,onDone}){
   const[teams,setTeams]=useState([]);
   const[loading,setLoading]=useState(true);
   const[newTeamName,setNewTeamName]=useState("");
+  const[newTeamColor,setNewTeamColor]=useState("blue");
   const[creating,setCreating]=useState(false);
   const[error,setError]=useState("");
 
@@ -1385,7 +1438,7 @@ function TeamSelectionScreen({user,onDone}){
     if(!newTeamName.trim()){setError("Escribe el nombre de tu equipo.");return;}
     setCreating(true);
     const ref=doc(db,"teams",user.uid);
-    await setDoc(ref,{uid:user.uid,email:user.email,teamName:newTeamName.trim(),squad:[],lineups:[{id:"a",name:"Alineación A",formation:"4-3-3",starters:{},subs:Array(7).fill(null)}],createdAt:new Date().toISOString()});
+    await setDoc(ref,{uid:user.uid,email:user.email,teamName:newTeamName.trim(),teamColor:newTeamColor,squad:[],lineups:[{id:"a",name:"Alineación A",formation:"4-3-3",starters:{},subs:Array(7).fill(null)}],createdAt:new Date().toISOString()});
     await updateProfile(user,{displayName:newTeamName.trim()});
     onDone();
   };
@@ -1435,6 +1488,8 @@ function TeamSelectionScreen({user,onDone}){
                 placeholder="Nombre de tu equipo…"
                 style={{width:"100%",padding:"11px 14px",borderRadius:10,border:`1.5px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:14,outline:"none",fontFamily:"'DM Sans',sans-serif",marginBottom:10}}
                 onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.borderDark}/>
+              <div style={{fontSize:11,fontWeight:600,color:C.textLight,marginBottom:8,textTransform:"uppercase",letterSpacing:0.5,fontFamily:"'DM Sans',sans-serif"}}>Color del equipo</div>
+              <div style={{marginBottom:12}}><ColorPicker selected={newTeamColor} onChange={setNewTeamColor}/></div>
               {error&&<p style={{color:"#c0392b",fontSize:12,margin:"0 0 8px",fontFamily:"'DM Sans',sans-serif"}}>⚠ {error}</p>}
               <button onClick={createTeam} disabled={creating}
                 style={{width:"100%",padding:"13px",background:C.accent,color:"#fff",border:"none",borderRadius:11,fontSize:15,fontWeight:800,cursor:"pointer",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:2,opacity:creating?0.6:1}}>
