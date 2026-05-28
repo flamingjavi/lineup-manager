@@ -655,30 +655,55 @@ function AdminTeamEditor({teamData,pool}){
 
   return(
     <div style={{marginTop:12,background:C.card,border:`2px solid ${C.accent}`,borderRadius:16,overflow:"hidden",boxShadow:`0 8px 32px ${C.goldLight}`}}>
-      <div style={{padding:"11px 14px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:10,background:C.goldLight,flexWrap:"wrap"}}>
-        <div style={{width:3,height:16,background:C.accent,borderRadius:2}}/>
-        <span style={{fontSize:14,fontWeight:800,color:C.text,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>{localData.teamName}</span>
-        {saving&&<span style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>Guardando…</span>}
-        {/* Lineup selector + create */}
-        {allLineups.map(l=>(
-          <button key={l.id} onClick={()=>setActiveAdminLineupId(l.id)}
-            style={{padding:"3px 9px",borderRadius:7,border:`1.5px solid ${lineup.id===l.id?C.accent:C.borderDark}`,background:lineup.id===l.id?C.accent:C.inputBg,color:lineup.id===l.id?"#fff":C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
-            {l.name}
+      <div style={{padding:"11px 14px",borderBottom:`1px solid ${C.border}`,background:C.goldLight,flexWrap:"wrap",display:"flex",flexDirection:"column",gap:8}}>
+        {/* Team name editable */}
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <div style={{width:3,height:16,background:C.accent,borderRadius:2,flexShrink:0}}/>
+          <input value={localData.teamName}
+            onChange={e=>setLocalData(d=>({...d,teamName:e.target.value}))}
+            onBlur={e=>save({teamName:e.target.value.trim()||localData.teamName})}
+            style={{fontSize:14,fontWeight:800,color:C.text,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1,background:"transparent",border:"none",borderBottom:`1.5px solid ${C.borderDark}`,outline:"none",flex:1,minWidth:0}}/>
+          {saving&&<span style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif",flexShrink:0}}>Guardando…</span>}
+          <button onClick={()=>setShowReserves(true)}
+            style={{padding:"4px 10px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",flexShrink:0}}>
+            Ver reservas
           </button>
-        ))}
-        <input value={newLineupName} onChange={e=>setNewLineupName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addAdminLineup()}
-          placeholder="+ Nueva…"
-          style={{padding:"3px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:10,outline:"none",fontFamily:"'DM Sans',sans-serif",width:80}}
-          onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.borderDark}/>
-        <button onClick={addAdminLineup} style={{padding:"3px 8px",borderRadius:7,background:C.accent,color:"#fff",border:"none",cursor:"pointer",fontSize:10,fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>+ Crear</button>
-        <button onClick={()=>setShowReserves(true)}
-          style={{padding:"4px 10px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
-          Ver reservas
-        </button>
-        <div style={{marginLeft:"auto",display:"flex",gap:4,flexWrap:"wrap"}}>
+        </div>
+        {/* Lineup selector + rename + delete + create */}
+        <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}>
+          {allLineups.map(l=>(
+            <div key={l.id} style={{display:"flex",alignItems:"center",gap:2}}>
+              <button onClick={()=>setActiveAdminLineupId(l.id)}
+                style={{padding:"3px 9px",borderRadius:7,border:`1.5px solid ${lineup.id===l.id?C.accent:C.borderDark}`,background:lineup.id===l.id?C.accent:C.inputBg,color:lineup.id===l.id?"#fff":C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                {l.name}
+              </button>
+              {lineup.id===l.id&&(
+                <>
+                  <button onClick={()=>{
+                    const n=window.prompt("Nuevo nombre:",l.name);
+                    if(n?.trim()) save({lineups:allLineups.map(x=>x.id===l.id?{...x,name:n.trim()}:x)});
+                  }} style={{padding:"2px 5px",borderRadius:5,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:10,cursor:"pointer"}}>✏️</button>
+                  {allLineups.length>1&&<button onClick={()=>{
+                    if(!window.confirm(`¿Borrar "${l.name}"?`)) return;
+                    const nl=allLineups.filter(x=>x.id!==l.id);
+                    save({lineups:nl});
+                    setActiveAdminLineupId(nl[0].id);
+                  }} style={{padding:"2px 5px",borderRadius:5,border:"1px solid #ffcccc",background:"#fff5f5",color:"#c0392b",fontSize:10,cursor:"pointer"}}>🗑️</button>}
+                </>
+              )}
+            </div>
+          ))}
+          <input value={newLineupName} onChange={e=>setNewLineupName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addAdminLineup()}
+            placeholder="+ Nueva…"
+            style={{padding:"3px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:10,outline:"none",fontFamily:"'DM Sans',sans-serif",width:75}}
+            onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.borderDark}/>
+          <button onClick={addAdminLineup} style={{padding:"3px 8px",borderRadius:7,background:C.accent,color:"#fff",border:"none",cursor:"pointer",fontSize:10,fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>+ Crear</button>
+        </div>
+        {/* Formation selector */}
+        <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
           {Object.keys(FORMATIONS).map(f=>(
             <button key={f} onClick={()=>updateLineup(()=>({formation:f,starters:{}}))}
-              style={{padding:"3px 7px",borderRadius:6,border:`1.5px solid ${lineup.formation===f?C.accent:C.borderDark}`,background:lineup.formation===f?C.accent:C.inputBg,color:lineup.formation===f?"#fff":C.textMid,fontSize:9,fontWeight:600,cursor:"pointer",fontFamily:"monospace"}}>
+              style={{padding:"2px 6px",borderRadius:5,border:`1.5px solid ${lineup.formation===f?C.accent:C.borderDark}`,background:lineup.formation===f?C.accent:C.inputBg,color:lineup.formation===f?"#fff":C.textMid,fontSize:9,fontWeight:600,cursor:"pointer",fontFamily:"monospace"}}>
               {f}
             </button>
           ))}
