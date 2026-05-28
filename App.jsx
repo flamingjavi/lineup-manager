@@ -803,12 +803,31 @@ function MainApp({user,isAdmin,onLogout}){
         {/* LINEUP PANEL */}
         {showLineupPanel&&(
           <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:13,marginTop:10,boxShadow:`0 2px 12px rgba(196,154,42,0.06)`}}>
-            <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:9}}>
+            <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:9}}>
               {lineups.map(l=>(
-                <button key={l.id} onClick={()=>{setActiveLineupId(l.id);setShowLineupPanel(false);}}
-                  style={{padding:"6px 13px",borderRadius:9,border:`1.5px solid ${activeLineupId===l.id?C.accent:C.borderDark}`,background:activeLineupId===l.id?C.accent:C.inputBg,color:activeLineupId===l.id?"#fff":C.textMid,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
-                  {l.name}
-                </button>
+                <div key={l.id} style={{display:"flex",alignItems:"center",gap:6}}>
+                  <button onClick={()=>{setActiveLineupId(l.id);setShowLineupPanel(false);}}
+                    style={{flex:1,padding:"8px 13px",borderRadius:9,border:`1.5px solid ${activeLineupId===l.id?C.accent:C.borderDark}`,background:activeLineupId===l.id?C.accent:C.inputBg,color:activeLineupId===l.id?"#fff":C.textMid,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textAlign:"left"}}>
+                    {l.name}
+                  </button>
+                  {/* Rename */}
+                  <button onClick={()=>{
+                    const newName=window.prompt("Nuevo nombre:",l.name);
+                    if(newName&&newName.trim()){
+                      const nl=lineups.map(x=>x.id===l.id?{...x,name:newName.trim()}:x);
+                      saveTeam({lineups:nl});
+                    }
+                  }} style={{padding:"7px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:12,cursor:"pointer"}}>✏️</button>
+                  {/* Delete — only if more than 1 lineup */}
+                  {lineups.length>1&&(
+                    <button onClick={async()=>{
+                      if(!window.confirm(`¿Borrar "${l.name}"?`)) return;
+                      const nl=lineups.filter(x=>x.id!==l.id);
+                      await saveTeam({lineups:nl});
+                      if(activeLineupId===l.id) setActiveLineupId(nl[0].id);
+                    }} style={{padding:"7px 10px",borderRadius:8,border:"1px solid #ffcccc",background:"#fff5f5",color:"#c0392b",fontSize:12,cursor:"pointer"}}>🗑️</button>
+                  )}
+                </div>
               ))}
             </div>
             <div style={{fontSize:10,color:C.textLight,marginBottom:9,fontFamily:"'DM Sans',sans-serif"}}>Todas usan los mismos {squad.length} jugadores de la plantilla.</div>
