@@ -199,7 +199,7 @@ function Avatar({name,size=50}){
 }
 
 // ─── ADD PLAYER MODAL ─────────────────────────────────────────────────────────
-function AddPlayerModal({onAdd,onClose,currentCount}){
+function AddPlayerModal({onAdd,onClose,currentCount,pool,teamName}){
   const[tab,setTab]=useState("search");
   const[query,setQuery]=useState("");
   const[results,setResults]=useState(FC26_DB.slice(0,20));
@@ -211,14 +211,23 @@ function AddPlayerModal({onAdd,onClose,currentCount}){
   const remaining=26-currentCount;
 
   const TS=a=>({flex:1,padding:"9px 0",border:"none",background:"none",cursor:"pointer",fontSize:12,fontWeight:700,color:a?C.text:C.textFaint,borderBottom:a?`2px solid ${C.accent}`:"2px solid transparent",fontFamily:"'DM Sans',sans-serif"});
-
   const togglePos=(p)=>setMPos(prev=>prev.includes(p)?prev.filter(x=>x!==p):[...prev,p]);
+
+  const getTakenBy=(poolKey)=>{
+    if(!pool||!poolKey) return null;
+    const entry=pool[poolKey];
+    if(entry&&entry.teamName!==teamName) return entry.teamName;
+    return null;
+  };
 
   const handleManual=()=>{
     if(!mName.trim()){setMErr("Nombre obligatorio.");return;}
     if(mPos.length===0){setMErr("Selecciona al menos una posición.");return;}
+    const poolKey=`name_${mName.trim().toLowerCase().replace(/\s+/g,"_")}`;
+    const taken=getTakenBy(poolKey);
+    if(taken){setMErr(`Ya registrado por ${taken}.`);return;}
     setMErr("");
-    onAdd({id:`p_${Date.now()}`,name:mName.trim(),pos:mPos.join("/"),team:mTeam.trim()||"—",age:mAge?parseInt(mAge):null});
+    onAdd({id:`p_${Date.now()}`,name:mName.trim(),pos:mPos.join("/"),team:mTeam.trim()||"—",age:mAge?parseInt(mAge):null,poolKey});
   };
 
   return(
@@ -249,18 +258,24 @@ function AddPlayerModal({onAdd,onClose,currentCount}){
               </div>
             </div>
             <div style={{overflowY:"auto",flex:1}}>
-              {results.map((p,i)=>(
-                <div key={p.id} onClick={()=>remaining>0&&onAdd({...p,id:`p_${Date.now()}_${i}`})}
-                  style={{display:"flex",alignItems:"center",gap:12,padding:"10px 16px",cursor:remaining>0?"pointer":"not-allowed",borderBottom:`1px solid ${C.border}`,transition:"background .1s",opacity:remaining>0?1:0.4}}
-                  onMouseEnter={e=>remaining>0&&(e.currentTarget.style.background=C.inputBg)} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                  <Avatar name={p.name} size={38}/>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:13,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"'DM Sans',sans-serif"}}>{p.name}</div>
-                    <div style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{p.team} · {p.age}a</div>
+              {results.map((p,i)=>{
+                const poolKey=`fc26_${p.id}`;
+                const takenBy=getTakenBy(poolKey);
+                const canAdd=remaining>0&&!takenBy;
+                return(
+                  <div key={p.id} onClick={()=>canAdd&&onAdd({...p,id:poolKey,poolKey})}
+                    style={{display:"flex",alignItems:"center",gap:12,padding:"10px 16px",cursor:canAdd?"pointer":"not-allowed",borderBottom:`1px solid ${C.border}`,transition:"background .1s",opacity:canAdd?1:0.45}}
+                    onMouseEnter={e=>canAdd&&(e.currentTarget.style.background=C.inputBg)} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                    <Avatar name={p.name} size={38}/>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:13,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"'DM Sans',sans-serif"}}>{p.name}</div>
+                      <div style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{p.team} · {p.age}a</div>
+                      {takenBy&&<span style={{fontSize:9,color:"#c0392b",fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>🔒 Tomado por {takenBy}</span>}
+                    </div>
+                    <span style={{fontSize:10,fontWeight:700,color:C.textLight,background:C.inputBg,padding:"3px 8px",borderRadius:6,fontFamily:"monospace",border:`1px solid ${C.border}`}}>{p.pos}</span>
                   </div>
-                  <span style={{fontSize:10,fontWeight:700,color:C.textLight,background:C.inputBg,padding:"3px 8px",borderRadius:6,fontFamily:"monospace",border:`1px solid ${C.border}`}}>{p.pos}</span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </>
         )}
@@ -629,6 +644,8 @@ function AdminTeamEditor({teamData}){
 function MainApp({user,isAdmin,onLogout}){
   const[teamData,setTeamData]=useState(null);
   const[allTeams,setAllTeams]=useState([]);
+  const[pool,setPool]=useState({});
+  const[showPool,setShowPool]=useState(false);
   const[viewingTeam,setViewingTeam]=useState(null);
   const[activeLineupId,setActiveLineupId]=useState("a");
   const[showLineupPanel,setShowLineupPanel]=useState(false);
@@ -662,7 +679,33 @@ function MainApp({user,isAdmin,onLogout}){
     return unsub;
   },[user]);
 
+  useEffect(()=>{
+    const unsub=onSnapshot(doc(db,"pool","players"),snap=>{
+      if(snap.exists()) setPool(snap.data());
+      else setPool({});
+    });
+    return unsub;
+  },[]);
+
   const saveTeam=async patch=>{setSaving(true);await updateDoc(doc(db,"teams",user.uid),patch);setSaving(false);setSaved(true);setTimeout(()=>setSaved(false),2000);};
+
+  const addToPool=async(player,tName)=>{
+    if(!player.poolKey) return;
+    const poolRef=doc(db,"pool","players");
+    const snap=await getDoc(poolRef);
+    const current=snap.exists()?snap.data():{};
+    await setDoc(poolRef,{...current,[player.poolKey]:{name:player.name,pos:player.pos,teamName:tName,teamUid:user.uid}});
+  };
+
+  const removeFromPool=async(player)=>{
+    if(!player.poolKey) return;
+    const poolRef=doc(db,"pool","players");
+    const snap=await getDoc(poolRef);
+    if(!snap.exists()) return;
+    const current={...snap.data()};
+    delete current[player.poolKey];
+    await setDoc(poolRef,current);
+  };
 
   if(!teamData) return(
     <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -791,8 +834,13 @@ function MainApp({user,isAdmin,onLogout}){
         {isAdmin&&(
           <div style={{paddingTop:12}}>
             <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 14px",boxShadow:`0 2px 12px rgba(196,154,42,0.06)`}}>
-              <div style={{fontSize:10,fontWeight:700,color:C.textLight,textTransform:"uppercase",letterSpacing:0.5,marginBottom:10,fontFamily:"'DM Sans',sans-serif"}}>
-                Todos los equipos ({allTeams.length})
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                <div style={{fontSize:10,fontWeight:700,color:C.textLight,textTransform:"uppercase",letterSpacing:0.5,fontFamily:"'DM Sans',sans-serif"}}>
+                  Todos los equipos ({allTeams.length})
+                </div>
+                <button onClick={()=>setShowPool(true)} style={{marginLeft:"auto",padding:"5px 12px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                  🌍 Ver pool global
+                </button>
               </div>
               <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
                 {allTeams.filter(t=>t.uid!==user.uid).map(t=>(
@@ -938,9 +986,37 @@ function MainApp({user,isAdmin,onLogout}){
         </div>}
       </div>
 
-      {showAddPlayer&&<AddPlayerModal currentCount={squad.length} onAdd={async p=>{await saveTeam({squad:[...squad,p]});setShowAddPlayer(false);}} onClose={()=>setShowAddPlayer(false)}/>}
+      {showAddPlayer&&<AddPlayerModal currentCount={squad.length} pool={pool} teamName={teamData?.teamName}
+        onAdd={async p=>{await saveTeam({squad:[...squad,p]});await addToPool(p,teamData?.teamName);setShowAddPlayer(false);}}
+        onClose={()=>setShowAddPlayer(false)}/>}
       {pickModal&&<PickFromSquad squad={squad} posLabel={pickModal.posLabel} onPick={handlePick} onClose={()=>setPickModal(null)}
         usedIds={[...Object.values(activeLineup?.starters||{}).filter(Boolean).map(p=>p.id),...(activeLineup?.subs||[]).filter(Boolean).map(p=>p.id)]}/>}
+
+      {/* POOL MODAL */}
+      {showPool&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(8px)"}} onClick={()=>setShowPool(false)}>
+          <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:22,width:"100%",maxWidth:500,maxHeight:"88vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 24px 60px rgba(0,0,0,0.15)"}} onClick={e=>e.stopPropagation()}>
+            <div style={{padding:"14px 18px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+              <span style={{fontSize:15,fontWeight:800,color:C.text,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>🌍 POOL GLOBAL DE JUGADORES</span>
+              <span style={{fontSize:11,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{Object.keys(pool).length} jugadores</span>
+              <button onClick={()=>setShowPool(false)} style={{marginLeft:"auto",background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:"50%",width:30,height:30,color:C.textMid,cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+            </div>
+            <div style={{overflowY:"auto",flex:1,padding:"10px 14px 16px",display:"flex",flexDirection:"column",gap:5}}>
+              {Object.keys(pool).length===0&&<div style={{textAlign:"center",color:C.textFaint,fontSize:13,padding:"32px 0",fontFamily:"'DM Sans',sans-serif"}}>No hay jugadores en el pool todavía.</div>}
+              {Object.entries(pool).sort((a,b)=>a[1].name.localeCompare(b[1].name)).map(([key,p])=>(
+                <div key={key} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 11px",borderRadius:10,background:C.inputBg,border:`1px solid ${C.border}`}}>
+                  <Avatar name={p.name} size={34}/>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:12,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"'DM Sans',sans-serif"}}>{p.name}</div>
+                    <div style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}><span style={{fontFamily:"monospace",color:C.accent,fontWeight:700}}>{p.pos}</span></div>
+                  </div>
+                  <span style={{fontSize:10,fontWeight:700,color:C.textMid,background:C.card,padding:"3px 9px",borderRadius:8,fontFamily:"'DM Sans',sans-serif",border:`1px solid ${C.border}`}}>⚽ {p.teamName}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* SUB MENU MODAL */}
       {pickModal?.type==="subMenu"&&(
@@ -994,6 +1070,7 @@ function MainApp({user,isAdmin,onLogout}){
                     e.stopPropagation();
                     const ns=squad.filter(s=>s.id!==p.id);
                     await saveTeam({squad:ns});
+                    await removeFromPool(p);
                   }} style={{background:"#fff5f5",border:"1px solid #ffcccc",borderRadius:8,color:"#c0392b",cursor:"pointer",fontSize:13,padding:"6px 10px",flexShrink:0,fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>✕</button>
                 </div>
               ))}
