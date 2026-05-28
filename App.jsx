@@ -336,7 +336,7 @@ function PickFromSquad({squad,posLabel,onPick,onClose,usedIds}){
         <div style={{overflowY:"auto",flex:1}}>
           {squad.length===0&&<div style={{padding:"32px",textAlign:"center",color:C.textFaint,fontSize:13,fontFamily:"'DM Sans',sans-serif"}}>Plantilla vacía. Agrega jugadores desde ⚙️</div>}
           {filtered.map(p=>{
-            const isUsed=usedIds?.includes(p.id);
+            const isUsed=usedIds?.includes(p.poolKey||p.id);
             return(
               <div key={p.id} onClick={()=>!isUsed&&onPick(p)}
                 style={{display:"flex",alignItems:"center",gap:11,padding:"10px 18px",cursor:isUsed?"not-allowed":"pointer",borderBottom:`1px solid ${C.border}`,transition:"background .1s",opacity:isUsed?0.35:1}}
@@ -619,8 +619,8 @@ function AdminTeamEditor({teamData}){
             </div>
             <div style={{overflowY:"auto",flex:1,padding:"10px 14px 16px",display:"flex",flexDirection:"column",gap:6}}>
               {(()=>{
-                const usedIds=[...Object.values(lineup.starters||{}).filter(Boolean).map(p=>p.id),...(lineup.subs||[]).filter(Boolean).map(p=>p.id)];
-                const reserves=squad.filter(p=>!usedIds.includes(p.id));
+                const usedIds=[...Object.values(lineup.starters||{}).filter(Boolean).map(p=>p.poolKey||p.id),...(lineup.subs||[]).filter(Boolean).map(p=>p.poolKey||p.id)];
+                const reserves=squad.filter(p=>!usedIds.includes(p.poolKey||p.id));
                 if(reserves.length===0) return <div style={{textAlign:"center",color:C.textFaint,fontSize:13,padding:"24px 0",fontFamily:"'DM Sans',sans-serif"}}>No hay reservas — todos los jugadores están convocados.</div>;
                 return reserves.map(p=>(
                   <div key={p.id} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 11px",borderRadius:10,background:C.inputBg,border:`1px solid ${C.border}`}}>
@@ -960,7 +960,7 @@ function MainApp({user,isAdmin,onLogout}){
               ...Object.values(activeLineup?.starters||{}).filter(Boolean).map(p=>p.id),
               ...(activeLineup?.subs||[]).filter(Boolean).map(p=>p.id)
             ];
-            const reserves=squad.filter(p=>!usedIds.includes(p.id));
+            const reserves=squad.filter(p=>!usedIds.includes(p.poolKey||p.id));
             if(reserves.length===0) return null;
             return(
               <div style={{width:"100%",order:4,background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"13px 14px",boxShadow:`0 2px 12px rgba(0,0,0,0.04)`}}>
@@ -990,7 +990,7 @@ function MainApp({user,isAdmin,onLogout}){
         onAdd={async p=>{await saveTeam({squad:[...squad,p]});await addToPool(p,teamData?.teamName);setShowAddPlayer(false);}}
         onClose={()=>setShowAddPlayer(false)}/>}
       {pickModal&&<PickFromSquad squad={squad} posLabel={pickModal.posLabel} onPick={handlePick} onClose={()=>setPickModal(null)}
-        usedIds={[...Object.values(activeLineup?.starters||{}).filter(Boolean).map(p=>p.id),...(activeLineup?.subs||[]).filter(Boolean).map(p=>p.id)]}/>}
+        usedIds={[...Object.values(activeLineup?.starters||{}).filter(Boolean).map(p=>p.poolKey||p.id),...(activeLineup?.subs||[]).filter(Boolean).map(p=>p.poolKey||p.id)]}/>}
 
       {/* POOL MODAL */}
       {showPool&&(
