@@ -477,6 +477,7 @@ function AdminTeamEditor({teamData}){
   const[saving,setSaving]=useState(false);
   const[localData,setLocalData]=useState(teamData);
   const[showReserves,setShowReserves]=useState(false);
+  const[activeAdminLineupId,setActiveAdminLineupId]=useState(null);
   const dragSubIdx=useRef(null);
   const[dragOverPos,setDragOverPos]=useState(null);
 
@@ -488,12 +489,13 @@ function AdminTeamEditor({teamData}){
   },[teamData.uid]);
 
   const save=async patch=>{setSaving(true);await updateDoc(doc(db,"teams",localData.uid),patch);setSaving(false);};
-  const lineup=localData.lineups?.[0]||{formation:"4-3-3",starters:{},subs:Array(7).fill(null)};
+  const allLineups=localData.lineups||[{formation:"4-3-3",starters:{},subs:Array(7).fill(null)}];
+  const lineup=allLineups.find(l=>l.id===activeAdminLineupId)||allLineups[0]||{formation:"4-3-3",starters:{},subs:Array(7).fill(null)};
   const squad=localData.squad||[];
   const positions=FORMATIONS[lineup.formation]||FORMATIONS["4-3-3"];
 
   const updateLineup=async fn=>{
-    const nl=(localData.lineups||[]).map((l,i)=>i===0?{...l,...fn(l)}:l);
+    const nl=allLineups.map(l=>l.id===lineup.id?{...l,...fn(l)}:l);
     if(!nl.length) nl.push({id:"a",name:"Alineación A",formation:"4-3-3",starters:{},subs:Array(7).fill(null)});
     await save({lineups:nl});
   };
@@ -532,6 +534,13 @@ function AdminTeamEditor({teamData}){
         <div style={{width:3,height:16,background:C.accent,borderRadius:2}}/>
         <span style={{fontSize:14,fontWeight:800,color:C.text,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>{localData.teamName}</span>
         {saving&&<span style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>Guardando…</span>}
+        {/* Lineup selector */}
+        {allLineups.length>1&&allLineups.map(l=>(
+          <button key={l.id} onClick={()=>setActiveAdminLineupId(l.id)}
+            style={{padding:"3px 9px",borderRadius:7,border:`1.5px solid ${lineup.id===l.id?C.accent:C.borderDark}`,background:lineup.id===l.id?C.accent:C.inputBg,color:lineup.id===l.id?"#fff":C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+            {l.name}
+          </button>
+        ))}
         <button onClick={()=>setShowReserves(true)}
           style={{padding:"4px 10px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
           Ver reservas
@@ -879,8 +888,8 @@ function MainApp({user,isAdmin,onLogout}){
           </div>
         )}
 
-        {/* FIELD + BENCH + RESERVES */}
-        <div style={{paddingTop:12,display:"flex",gap:14,flexWrap:"wrap"}}>
+        {/* FIELD + BENCH + RESERVES — ocultar si admin está viendo otro equipo */}
+        {!viewingTeam&&<div style={{paddingTop:12,display:"flex",gap:14,flexWrap:"wrap"}}>
           <div style={{flex:"1 1 260px",minWidth:240}}>
             <Field positions={positions} lineup={activeLineup} readOnly={false}
               onClickPos={(id,label)=>setPickModal({type:"starter",posId:id,posLabel:label})}
@@ -926,7 +935,7 @@ function MainApp({user,isAdmin,onLogout}){
               </div>
             );
           })()}
-        </div>
+        </div>}
       </div>
 
       {showAddPlayer&&<AddPlayerModal currentCount={squad.length} onAdd={async p=>{await saveTeam({squad:[...squad,p]});setShowAddPlayer(false);}} onClose={()=>setShowAddPlayer(false)}/>}
