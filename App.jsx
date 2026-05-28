@@ -500,8 +500,22 @@ function AdminTeamEditor({teamData}){
 
   const handlePick=async player=>{
     if(!pickModal) return;
-    if(pickModal.type==="starter") await updateLineup(l=>({starters:{...l.starters,[pickModal.posId]:player}}));
-    else await updateLineup(l=>{const s=[...l.subs];s[pickModal.subIdx]=player;return{subs:s};});
+    if(pickModal.type==="starter"){
+      await updateLineup(l=>{
+        const newStarters={...l.starters};
+        Object.keys(newStarters).forEach(k=>{if(newStarters[k]?.id===player.id) delete newStarters[k];});
+        const newSubs=l.subs.map(s=>s?.id===player.id?null:s);
+        newStarters[pickModal.posId]=player;
+        return{starters:newStarters,subs:newSubs};
+      });
+    } else {
+      await updateLineup(l=>{
+        const newStarters={...l.starters};
+        Object.keys(newStarters).forEach(k=>{if(newStarters[k]?.id===player.id) delete newStarters[k];});
+        const newSubs=l.subs.map((s,i)=>i===pickModal.subIdx?player:(s?.id===player.id?null:s));
+        return{starters:newStarters,subs:newSubs};
+      });
+    }
     setPickModal(null);
   };
 
@@ -535,7 +549,9 @@ function AdminTeamEditor({teamData}){
         <div style={{flex:"1 1 220px"}}>
           <Field positions={positions} lineup={lineup} readOnly={false}
             onClickPos={(id,label)=>setPickModal({type:"starter",posId:id,posLabel:label})}
-            dragOverPos={dragOverPos} onDragOver={setDragOverPos} onDragLeave={()=>setDragOverPos(null)} onDrop={handleDrop}/>
+            onRemovePos={async posId=>{await updateLineup(l=>{const s={...l.starters};delete s[posId];return{starters:s};});}}
+            dragOverPos={dragOverPos} onDragOver={setDragOverPos} onDragLeave={()=>setDragOverPos(null)} onDrop={handleDrop}
+            onDragStartPos={posId=>{dragSubIdx.current=null;setDragOverPos(null);handleDrop._fromPos=posId;}}/>
         </div>
         <div style={{flex:"0 0 175px",minWidth:160,display:"flex",flexDirection:"column",gap:10}}>
           <Bench subs={lineup.subs} readOnly={false}
@@ -567,7 +583,8 @@ function AdminTeamEditor({teamData}){
         </div>
       </div>
       {showAddPlayer&&<AddPlayerModal currentCount={squad.length} onAdd={async p=>{await save({squad:[...squad,p]});setShowAddPlayer(false);}} onClose={()=>setShowAddPlayer(false)}/>}
-      {pickModal&&<PickFromSquad squad={squad} posLabel={pickModal.posLabel} onPick={handlePick} onClose={()=>setPickModal(null)}/>}
+      {pickModal&&<PickFromSquad squad={squad} posLabel={pickModal.posLabel} onPick={handlePick} onClose={()=>setPickModal(null)}
+        usedIds={[...Object.values(lineup.starters||{}).filter(Boolean).map(p=>p.id),...(lineup.subs||[]).filter(Boolean).map(p=>p.id)]}/>}
       {/* RESERVES MODAL FOR ADMIN */}
       {showReserves&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(8px)"}} onClick={()=>setShowReserves(false)}>
