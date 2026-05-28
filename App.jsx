@@ -492,13 +492,14 @@ function Bench({subs,readOnly,onClickSub,onDragStart}){
 }
 
 // ─── ADMIN TEAM EDITOR ────────────────────────────────────────────────────────
-function AdminTeamEditor({teamData}){
+function AdminTeamEditor({teamData,pool}){
   const[showAddPlayer,setShowAddPlayer]=useState(false);
   const[pickModal,setPickModal]=useState(null);
   const[saving,setSaving]=useState(false);
   const[localData,setLocalData]=useState(teamData);
   const[showReserves,setShowReserves]=useState(false);
   const[activeAdminLineupId,setActiveAdminLineupId]=useState(null);
+  const[newLineupName,setNewLineupName]=useState("");
   const dragSubIdx=useRef(null);
   const[dragOverPos,setDragOverPos]=useState(null);
 
@@ -521,25 +522,35 @@ function AdminTeamEditor({teamData}){
     await save({lineups:nl});
   };
 
+  const matchPlayer=(a,b)=>(a?.poolKey&&a?.poolKey===b?.poolKey)||(a?.id===b?.id);
+
   const handlePick=async player=>{
     if(!pickModal) return;
     if(pickModal.type==="starter"){
       await updateLineup(l=>{
         const newStarters={...l.starters};
-        Object.keys(newStarters).forEach(k=>{if(newStarters[k]?.id===player.id) delete newStarters[k];});
-        const newSubs=l.subs.map(s=>s?.id===player.id?null:s);
+        Object.keys(newStarters).forEach(k=>{if(matchPlayer(newStarters[k],player)) delete newStarters[k];});
+        const newSubs=l.subs.map(s=>matchPlayer(s,player)?null:s);
         newStarters[pickModal.posId]=player;
         return{starters:newStarters,subs:newSubs};
       });
     } else {
       await updateLineup(l=>{
         const newStarters={...l.starters};
-        Object.keys(newStarters).forEach(k=>{if(newStarters[k]?.id===player.id) delete newStarters[k];});
-        const newSubs=l.subs.map((s,i)=>i===pickModal.subIdx?player:(s?.id===player.id?null:s));
+        Object.keys(newStarters).forEach(k=>{if(matchPlayer(newStarters[k],player)) delete newStarters[k];});
+        const newSubs=l.subs.map((s,i)=>i===pickModal.subIdx?player:(matchPlayer(s,player)?null:s));
         return{starters:newStarters,subs:newSubs};
       });
     }
     setPickModal(null);
+  };
+
+  const addAdminLineup=async()=>{
+    const name=newLineupName.trim()||`Alineación ${allLineups.length+1}`;
+    const id=`l_${Date.now()}`;
+    await save({lineups:[...allLineups,{id,name,formation:"4-3-3",starters:{},subs:Array(7).fill(null)}]});
+    setActiveAdminLineupId(id);
+    setNewLineupName("");
   };
 
   const handleDrop=async posId=>{
@@ -555,13 +566,18 @@ function AdminTeamEditor({teamData}){
         <div style={{width:3,height:16,background:C.accent,borderRadius:2}}/>
         <span style={{fontSize:14,fontWeight:800,color:C.text,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>{localData.teamName}</span>
         {saving&&<span style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>Guardando…</span>}
-        {/* Lineup selector */}
-        {allLineups.length>1&&allLineups.map(l=>(
+        {/* Lineup selector + create */}
+        {allLineups.map(l=>(
           <button key={l.id} onClick={()=>setActiveAdminLineupId(l.id)}
             style={{padding:"3px 9px",borderRadius:7,border:`1.5px solid ${lineup.id===l.id?C.accent:C.borderDark}`,background:lineup.id===l.id?C.accent:C.inputBg,color:lineup.id===l.id?"#fff":C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
             {l.name}
           </button>
         ))}
+        <input value={newLineupName} onChange={e=>setNewLineupName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addAdminLineup()}
+          placeholder="+ Nueva…"
+          style={{padding:"3px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:10,outline:"none",fontFamily:"'DM Sans',sans-serif",width:80}}
+          onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.borderDark}/>
+        <button onClick={addAdminLineup} style={{padding:"3px 8px",borderRadius:7,background:C.accent,color:"#fff",border:"none",cursor:"pointer",fontSize:10,fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>+ Crear</button>
         <button onClick={()=>setShowReserves(true)}
           style={{padding:"4px 10px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
           Ver reservas
@@ -612,9 +628,20 @@ function AdminTeamEditor({teamData}){
           </div>
         </div>
       </div>
-      {showAddPlayer&&<AddPlayerModal currentCount={squad.length} onAdd={async p=>{await save({squad:[...squad,p]});setShowAddPlayer(false);}} onClose={()=>setShowAddPlayer(false)}/>}
+      {showAddPlayer&&<AddPlayerModal currentCount={squad.length} pool={pool} teamName={localData.teamName}
+        onAdd={async p=>{
+          await save({squad:[...squad,p]});
+          // Add to pool
+          if(p.poolKey){
+            const poolRef=doc(db,"pool","players");
+            const snap=await getDoc(poolRef);
+            const current=snap.exists()?snap.data():{};
+            await setDoc(poolRef,{...current,[p.poolKey]:{name:p.name,pos:p.pos,teamName:localData.teamName,teamUid:localData.uid}});
+          }
+          setShowAddPlayer(false);
+        }} onClose={()=>setShowAddPlayer(false)}/>}
       {pickModal&&<PickFromSquad squad={squad} posLabel={pickModal.posLabel} onPick={handlePick} onClose={()=>setPickModal(null)}
-        usedIds={[...Object.values(lineup.starters||{}).filter(Boolean).map(p=>p.id),...(lineup.subs||[]).filter(Boolean).map(p=>p.id)]}/>}
+        usedIds={[...Object.values(lineup.starters||{}).filter(Boolean).map(p=>p.poolKey||p.id),...(lineup.subs||[]).filter(Boolean).map(p=>p.poolKey||p.id)]}/>}
       {/* RESERVES MODAL FOR ADMIN */}
       {showReserves&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(8px)"}} onClick={()=>setShowReserves(false)}>
@@ -741,29 +768,23 @@ function MainApp({user,isAdmin,onLogout}){
     await saveTeam({lineups:nl});
   };
 
+  const matchPlayer=(a,b)=>a&&b&&((a.poolKey&&a.poolKey===b.poolKey)||(a.id===b.id));
+
   const handlePick=async player=>{
     if(!pickModal) return;
     if(pickModal.type==="starter"){
       await updateActive(l=>{
-        // Remove player from any other position first
         const newStarters={...l.starters};
-        Object.keys(newStarters).forEach(k=>{
-          if(newStarters[k]?.id===player.id) delete newStarters[k];
-        });
-        // Also remove from subs if present
-        const newSubs=l.subs.map(s=>s?.id===player.id?null:s);
+        Object.keys(newStarters).forEach(k=>{if(matchPlayer(newStarters[k],player)) delete newStarters[k];});
+        const newSubs=l.subs.map(s=>matchPlayer(s,player)?null:s);
         newStarters[pickModal.posId]=player;
         return{starters:newStarters,subs:newSubs};
       });
     } else {
       await updateActive(l=>{
-        // Remove from starters if present
         const newStarters={...l.starters};
-        Object.keys(newStarters).forEach(k=>{
-          if(newStarters[k]?.id===player.id) delete newStarters[k];
-        });
-        // Remove from other sub slots
-        const newSubs=l.subs.map((s,i)=>i===pickModal.subIdx?player:(s?.id===player.id?null:s));
+        Object.keys(newStarters).forEach(k=>{if(matchPlayer(newStarters[k],player)) delete newStarters[k];});
+        const newSubs=l.subs.map((s,i)=>i===pickModal.subIdx?player:(matchPlayer(s,player)?null:s));
         return{starters:newStarters,subs:newSubs};
       });
     }
@@ -885,7 +906,7 @@ function MainApp({user,isAdmin,onLogout}){
                 {allTeams.filter(t=>t.uid!==user.uid).length===0&&<span style={{fontSize:12,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Aún no hay otros equipos registrados.</span>}
               </div>
             </div>
-            {viewingTeam&&<AdminTeamEditor teamData={viewingTeam}/>}
+            {viewingTeam&&<AdminTeamEditor teamData={viewingTeam} pool={pool}/>}
           </div>
         )}
 
