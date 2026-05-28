@@ -688,7 +688,10 @@ function AdminTeamEditor({teamData,pool}){
           setShowAddPlayer(false);
         }} onClose={()=>setShowAddPlayer(false)}/>}
       {pickModal&&<PickFromSquad squad={squad} posLabel={pickModal.posLabel} onPick={handlePick} onClose={()=>setPickModal(null)}
-        usedIds={[...Object.values(lineup.starters||{}).filter(Boolean).map(p=>p.poolKey||p.id),...(lineup.subs||[]).filter(Boolean).map(p=>p.poolKey||p.id)]}
+        usedIds={pickModal.type==="starter"
+          ? Object.entries(lineup.starters||{}).filter(([k,p])=>p&&k!==pickModal.posId).map(([,p])=>p.poolKey||p.id)
+          : [...Object.values(lineup.starters||{}).filter(Boolean).map(p=>p.poolKey||p.id),...(lineup.subs||[]).filter((p,i)=>p&&i!==pickModal.subIdx).map(p=>p.poolKey||p.id)]
+        }
         posFilter={pickModal.type==="starter"?pickModal.posLabel:null} isBench={pickModal.type==="sub"}/>}
       {showReserves&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(8px)"}} onClick={()=>setShowReserves(false)}>
@@ -1058,8 +1061,8 @@ function MainApp({user,isAdmin,onLogout}){
           {/* RESERVES */}
           {(()=>{
             const usedIds=[
-              ...Object.values(activeLineup?.starters||{}).filter(Boolean).map(p=>p.id),
-              ...(activeLineup?.subs||[]).filter(Boolean).map(p=>p.id)
+              ...Object.values(activeLineup?.starters||{}).filter(Boolean).map(p=>p.poolKey||p.id),
+              ...(activeLineup?.subs||[]).filter(Boolean).map(p=>p.poolKey||p.id)
             ];
             const reserves=squad.filter(p=>!usedIds.includes(p.poolKey||p.id));
             if(reserves.length===0) return null;
@@ -1100,7 +1103,10 @@ function MainApp({user,isAdmin,onLogout}){
         }}
         onAdd={()=>{}} onClose={()=>setEditingPlayer(null)}/>}
       {pickModal&&<PickFromSquad squad={squad} posLabel={pickModal.posLabel} onPick={handlePick} onClose={()=>setPickModal(null)}
-        usedIds={[...Object.values(activeLineup?.starters||{}).filter(Boolean).map(p=>p.poolKey||p.id),...(activeLineup?.subs||[]).filter(Boolean).map(p=>p.poolKey||p.id)]}
+        usedIds={pickModal.type==="starter"
+          ? Object.entries(activeLineup?.starters||{}).filter(([k,p])=>p&&k!==pickModal.posId).map(([,p])=>p.poolKey||p.id)
+          : [...Object.values(activeLineup?.starters||{}).filter(Boolean).map(p=>p.poolKey||p.id),...(activeLineup?.subs||[]).filter((p,i)=>p&&i!==pickModal.subIdx).map(p=>p.poolKey||p.id)]
+        }
         posFilter={pickModal.type==="starter"?pickModal.posLabel:null} isBench={pickModal.type==="sub"}/>}
 
       {/* TRANSFER TEAM MODAL */}
