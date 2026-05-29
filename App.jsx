@@ -733,11 +733,20 @@ function AdminTeamEditor({teamData,pool}){
             </button>
             <div style={{maxHeight:160,overflowY:"auto",display:"flex",flexDirection:"column",gap:3}}>
               {squad.map(p=>(
-                <div key={p.id} style={{display:"flex",alignItems:"center",gap:5,padding:"5px 7px",borderRadius:7,background:C.inputBg,border:`1px solid ${C.border}`}}>
+                <div key={p.id} style={{display:"flex",alignItems:"center",gap:5,padding:"5px 7px",borderRadius:7,background:p.locked?"#fffbf0":C.inputBg,border:`1px solid ${p.locked?C.accent:C.border}`}}>
                   <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:10,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"'DM Sans',sans-serif"}}>{p.name}</div>
-                    <div style={{fontSize:8,color:C.textLight,fontFamily:"monospace"}}>{p.pos}</div>
+                    <div style={{fontSize:10,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"'DM Sans',sans-serif"}}>
+                      {p.locked&&"🔒 "}{p.name}
+                    </div>
+                    <div style={{fontSize:8,color:C.textLight,fontFamily:"monospace"}}>{p.primaryPos||p.pos?.split("/")?.[0]}</div>
                   </div>
+                  <button onClick={async()=>{
+                    const ns=squad.map(s=>s.id===p.id?{...s,locked:!p.locked}:s);
+                    await save({squad:ns});
+                  }} title={p.locked?"Desbloquear":"Bloquear"}
+                    style={{background:p.locked?C.goldLight:"none",border:p.locked?`1px solid ${C.accent}`:"1px solid transparent",borderRadius:6,color:p.locked?C.accent:C.textFaint,cursor:"pointer",fontSize:11,padding:"2px 5px",flexShrink:0}}>
+                    {p.locked?"🔒":"🔓"}
+                  </button>
                   <button onClick={async()=>{const ns=squad.filter(s=>s.id!==p.id);await save({squad:ns});}}
                     style={{background:"none",border:"none",color:"#d4846a",cursor:"pointer",fontSize:13,padding:0,flexShrink:0}}>✕</button>
                 </div>
@@ -808,6 +817,7 @@ function MainApp({user,isAdmin,onLogout}){
   const[adminsList,setAdminsList]=useState([]);
   const[viewingTeam,setViewingTeam]=useState(null);
   const[showTeamsList,setShowTeamsList]=useState(false);
+  const[showPresidents,setShowPresidents]=useState(false);
   const[activeLineupId,setActiveLineupId]=useState("a");
   const[showLineupPanel,setShowLineupPanel]=useState(false);
   const[showFormations,setShowFormations]=useState(false);
@@ -1019,6 +1029,7 @@ function MainApp({user,isAdmin,onLogout}){
                   </span>
                 </button>
                 <button onClick={()=>setShowAdminManager(true)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>👑 Admins</button>
+                <button onClick={()=>setShowPresidents(true)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>👤 Presidentes</button>
                 <button onClick={()=>setShowPool(true)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>🌍 Pool</button>
                 <button onClick={()=>setShowCreateTeam(true)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${C.accent}`,background:C.goldLight,color:C.accentDark,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>+ Equipo</button>
               </div>
@@ -1208,6 +1219,53 @@ function MainApp({user,isAdmin,onLogout}){
           : [...Object.values(activeLineup?.starters||{}).filter(Boolean).map(p=>p.poolKey||p.id),...(activeLineup?.subs||[]).filter((p,i)=>p&&i!==pickModal.subIdx).map(p=>p.poolKey||p.id)]
         }
         posFilter={pickModal.type==="starter"?pickModal.posLabel:null} isBench={pickModal.type==="sub"}/>}
+
+      {/* PRESIDENTS MODAL */}
+      {showPresidents&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(8px)"}} onClick={()=>setShowPresidents(false)}>
+          <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:22,width:"100%",maxWidth:440,maxHeight:"88vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 24px 60px rgba(0,0,0,0.15)"}} onClick={e=>e.stopPropagation()}>
+            <div style={{padding:"14px 18px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+              <span style={{fontSize:14,fontWeight:800,color:C.text,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>👤 PRESIDENTES</span>
+              <span style={{fontSize:11,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{allTeams.filter(t=>t.uid).length} activos</span>
+              <button onClick={()=>setShowPresidents(false)} style={{marginLeft:"auto",background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:"50%",width:28,height:28,color:C.textMid,cursor:"pointer",fontSize:15,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+            </div>
+            <div style={{overflowY:"auto",flex:1,padding:"10px 14px 16px",display:"flex",flexDirection:"column",gap:6}}>
+              {[...allTeams].sort((a,b)=>(a.teamName||"").localeCompare(b.teamName||"")).map(t=>{
+                const isTeamAdmin=adminsList.some(a=>a.id===t.uid);
+                const hasOwner=t.uid&&t.uid!=="";
+                return(
+                  <div key={t.id||t.uid} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:10,background:C.inputBg,border:`1px solid ${C.border}`}}>
+                    <div style={{width:8,height:8,borderRadius:"50%",background:getTeamColor(t.teamColor).bg,flexShrink:0}}/>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{display:"flex",alignItems:"center",gap:5}}>
+                        <div style={{fontSize:13,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"'DM Sans',sans-serif"}}>{t.teamName}</div>
+                        {isTeamAdmin&&<span style={{fontSize:8,fontWeight:800,color:C.accent,background:C.goldLight,padding:"1px 5px",borderRadius:8,fontFamily:"'DM Sans',sans-serif",border:`1px solid ${C.accent}`,flexShrink:0}}>ADMIN</span>}
+                      </div>
+                      {hasOwner?(
+                        <div style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.email}</div>
+                      ):(
+                        <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",fontStyle:"italic"}}>Sin presidente</div>
+                      )}
+                    </div>
+                    {hasOwner&&t.uid!==user.uid&&(
+                      <button onClick={async()=>{
+                        if(!window.confirm(`¿Expulsar a ${t.email} de la liga?\n\nEl equipo "${t.teamName}" quedará sin dueño.`)) return;
+                        await updateDoc(doc(db,"teams",t.id||t.uid),{uid:"",email:""});
+                        // Remove admin if they were one
+                        if(isTeamAdmin) await deleteDoc(doc(db,"admins",t.uid));
+                        alert(`✅ ${t.email} fue expulsado. El equipo quedó disponible.`);
+                      }} style={{padding:"5px 10px",borderRadius:8,border:"1px solid #ffcccc",background:"#fff5f5",color:"#c0392b",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",flexShrink:0}}>
+                        Expulsar
+                      </button>
+                    )}
+                    {t.uid===user.uid&&<span style={{fontSize:9,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",flexShrink:0}}>Tú</span>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ADMIN MANAGER MODAL */}
       {showAdminManager&&(
@@ -1438,10 +1496,21 @@ function MainApp({user,isAdmin,onLogout}){
                         <span style={{fontSize:8,fontWeight:700,color:C.accent,background:C.goldLight,padding:"2px 6px",borderRadius:5,fontFamily:"monospace",border:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{p.pos?.split("/")?.[0]}</span>
                         <button onClick={async e=>{
                           e.stopPropagation();
-                          if(!window.confirm(`¿Eliminar a ${p.name} del pool?`)) return;
+                          if(!window.confirm(`¿Eliminar a ${p.name} del pool y de la plantilla de ${p.teamName}?`)) return;
+                          // Remove from pool
                           const poolRef=doc(db,"pool","players");
                           const snap=await getDoc(poolRef);
                           if(snap.exists()){const d={...snap.data()};delete d[key];await setDoc(poolRef,d);}
+                          // Remove from team squad
+                          if(p.teamUid){
+                            const teamRef=doc(db,"teams",p.teamUid);
+                            const teamSnap=await getDoc(teamRef);
+                            if(teamSnap.exists()){
+                              const squad=teamSnap.data().squad||[];
+                              const ns=squad.filter(s=>s.poolKey!==key&&s.id!==key);
+                              await updateDoc(teamRef,{squad:ns});
+                            }
+                          }
                         }} style={{background:"none",border:"none",color:"#ffaaaa",cursor:"pointer",fontSize:12,padding:"2px 4px",flexShrink:0}}>✕</button>
                       </div>
                     </div>
@@ -1572,23 +1641,28 @@ function MainApp({user,isAdmin,onLogout}){
             <div style={{overflowY:"auto",flex:1,padding:"10px 14px 16px",display:"flex",flexDirection:"column",gap:6}}>
               {squad.length===0&&<div style={{textAlign:"center",color:C.textFaint,fontSize:13,padding:"32px 0",fontFamily:"'DM Sans',sans-serif"}}>No hay jugadores todavía.</div>}
               {squad.map(p=>(
-                <div key={p.id} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 11px",borderRadius:10,background:C.inputBg,border:`1px solid ${C.border}`}}>
-                  <Avatar name={p.name} size={36}/>
+                <div key={p.id} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 11px",borderRadius:10,background:p.locked?"#fffbf0":C.inputBg,border:`1px solid ${p.locked?C.accent:C.border}`}}>
+                  <Avatar name={p.name} size={36} colorId={teamData?.teamColor}/>
                   <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:13,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"'DM Sans',sans-serif"}}>{p.name}</div>
+                    <div style={{display:"flex",alignItems:"center",gap:5}}>
+                      <div style={{fontSize:13,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"'DM Sans',sans-serif"}}>{p.name}</div>
+                      {p.locked&&<span style={{fontSize:10,flexShrink:0}}>🔒</span>}
+                    </div>
                     <div style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{p.country||"—"} · <span style={{fontFamily:"monospace",color:C.accent,fontWeight:700}}>{p.primaryPos||p.pos?.split("/")?.[0]}</span>{p.age?` · ${p.age}a`:""}{p.overall?` · ${p.overall}⭐`:""}</div>
                   </div>
                   <div style={{display:"flex",gap:5}}>
-                    {!p.poolKey?.startsWith("fc26_")&&(
+                    {!p.locked&&!p.poolKey?.startsWith("fc26_")&&(
                       <button onClick={e=>{e.stopPropagation();setEditingPlayer(p);setShowSquadManager(false);}}
                         style={{background:C.goldLight,border:`1px solid ${C.borderDark}`,borderRadius:8,color:C.textMid,cursor:"pointer",fontSize:13,padding:"6px 10px",flexShrink:0,fontFamily:"'DM Sans',sans-serif"}}>✏️</button>
                     )}
-                    <button onClick={async e=>{
-                      e.stopPropagation();
-                      const ns=squad.filter(s=>s.id!==p.id);
-                      await saveTeam({squad:ns});
-                      await removeFromPool(p);
-                    }} style={{background:"#fff5f5",border:"1px solid #ffcccc",borderRadius:8,color:"#c0392b",cursor:"pointer",fontSize:13,padding:"6px 10px",flexShrink:0,fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>✕</button>
+                    {!p.locked&&(
+                      <button onClick={async e=>{
+                        e.stopPropagation();
+                        const ns=squad.filter(s=>s.id!==p.id);
+                        await saveTeam({squad:ns});
+                        await removeFromPool(p);
+                      }} style={{background:"#fff5f5",border:"1px solid #ffcccc",borderRadius:8,color:"#c0392b",cursor:"pointer",fontSize:13,padding:"6px 10px",flexShrink:0,fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>✕</button>
+                    )}
                   </div>
                 </div>
               ))}
