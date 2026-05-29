@@ -804,6 +804,29 @@ function AdminTeamEditor({teamData,pool}){
 }
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
+// ─── MAINTENANCE TOGGLE ───────────────────────────────────────────────────────
+function MaintenanceToggle(){
+  const[on,setOn]=useState(false);
+  useEffect(()=>{
+    const unsub=onSnapshot(doc(db,"config","settings"),snap=>{
+      setOn(snap.exists()&&snap.data().maintenance===true);
+    });
+    return unsub;
+  },[]);
+  const toggle=async()=>{
+    const next=!on;
+    if(next&&!window.confirm("¿Activar modo mantenimiento? Los usuarios no podrán acceder.")) return;
+    await setDoc(doc(db,"config","settings"),{maintenance:next});
+  };
+  return(
+    <button onClick={toggle}
+      style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${on?"#c0392b":"#27ae60"}`,background:on?"#fff5f5":"#f0fff4",color:on?"#c0392b":"#27ae60",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",flexShrink:0}}>
+      {on?"🔴 Mantenimiento ON":"🟢 Mantenimiento OFF"}
+    </button>
+  );
+}
+
+// ─── MAIN APP ─────────────────────────────────────────────────────────────────
 function MainApp({user,isAdmin,onLogout}){
   const[teamData,setTeamData]=useState(null);
   const[allTeams,setAllTeams]=useState([]);
@@ -1032,6 +1055,7 @@ function MainApp({user,isAdmin,onLogout}){
                 <button onClick={()=>setShowPresidents(true)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>👤 Presidentes</button>
                 <button onClick={()=>setShowPool(true)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>🌍 Pool</button>
                 <button onClick={()=>setShowCreateTeam(true)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${C.accent}`,background:C.goldLight,color:C.accentDark,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>+ Equipo</button>
+                <MaintenanceToggle/>
               </div>
               {/* Collapsible teams list */}
               {showTeamsList&&(
@@ -1778,11 +1802,20 @@ export default function App(){
   const[isAdmin,setIsAdmin]=useState(false);
   const[hasTeam,setHasTeam]=useState(false);
   const[loading,setLoading]=useState(true);
+  const[maintenance,setMaintenance]=useState(false);
+
+  // Listen to maintenance mode in real time
+  useEffect(()=>{
+    const unsub=onSnapshot(doc(db,"config","settings"),snap=>{
+      if(snap.exists()) setMaintenance(snap.data().maintenance===true);
+      else setMaintenance(false);
+    });
+    return unsub;
+  },[]);
 
   const checkUserState=async(u)=>{
     if(!u){setUser(null);setIsAdmin(false);setHasTeam(false);setLoading(false);return;}
     setUser(u);
-    // Check admin
     const adminSnap=await getDoc(doc(db,"admins",u.uid));
     if(adminSnap.exists()){
       setIsAdmin(true);
@@ -1795,12 +1828,10 @@ export default function App(){
         setIsAdmin(false);
       }
     }
-    // Check if user has a team assigned
     const teamSnap=await getDoc(doc(db,"teams",u.uid));
     if(teamSnap.exists()&&teamSnap.data().uid===u.uid){
       setHasTeam(true);
     } else {
-      // Also check if any team has this uid
       const teamsSnap=await getDocs(collection(db,"teams"));
       const myTeam=teamsSnap.docs.find(d=>d.data().uid===u.uid);
       setHasTeam(!!myTeam);
@@ -1817,6 +1848,19 @@ export default function App(){
     <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center"}}>
       <div style={{width:36,height:36,border:`3px solid ${C.border}`,borderTopColor:C.accent,borderRadius:"50%",animation:"spin .7s linear infinite"}}/>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}*{box-sizing:border-box}`}</style>
+    </div>
+  );
+
+  // Maintenance mode — only admins pass through
+  if(maintenance&&!isAdmin) return(
+    <div style={{minHeight:"100vh",background:"#1a1a1a",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24}}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;700;800&display=swap');*{box-sizing:border-box}`}</style>
+      <div style={{textAlign:"center",maxWidth:380}}>
+        <div style={{fontSize:64,marginBottom:16}}>🔒</div>
+        <h1 style={{fontSize:32,fontWeight:800,color:"#F5C518",margin:"0 0 10px",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:2}}>LIGA CERRADA</h1>
+        <p style={{fontSize:14,color:"rgba(255,255,255,0.6)",fontFamily:"'DM Sans',sans-serif",lineHeight:1.6,marginBottom:24}}>La Federación Liga Simulada está en mantenimiento. Vuelve pronto.</p>
+        {user&&<button onClick={()=>signOut(auth)} style={{padding:"10px 24px",borderRadius:10,border:"1px solid rgba(255,255,255,0.2)",background:"transparent",color:"rgba(255,255,255,0.5)",fontSize:12,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Cerrar sesión</button>}
+      </div>
     </div>
   );
 
