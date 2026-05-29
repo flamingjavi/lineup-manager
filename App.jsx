@@ -807,6 +807,7 @@ function MainApp({user,isAdmin,onLogout}){
   const[deleteTeamTarget,setDeleteTeamTarget]=useState(null);
   const[adminsList,setAdminsList]=useState([]);
   const[viewingTeam,setViewingTeam]=useState(null);
+  const[showTeamsList,setShowTeamsList]=useState(false);
   const[activeLineupId,setActiveLineupId]=useState("a");
   const[showLineupPanel,setShowLineupPanel]=useState(false);
   const[showFormations,setShowFormations]=useState(false);
@@ -1009,40 +1010,46 @@ function MainApp({user,isAdmin,onLogout}){
         {isAdmin&&(
           <div style={{paddingTop:12}}>
             <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 14px",boxShadow:`0 2px 12px rgba(196,154,42,0.06)`}}>
-              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-                <div style={{fontSize:10,fontWeight:700,color:C.textLight,textTransform:"uppercase",letterSpacing:0.5,fontFamily:"'DM Sans',sans-serif"}}>
-                  Todos los equipos ({allTeams.length})
+              {/* Header */}
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <button onClick={()=>setShowTeamsList(v=>!v)}
+                  style={{flex:1,display:"flex",alignItems:"center",gap:6,background:"none",border:"none",cursor:"pointer",padding:0}}>
+                  <span style={{fontSize:10,fontWeight:700,color:C.textLight,textTransform:"uppercase",letterSpacing:0.5,fontFamily:"'DM Sans',sans-serif"}}>
+                    Equipos ({allTeams.length}) {showTeamsList?"▲":"▼"}
+                  </span>
+                </button>
+                <button onClick={()=>setShowAdminManager(true)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>👑 Admins</button>
+                <button onClick={()=>setShowPool(true)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>🌍 Pool</button>
+                <button onClick={()=>setShowCreateTeam(true)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${C.accent}`,background:C.goldLight,color:C.accentDark,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>+ Equipo</button>
+              </div>
+              {/* Collapsible teams list */}
+              {showTeamsList&&(
+                <div style={{marginTop:10,display:"flex",flexDirection:"column",gap:5}}>
+                  {[...allTeams].sort((a,b)=>(a.teamName||"").localeCompare(b.teamName||"")).map(t=>{
+                    const isTeamAdmin=adminsList.some(a=>a.id===t.uid);
+                    const isMe=t.uid===user.uid;
+                    const isSelected=viewingTeam?.uid===t.uid;
+                    return(
+                      <div key={t.id||t.uid} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 10px",borderRadius:9,border:`1.5px solid ${isSelected?C.accent:C.border}`,background:isSelected?C.goldLight:C.inputBg}}>
+                        <div style={{width:10,height:10,borderRadius:"50%",background:getTeamColor(t.teamColor).bg,flexShrink:0,border:"1px solid rgba(0,0,0,0.15)"}}/>
+                        <span style={{fontSize:12,fontWeight:700,color:C.text,flex:1,fontFamily:"'DM Sans',sans-serif",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.teamName}</span>
+                        <span style={{fontSize:9,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>{(t.squad||[]).length}j</span>
+                        {isTeamAdmin&&<span style={{fontSize:8,fontWeight:800,color:C.accent,background:C.goldLight,padding:"1px 5px",borderRadius:8,fontFamily:"'DM Sans',sans-serif",border:`1px solid ${C.accent}`,flexShrink:0}}>ADMIN</span>}
+                        {!isMe?(
+                          <>
+                            <button onClick={()=>setViewingTeam(isSelected?null:t)}
+                              style={{padding:"4px 9px",borderRadius:7,border:`1px solid ${isSelected?C.accent:C.borderDark}`,background:isSelected?C.accent:C.card,color:isSelected?"#fff":C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",flexShrink:0}}>
+                              {isSelected?"✕":"Ver"}
+                            </button>
+                            <button onClick={()=>setTransferTeam(t)} style={{padding:"4px 7px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:C.textMid,fontSize:11,cursor:"pointer",flexShrink:0}}>🔄</button>
+                            <button onClick={()=>setDeleteTeamTarget(t)} style={{padding:"4px 7px",borderRadius:7,border:"1px solid #ffcccc",background:"#fff5f5",color:"#c0392b",fontSize:11,cursor:"pointer",flexShrink:0}}>🗑️</button>
+                          </>
+                        ):<span style={{fontSize:9,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",flexShrink:0}}>Tú</span>}
+                      </div>
+                    );
+                  })}
                 </div>
-                <button onClick={()=>setShowAdminManager(true)} style={{marginLeft:"auto",padding:"5px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
-                  👑 Admins
-                </button>
-                <button onClick={()=>setShowPool(true)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
-                  🌍 Pool
-                </button>
-                <button onClick={()=>setShowCreateTeam(true)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${C.accent}`,background:C.goldLight,color:C.accentDark,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
-                  + Equipo
-                </button>
-              </div>
-              <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
-                {allTeams.filter(t=>t.uid!==user.uid).map(t=>(
-                  <div key={t.id} style={{display:"flex",gap:4,alignItems:"center"}}>
-                    <button onClick={()=>setViewingTeam(viewingTeam?.uid===t.uid?null:t)}
-                      style={{padding:"6px 13px",borderRadius:9,border:`1.5px solid ${viewingTeam?.uid===t.uid?C.accent:C.borderDark}`,background:viewingTeam?.uid===t.uid?C.accent:C.inputBg,color:viewingTeam?.uid===t.uid?"#fff":C.textMid,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",display:"flex",alignItems:"center",gap:6}}>
-                      ⚽ {t.teamName}
-                      <span style={{fontSize:9,color:viewingTeam?.uid===t.uid?"rgba(255,255,255,0.7)":C.textFaint}}>{(t.squad||[]).length} jug.</span>
-                    </button>
-                    <button onClick={()=>setTransferTeam(t)}
-                      style={{padding:"5px 7px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:11,cursor:"pointer"}} title="Transferir equipo">
-                      🔄
-                    </button>
-                    <button onClick={()=>setDeleteTeamTarget(t)}
-                      style={{padding:"5px 7px",borderRadius:7,border:"1px solid #ffcccc",background:"#fff5f5",color:"#c0392b",fontSize:11,cursor:"pointer"}} title="Eliminar equipo">
-                      🗑️
-                    </button>
-                  </div>
-                ))}
-                {allTeams.filter(t=>t.uid!==user.uid).length===0&&<span style={{fontSize:12,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Aún no hay otros equipos registrados.</span>}
-              </div>
+              )}
             </div>
             {viewingTeam&&<AdminTeamEditor teamData={viewingTeam} pool={pool}/>}
           </div>
