@@ -898,68 +898,185 @@ function AdminTeamEditor({teamData,pool,allTeamsRef}){
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 // ─── IMPORT BUTTON ────────────────────────────────────────────────────────────
 function ImportButton({allTeams,pool,user,onDone}){
-  const[status,setStatus]=useState("idle"); // idle | running | done
+  const[status,setStatus]=useState("idle");
   const[log,setLog]=useState([]);
+  const[parsedTeams,setParsedTeams]=useState(null);
+  const[importing,setImporting]=useState(false);
+  const fileRef=useRef(null);
 
-  const runImport=async()=>{
-    setStatus("running");
-    setLog(["🚀 Iniciando importación..."]);
-    const addLog=msg=>setLog(prev=>[...prev,msg]);
+  const POS_MAP={'POR':'GK','DFC':'CB','DFD':'RB','DFI':'LB','LD':'RWB','LI':'LWB','MCD':'CDM','MC':'CM','MD':'RM','MI':'LM','MCO':'CAM','ED':'RW','EI':'LW','DC':'ST','CO':'CF'};
 
-    // Build existing teams map by name
-    const existing={};
-    allTeams.forEach(t=>{existing[t.teamName]={...t};});
+  const convertPos=raw=>{
+    if(!raw) return 'CM';
+    const parts=String(raw).split(/[\s\-]+/).map(p=>p.trim()).filter(Boolean);
+    const converted=[...new Set(parts.map(p=>POS_MAP[p]).filter(Boolean))];
+    return converted.length?converted.join('/'):raw;
+  };
 
-    let poolData={...pool};
-    let ok=0, missing=[];
+  const formatPrice=val=>{
+    if(!val) return null;
+    const v=parseFloat(val);
+    if(v>=1000000) return{value:Math.round(v/10000)/100,unit:'M'};
+    if(v>=1000) return{value:Math.round(v/100)/10,unit:'K'};
+    return{value:v,unit:'K'};
+  };
 
-    for(const [teamName, players] of Object.entries(LIGA_DATA)){
-      const t=existing[teamName];
-      if(!t){missing.push(teamName);addLog(`⚠️ No encontrado: ${teamName}`);continue;}
+  const normalize=s=>String(s||"").toLowerCase().trim().replace(/[.\-_]/g,' ').replace(/\s+/g,' ');
 
-      // Clear old pool entries for this team
-      Object.keys(poolData).forEach(k=>{
-        if(poolData[k].teamName===teamName||poolData[k].teamUid===t.uid) delete poolData[k];
-      });
+  const handleFile=async e=>{
+    const file=e.target.files[0];
+    if(!file) return;
+    setStatus("parsing");
+    setLog(["📖 Leyendo archivo..."]);
 
-      // Add new pool entries
-      players.forEach(p=>{
-        if(p.poolKey) poolData[p.poolKey]={name:p.name,pos:p.pos,country:p.country||null,overall:p.overall||null,price:p.price||null,teamName,teamUid:t.uid||t.id};
-      });
+    // Load SheetJS from CDN
+    await new Promise((res,rej)=>{
+      if(window.XLSX){res();return;}
+      const s=document.createElement('script');
+      s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      s.onload=res; s.onerror=rej;
+      document.head.appendChild(s);
+    });
 
-      // Update squad in Firestore
-      const teamId=t.id||t.uid;
-      await updateDoc(doc(db,"teams",teamId),{squad:players});
-      ok++;
-      addLog(`✅ ${teamName} (${players.length} jug.)`);
+    const buf=await file.arrayBuffer();
+    const wb=window.XLSX.read(buf,{type:'array'});
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    const rows=window.XLSX.utils.sheet_to_json(ws,{header:1});
+
+    // Parse teams
+    const teams={};
+    let currentTeam=null;
+    for(const row of rows){
+      if(!row||row.every(v=>!v)) continue;
+      if(row[0]==='NOMBRE') continue;
+      if(!row[0]&&row[1]&&!row[2]){currentTeam=String(row[1]).trim();teams[currentTeam]=[];continue;}
+      if(currentTeam&&row[0]){
+        const name=String(row[0]).trim();
+        const pos=convertPos(row[3]);
+        const parts=pos.split('/');
+        teams[currentTeam].push({
+          id:`xls_${Math.abs(name.split('').reduce((a,c)=>a+c.charCodeAt(0),0)^Date.now())}`,
+          name, pos, primaryPos:parts[0], secondaryPos:parts.slice(1).join('/')||null,
+          country:row[5]?String(row[5]).trim():null,
+          age:row[2]?parseInt(row[2]):null,
+          overall:row[4]?parseInt(row[4]):null,
+          price:formatPrice(row[1]),
+          poolKey:`name_${name.toLowerCase().replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'').slice(0,50)}`,
+        });
+      }
     }
 
-    // Save pool
-    await setDoc(doc(db,"pool","players"),poolData);
+    // Match with Firestore teams
+    const matched={};
+    const notFound=[];
+    for(const [excelName,players] of Object.entries(teams)){
+      // Try exact match first
+      let ft=allTeams.find(t=>t.teamName===excelName);
+      // Try normalized match
+      if(!ft) ft=allTeams.find(t=>normalize(t.teamName)===normalize(excelName));
+      // Try partial match
+      if(!ft) ft=allTeams.find(t=>normalize(t.teamName).includes(normalize(excelName).split(' ')[0])||normalize(excelName).includes(normalize(t.teamName).split(' ')[0]));
+      
+      if(ft) matched[ft.teamName]={firestoreTeam:ft,players,excelName};
+      else notFound.push(excelName);
+    }
 
-    addLog(`\n✅ Importación completa: ${ok} equipos.`);
-    if(missing.length) addLog(`⚠️ No encontrados: ${missing.join(", ")}`);
+    setParsedTeams({matched,notFound,totalPlayers:Object.values(teams).flat().length});
+    setLog([
+      `✅ Archivo leído: ${Object.keys(teams).length} equipos`,
+      `✅ Coincidencias: ${Object.keys(matched).length} equipos`,
+      notFound.length?`⚠️ Sin coincidencia: ${notFound.length} equipos`:null,
+    ].filter(Boolean));
+    setStatus("preview");
+  };
+
+  const runImport=async()=>{
+    if(!parsedTeams) return;
+    setImporting(true);
+    setStatus("running");
+    setLog(["🚀 Importando..."]);
+    const addLog=msg=>setLog(p=>[...p,msg]);
+
+    let poolData={...pool};
+    let ok=0;
+
+    for(const [teamName,{firestoreTeam,players}] of Object.entries(parsedTeams.matched)){
+      // Clear old pool entries
+      Object.keys(poolData).forEach(k=>{if(poolData[k].teamName===teamName||poolData[k].teamUid===firestoreTeam.uid) delete poolData[k];});
+      // Add new pool entries
+      players.forEach(p=>{if(p.poolKey) poolData[p.poolKey]={name:p.name,pos:p.pos,country:p.country||null,overall:p.overall||null,price:p.price||null,teamName,teamUid:firestoreTeam.uid||firestoreTeam.id};});
+      // Update Firestore
+      await updateDoc(doc(db,"teams",firestoreTeam.id||firestoreTeam.uid),{squad:players});
+      addLog(`✅ ${teamName} (${players.length} jug.)`);
+      ok++;
+    }
+
+    await setDoc(doc(db,"pool","players"),poolData);
+    addLog(`\n🏆 Listo: ${ok} equipos importados.`);
+    if(parsedTeams.notFound.length) addLog(`⚠️ Sin coincidencia: ${parsedTeams.notFound.join(", ")}`);
     setStatus("done");
+    setImporting(false);
   };
 
   return(
     <div>
       {status==="idle"&&(
-        <button onClick={runImport}
-          style={{width:"100%",padding:"13px",background:"#27ae60",color:"#fff",border:"none",borderRadius:11,fontSize:15,fontWeight:800,cursor:"pointer",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>
-          IMPORTAR AHORA
-        </button>
+        <div style={{textAlign:"center"}}>
+          <input ref={fileRef} type="file" accept=".xlsx,.xls" style={{display:"none"}} onChange={handleFile}/>
+          <button onClick={()=>fileRef.current.click()}
+            style={{width:"100%",padding:"13px",background:"#27ae60",color:"#fff",border:"none",borderRadius:11,fontSize:15,fontWeight:800,cursor:"pointer",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>
+            📁 SELECCIONAR EXCEL
+          </button>
+          <div style={{fontSize:10,color:C.textFaint,marginTop:6,fontFamily:"'DM Sans',sans-serif"}}>Formato: Plantillas_Liga_Simulada_EAFC26.xlsx</div>
+        </div>
       )}
-      {status!=="idle"&&(
-        <div style={{background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 12px",maxHeight:300,overflowY:"auto",fontFamily:"monospace",fontSize:11,color:C.text,lineHeight:1.8}}>
+
+      {status==="parsing"&&(
+        <div style={{textAlign:"center",padding:"20px",color:C.textLight,fontFamily:"'DM Sans',sans-serif",fontSize:13}}>
+          <div style={{width:28,height:28,border:`3px solid ${C.border}`,borderTopColor:"#27ae60",borderRadius:"50%",animation:"spin .7s linear infinite",margin:"0 auto 10px"}}/>
+          Leyendo archivo...
+        </div>
+      )}
+
+      {status==="preview"&&parsedTeams&&(
+        <div>
+          <div style={{background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 12px",maxHeight:200,overflowY:"auto",fontFamily:"'DM Sans',sans-serif",fontSize:11,lineHeight:1.8,marginBottom:12}}>
+            {log.map((l,i)=><div key={i} style={{color:l.startsWith("⚠️")?"#e67e22":"#27ae60"}}>{l}</div>)}
+          </div>
+          {parsedTeams.notFound.length>0&&(
+            <div style={{background:"#fffbf0",border:"1px solid #f0d060",borderRadius:9,padding:"8px 12px",marginBottom:12,fontSize:10,color:"#7a6000",fontFamily:"'DM Sans',sans-serif"}}>
+              <strong>Sin coincidencia:</strong> {parsedTeams.notFound.join(", ")}
+            </div>
+          )}
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={()=>{setStatus("idle");setParsedTeams(null);setLog([]);}}
+              style={{flex:1,padding:"11px",background:C.inputBg,color:C.textMid,border:`1px solid ${C.border}`,borderRadius:10,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+              Cancelar
+            </button>
+            <button onClick={runImport} disabled={importing}
+              style={{flex:2,padding:"11px",background:"#27ae60",color:"#fff",border:"none",borderRadius:10,fontSize:14,fontWeight:800,cursor:"pointer",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>
+              IMPORTAR {Object.keys(parsedTeams.matched).length} EQUIPOS
+            </button>
+          </div>
+        </div>
+      )}
+
+      {status==="running"&&(
+        <div style={{background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 12px",maxHeight:280,overflowY:"auto",fontFamily:"monospace",fontSize:11,color:C.text,lineHeight:1.8}}>
           {log.map((l,i)=><div key={i}>{l}</div>)}
         </div>
       )}
+
       {status==="done"&&(
-        <button onClick={onDone}
-          style={{width:"100%",marginTop:10,padding:"11px",background:C.accent,color:"#fff",border:"none",borderRadius:11,fontSize:14,fontWeight:800,cursor:"pointer",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>
-          CERRAR
-        </button>
+        <div>
+          <div style={{background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 12px",maxHeight:250,overflowY:"auto",fontFamily:"monospace",fontSize:11,color:C.text,lineHeight:1.8,marginBottom:10}}>
+            {log.map((l,i)=><div key={i}>{l}</div>)}
+          </div>
+          <button onClick={onDone}
+            style={{width:"100%",padding:"11px",background:C.accent,color:"#fff",border:"none",borderRadius:11,fontSize:14,fontWeight:800,cursor:"pointer",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>
+            CERRAR
+          </button>
+        </div>
       )}
     </div>
   );
