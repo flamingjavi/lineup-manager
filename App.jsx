@@ -462,7 +462,7 @@ function PlayerSpot({pos,player,readOnly,onClick,onRemove,isDragOver,onDragOver,
               {isDragOver&&<div style={{position:"absolute",inset:-2,borderRadius:"50%",border:`2px dashed ${C.accent}`,pointerEvents:"none"}}/>}
             </div>
             {showMenu&&!readOnly&&(
-              <div style={{position:"absolute",top:"110%",left:"50%",transform:"translateX(-50%)",background:C.card,border:`1.5px solid ${C.accent}`,borderRadius:10,overflow:"hidden",boxShadow:"0 8px 24px rgba(0,0,0,0.2)",zIndex:50,minWidth:120}}>
+              <div style={{position:"absolute",[pos.y>70?"bottom":"top"]:"110%",left:"50%",transform:"translateX(-50%)",background:C.card,border:`1.5px solid ${C.accent}`,borderRadius:10,overflow:"hidden",boxShadow:"0 8px 24px rgba(0,0,0,0.2)",zIndex:50,minWidth:120}}>
                 <div onClick={e=>{e.stopPropagation();setShowMenu(false);onClick(pos.id,pos.label);}}
                   style={{padding:"11px 16px",fontSize:13,fontWeight:700,color:C.text,cursor:"pointer",borderBottom:`1px solid ${C.border}`,fontFamily:"'DM Sans',sans-serif"}}
                   onMouseEnter={e=>e.currentTarget.style.background=C.inputBg} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
@@ -800,8 +800,12 @@ function MainApp({user,isAdmin,onLogout}){
   const[allTeams,setAllTeams]=useState([]);
   const[pool,setPool]=useState({});
   const[showPool,setShowPool]=useState(false);
+  const[poolPlayer,setPoolPlayer]=useState(null);
   const[transferTeam,setTransferTeam]=useState(null);
   const[showCreateTeam,setShowCreateTeam]=useState(false);
+  const[showAdminManager,setShowAdminManager]=useState(false);
+  const[deleteTeamTarget,setDeleteTeamTarget]=useState(null);
+  const[adminsList,setAdminsList]=useState([]);
   const[viewingTeam,setViewingTeam]=useState(null);
   const[activeLineupId,setActiveLineupId]=useState("a");
   const[showLineupPanel,setShowLineupPanel]=useState(false);
@@ -836,6 +840,11 @@ function MainApp({user,isAdmin,onLogout}){
     const unsub=onSnapshot(collection(db,"teams"),snap=>{setAllTeams(snap.docs.map(d=>({id:d.id,...d.data()})));});
     return unsub;
   },[user]);
+
+  useEffect(()=>{
+    const unsub=onSnapshot(collection(db,"admins"),snap=>{setAdminsList(snap.docs.map(d=>({id:d.id,...d.data()})));});
+    return unsub;
+  },[]);
 
   useEffect(()=>{
     const unsub=onSnapshot(doc(db,"pool","players"),snap=>{
@@ -1004,11 +1013,14 @@ function MainApp({user,isAdmin,onLogout}){
                 <div style={{fontSize:10,fontWeight:700,color:C.textLight,textTransform:"uppercase",letterSpacing:0.5,fontFamily:"'DM Sans',sans-serif"}}>
                   Todos los equipos ({allTeams.length})
                 </div>
-                <button onClick={()=>setShowPool(true)} style={{marginLeft:"auto",padding:"5px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
-                  🌍 Pool global
+                <button onClick={()=>setShowAdminManager(true)} style={{marginLeft:"auto",padding:"5px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                  👑 Admins
+                </button>
+                <button onClick={()=>setShowPool(true)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                  🌍 Pool
                 </button>
                 <button onClick={()=>setShowCreateTeam(true)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${C.accent}`,background:C.goldLight,color:C.accentDark,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
-                  + Crear equipo
+                  + Equipo
                 </button>
               </div>
               <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
@@ -1022,6 +1034,10 @@ function MainApp({user,isAdmin,onLogout}){
                     <button onClick={()=>setTransferTeam(t)}
                       style={{padding:"5px 7px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:11,cursor:"pointer"}} title="Transferir equipo">
                       🔄
+                    </button>
+                    <button onClick={()=>setDeleteTeamTarget(t)}
+                      style={{padding:"5px 7px",borderRadius:7,border:"1px solid #ffcccc",background:"#fff5f5",color:"#c0392b",fontSize:11,cursor:"pointer"}} title="Eliminar equipo">
+                      🗑️
                     </button>
                   </div>
                 ))}
@@ -1186,6 +1202,111 @@ function MainApp({user,isAdmin,onLogout}){
         }
         posFilter={pickModal.type==="starter"?pickModal.posLabel:null} isBench={pickModal.type==="sub"}/>}
 
+      {/* ADMIN MANAGER MODAL */}
+      {showAdminManager&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(8px)"}} onClick={()=>setShowAdminManager(false)}>
+          <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:22,width:"100%",maxWidth:420,maxHeight:"85vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 24px 60px rgba(0,0,0,0.15)"}} onClick={e=>e.stopPropagation()}>
+            <div style={{padding:"14px 18px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+              <span style={{fontSize:14,fontWeight:800,color:C.text,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>👑 ADMINISTRADORES</span>
+              <button onClick={()=>setShowAdminManager(false)} style={{marginLeft:"auto",background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:"50%",width:28,height:28,color:C.textMid,cursor:"pointer",fontSize:15,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+            </div>
+            <div style={{overflowY:"auto",flex:1,padding:"12px 16px 16px",display:"flex",flexDirection:"column",gap:8}}>
+              {/* Add admin by email */}
+              <div style={{background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:10,padding:12,marginBottom:4}}>
+                <div style={{fontSize:11,fontWeight:600,color:C.textLight,marginBottom:8,textTransform:"uppercase",fontFamily:"'DM Sans',sans-serif"}}>Agregar nuevo admin</div>
+                <div style={{display:"flex",gap:8}}>
+                  <input id="newAdminEmailInput" placeholder="correo@ejemplo.com"
+                    style={{flex:1,padding:"8px 12px",borderRadius:9,border:`1.5px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:13,outline:"none",fontFamily:"'DM Sans',sans-serif"}}
+                    onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.borderDark}/>
+                  <button onClick={async()=>{
+                    const email=document.getElementById("newAdminEmailInput").value.trim();
+                    if(!email) return;
+                    const snap=await getDocs(collection(db,"teams"));
+                    let foundUid=null;
+                    snap.forEach(d=>{if(d.data().email===email) foundUid=d.id;});
+                    if(!foundUid){alert("❌ Usuario no encontrado. Debe registrarse primero.");return;}
+                    await setDoc(doc(db,"admins",foundUid),{email,uid:foundUid});
+                    document.getElementById("newAdminEmailInput").value="";
+                    alert("✅ Admin agregado.");
+                  }} style={{padding:"8px 14px",borderRadius:9,background:C.accent,color:"#fff",border:"none",cursor:"pointer",fontSize:12,fontWeight:800,fontFamily:"'DM Sans',sans-serif"}}>
+                    + Admin
+                  </button>
+                </div>
+              </div>
+              {/* Current admins list */}
+              {allTeams.filter(t=>t.uid).map(t=>{
+                const isAdmin=adminsList?.some(a=>a.id===t.uid);
+                return(
+                  <div key={t.id} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",borderRadius:10,background:isAdmin?C.goldLight:C.inputBg,border:`1px solid ${isAdmin?C.accent:C.border}`}}>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:12,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{t.teamName}</div>
+                      <div style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{t.email}</div>
+                    </div>
+                    {isAdmin?(
+                      t.uid!==user.uid?(
+                        <button onClick={async()=>{
+                          if(!window.confirm(`¿Quitar admin a ${t.teamName}?`)) return;
+                          await deleteDoc(doc(db,"admins",t.uid));
+                        }} style={{padding:"4px 10px",borderRadius:7,border:"1px solid #ffcccc",background:"#fff5f5",color:"#c0392b",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                          Quitar admin
+                        </button>
+                      ):<span style={{fontSize:10,color:C.accent,fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>Tú 👑</span>
+                    ):(
+                      <button onClick={async()=>{
+                        await setDoc(doc(db,"admins",t.uid),{email:t.email,uid:t.uid});
+                      }} style={{padding:"4px 10px",borderRadius:7,border:`1px solid ${C.accent}`,background:C.goldLight,color:C.accentDark,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                        + Admin
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE TEAM MODAL */}
+      {deleteTeamTarget&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(8px)"}} onClick={()=>setDeleteTeamTarget(null)}>
+          <div style={{background:C.card,border:"2px solid #c0392b",borderRadius:20,width:"100%",maxWidth:360,boxShadow:"0 24px 60px rgba(0,0,0,0.15)"}} onClick={e=>e.stopPropagation()}>
+            <div style={{padding:"16px 18px",borderBottom:`1px solid ${C.border}`}}>
+              <div style={{fontSize:14,fontWeight:800,color:"#c0392b",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>⚠️ ELIMINAR EQUIPO</div>
+            </div>
+            <div style={{padding:"16px 18px 20px"}}>
+              <p style={{fontSize:13,color:C.text,fontFamily:"'DM Sans',sans-serif",marginBottom:16}}>
+                ¿Estás seguro de eliminar <strong>{deleteTeamTarget.teamName}</strong>?<br/>
+                <span style={{color:"#c0392b",fontSize:11}}>Se borrarán plantilla, alineaciones y el equipo quedará eliminado permanentemente.</span>
+              </p>
+              <div style={{display:"flex",gap:10}}>
+                <button onClick={()=>setDeleteTeamTarget(null)}
+                  style={{flex:1,padding:"10px",borderRadius:10,border:`1px solid ${C.border}`,background:C.inputBg,color:C.textMid,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                  Cancelar
+                </button>
+                <button onClick={async()=>{
+                  const t=deleteTeamTarget;
+                  // Remove all pool entries for this team
+                  const poolRef=doc(db,"pool","players");
+                  const poolSnap=await getDoc(poolRef);
+                  if(poolSnap.exists()){
+                    const poolData={...poolSnap.data()};
+                    Object.keys(poolData).forEach(k=>{if(poolData[k].teamUid===t.uid||poolData[k].teamName===t.teamName) delete poolData[k];});
+                    await setDoc(poolRef,poolData);
+                  }
+                  // Delete team doc
+                  await deleteDoc(doc(db,"teams",t.id||t.uid));
+                  setDeleteTeamTarget(null);
+                  if(viewingTeam?.uid===t.uid) setViewingTeam(null);
+                }}
+                  style={{flex:1,padding:"10px",borderRadius:10,border:"none",background:"#c0392b",color:"#fff",fontSize:13,fontWeight:800,cursor:"pointer",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>
+                  ELIMINAR
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* TRANSFER TEAM MODAL */}
       {transferTeam&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(8px)"}} onClick={()=>setTransferTeam(null)}>
@@ -1279,7 +1400,14 @@ function MainApp({user,isAdmin,onLogout}){
             <div style={{overflowY:"auto",flex:1,padding:"10px 14px 16px",display:"flex",flexDirection:"column",gap:5}}>
               {Object.keys(pool).length===0&&<div style={{textAlign:"center",color:C.textFaint,fontSize:13,padding:"32px 0",fontFamily:"'DM Sans',sans-serif"}}>No hay jugadores en el pool todavía.</div>}
               {(()=>{
-                const sorted=Object.entries(pool).sort((a,b)=>(a[1].teamName||"").localeCompare(b[1].teamName||"")||(a[1].name||"").localeCompare(b[1].name||""));
+                const POS_ORDER=["GK","SW","CB","RB","LB","RWB","LWB","CDM","DM","CM","RM","LM","CAM","RAM","LAM","RW","LW","CF","ST"];
+                const sorted=Object.entries(pool).sort((a,b)=>{
+                  const teamCmp=(a[1].teamName||"").localeCompare(b[1].teamName||"");
+                  if(teamCmp!==0) return teamCmp;
+                  const posA=POS_ORDER.indexOf(a[1].pos?.split("/")?.[0]);
+                  const posB=POS_ORDER.indexOf(b[1].pos?.split("/")?.[0]);
+                  return(posA===-1?99:posA)-(posB===-1?99:posB);
+                });
                 let lastTeam=null;
                 return sorted.map(([key,p])=>{
                   const showTeamHeader=p.teamName!==lastTeam;
@@ -1289,7 +1417,10 @@ function MainApp({user,isAdmin,onLogout}){
                       {showTeamHeader&&<div style={{padding:"8px 2px 3px",borderBottom:`1px solid ${C.border}`,marginBottom:3,marginTop:lastTeam?10:0}}>
                         <span style={{fontSize:10,fontWeight:800,color:C.textMid,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>⚽ {p.teamName}</span>
                       </div>}
-                      <div style={{display:"flex",alignItems:"center",gap:8,padding:"5px 8px",borderRadius:8,background:C.inputBg,border:`1px solid ${C.border}`,marginBottom:3}}>
+                      <div onClick={()=>setPoolPlayer({key,p})}
+                        style={{display:"flex",alignItems:"center",gap:8,padding:"5px 8px",borderRadius:8,background:C.inputBg,border:`1px solid ${C.border}`,marginBottom:3,cursor:"pointer"}}
+                        onMouseEnter={e=>e.currentTarget.style.borderColor=C.accent}
+                        onMouseLeave={e=>e.currentTarget.style.borderColor=C.border}>
                         <div style={{width:26,height:26,borderRadius:"50%",background:`linear-gradient(135deg,${C.accentDark},${C.accent})`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                           <span style={{fontSize:9,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif"}}>{p.name?.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()}</span>
                         </div>
@@ -1310,6 +1441,35 @@ function MainApp({user,isAdmin,onLogout}){
                   );
                 });
               })()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* POOL PLAYER DETAIL */}
+      {poolPlayer&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:2100,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(8px)"}} onClick={()=>setPoolPlayer(null)}>
+          <div style={{background:C.card,border:`2px solid ${C.accent}`,borderRadius:22,width:"100%",maxWidth:320,overflow:"hidden",boxShadow:"0 24px 60px rgba(0,0,0,0.25)"}} onClick={e=>e.stopPropagation()}>
+            <div style={{background:`linear-gradient(135deg,${C.accentDark},${C.accent})`,padding:"24px 20px",textAlign:"center",position:"relative"}}>
+              <div style={{width:64,height:64,borderRadius:"50%",background:"rgba(255,255,255,0.2)",border:"3px solid rgba(255,255,255,0.8)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 10px"}}>
+                <span style={{fontSize:22,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif"}}>{poolPlayer.p.name?.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()}</span>
+              </div>
+              <div style={{fontSize:18,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>{poolPlayer.p.name}</div>
+              <div style={{fontSize:12,color:"rgba(255,255,255,0.8)",fontFamily:"'DM Sans',sans-serif",marginTop:2}}>⚽ {poolPlayer.p.teamName}</div>
+              <button onClick={()=>setPoolPlayer(null)} style={{position:"absolute",top:12,right:12,background:"rgba(255,255,255,0.2)",border:"none",borderRadius:"50%",width:28,height:28,color:"#fff",cursor:"pointer",fontSize:15,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+            </div>
+            <div style={{padding:"16px 20px 20px",display:"flex",flexDirection:"column",gap:10}}>
+              {[
+                ["📍 Posición",poolPlayer.p.pos||"—"],
+                ["🌍 País",poolPlayer.p.country||"—"],
+                ["🎂 Edad",poolPlayer.p.age?`${poolPlayer.p.age} años`:"—"],
+                ["⭐ Media",poolPlayer.p.overall||"—"],
+              ].map(([label,val])=>(
+                <div key={label} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 12px",borderRadius:9,background:C.inputBg,border:`1px solid ${C.border}`}}>
+                  <span style={{fontSize:12,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{label}</span>
+                  <span style={{fontSize:13,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{val}</span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
