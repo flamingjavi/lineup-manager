@@ -585,7 +585,7 @@ function Bench({subs,readOnly,onClickSub,onDragStart,teamColor}){
 }
 
 // ─── ADMIN TEAM EDITOR ────────────────────────────────────────────────────────
-function AdminTeamEditor({teamData,pool}){
+function AdminTeamEditor({teamData,pool,allTeamsRef}){
   const[showAddPlayer,setShowAddPlayer]=useState(false);
   const[pickModal,setPickModal]=useState(null);
   const[saving,setSaving]=useState(false);
@@ -593,6 +593,8 @@ function AdminTeamEditor({teamData,pool}){
   const[showReserves,setShowReserves]=useState(false);
   const[activeAdminLineupId,setActiveAdminLineupId]=useState(null);
   const[newLineupName,setNewLineupName]=useState("");
+  const[editingAdminPlayer,setEditingAdminPlayer]=useState(null);
+  const[transferAdminPlayer,setTransferAdminPlayer]=useState(null);
   const dragSubIdx=useRef(null);
   const[dragOverPos,setDragOverPos]=useState(null);
 
@@ -747,6 +749,12 @@ function AdminTeamEditor({teamData,pool}){
                     style={{background:p.locked?C.goldLight:"none",border:p.locked?`1px solid ${C.accent}`:"1px solid transparent",borderRadius:6,color:p.locked?C.accent:C.textFaint,cursor:"pointer",fontSize:11,padding:"2px 5px",flexShrink:0}}>
                     {p.locked?"🔒":"🔓"}
                   </button>
+                  {!p.poolKey?.startsWith("fc26_")&&(
+                    <button onClick={()=>setEditingAdminPlayer(p)}
+                      style={{background:"none",border:"none",color:C.textFaint,cursor:"pointer",fontSize:11,padding:"2px 5px",flexShrink:0}}>✏️</button>
+                  )}
+                  <button onClick={()=>setTransferAdminPlayer(p)}
+                    style={{background:"none",border:"none",color:C.textFaint,cursor:"pointer",fontSize:11,padding:"2px 5px",flexShrink:0}}>🔄</button>
                   <button onClick={async()=>{const ns=squad.filter(s=>s.id!==p.id);await save({squad:ns});}}
                     style={{background:"none",border:"none",color:"#d4846a",cursor:"pointer",fontSize:13,padding:0,flexShrink:0}}>✕</button>
                 </div>
@@ -758,7 +766,6 @@ function AdminTeamEditor({teamData,pool}){
       {showAddPlayer&&<AddPlayerModal currentCount={squad.length} pool={pool} teamName={localData.teamName}
         onAdd={async p=>{
           await save({squad:[...squad,p]});
-          // Add to pool
           if(p.poolKey){
             const poolRef=doc(db,"pool","players");
             const snap=await getDoc(poolRef);
@@ -767,6 +774,51 @@ function AdminTeamEditor({teamData,pool}){
           }
           setShowAddPlayer(false);
         }} onClose={()=>setShowAddPlayer(false)}/>}
+
+      {editingAdminPlayer&&<AddPlayerModal currentCount={squad.length} pool={pool} teamName={localData.teamName}
+        editPlayer={editingAdminPlayer}
+        onSaveEdit={async updated=>{const ns=squad.map(p=>p.id===updated.id?updated:p);await save({squad:ns});setEditingAdminPlayer(null);}}
+        onAdd={()=>{}} onClose={()=>setEditingAdminPlayer(null)}/>}
+
+      {transferAdminPlayer&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:3000,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(8px)"}} onClick={()=>setTransferAdminPlayer(null)}>
+          <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:22,width:"100%",maxWidth:400,maxHeight:"80vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 24px 60px rgba(0,0,0,0.15)"}} onClick={e=>e.stopPropagation()}>
+            <div style={{padding:"14px 18px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+              <span style={{fontSize:13,fontWeight:800,color:C.text,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>🔄 TRANSFERIR JUGADOR</span>
+              <button onClick={()=>setTransferAdminPlayer(null)} style={{marginLeft:"auto",background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:"50%",width:28,height:28,color:C.textMid,cursor:"pointer",fontSize:15,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+            </div>
+            <div style={{padding:"10px 14px 6px",borderBottom:`1px solid ${C.border}`,flexShrink:0}}>
+              <div style={{fontSize:12,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>Transferir <strong style={{color:C.text}}>{transferAdminPlayer.name}</strong> de <strong style={{color:C.text}}>{localData.teamName}</strong> a:</div>
+            </div>
+            <div style={{overflowY:"auto",flex:1,padding:"8px 14px 14px",display:"flex",flexDirection:"column",gap:6}}>
+              {(allTeamsRef||[]).filter(t=>t.uid&&t.uid!==localData.uid).sort((a,b)=>(a.teamName||"").localeCompare(b.teamName||"")).map(t=>(
+                <div key={t.id||t.uid} onClick={async()=>{
+                  if(!window.confirm(`¿Transferir a ${transferAdminPlayer.name} a ${t.teamName}?`)) return;
+                  await save({squad:squad.filter(p=>p.id!==transferAdminPlayer.id)});
+                  const destRef=doc(db,"teams",t.id||t.uid);
+                  const destSnap=await getDoc(destRef);
+                  if(destSnap.exists()) await updateDoc(destRef,{squad:[...(destSnap.data().squad||[]),transferAdminPlayer]});
+                  if(transferAdminPlayer.poolKey){
+                    const pRef=doc(db,"pool","players");const pSnap=await getDoc(pRef);
+                    if(pSnap.exists()){const pd={...pSnap.data()};if(pd[transferAdminPlayer.poolKey]){pd[transferAdminPlayer.poolKey]={...pd[transferAdminPlayer.poolKey],teamName:t.teamName,teamUid:t.uid};await setDoc(pRef,pd);}}
+                  }
+                  setTransferAdminPlayer(null);
+                  alert(`✅ ${transferAdminPlayer.name} transferido a ${t.teamName}`);
+                }}
+                  style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:10,background:C.inputBg,border:`1px solid ${C.border}`,cursor:"pointer"}}
+                  onMouseEnter={e=>e.currentTarget.style.borderColor=C.accent}
+                  onMouseLeave={e=>e.currentTarget.style.borderColor=C.border}>
+                  <div style={{width:10,height:10,borderRadius:"50%",background:getTeamColor(t.teamColor).bg,flexShrink:0}}/>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:12,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{t.teamName}</div>
+                    <div style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{(t.squad||[]).length} jug.</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
       {pickModal&&<PickFromSquad squad={squad} posLabel={pickModal.posLabel} onPick={handlePick} onClose={()=>setPickModal(null)}
         usedIds={pickModal.type==="starter"
           ? Object.entries(lineup.starters||{}).filter(([k,p])=>p&&k!==pickModal.posId).map(([,p])=>p.poolKey||p.id)
@@ -1086,7 +1138,7 @@ function MainApp({user,isAdmin,onLogout}){
                 </div>
               )}
             </div>
-            {viewingTeam&&<AdminTeamEditor teamData={viewingTeam} pool={pool}/>}
+            {viewingTeam&&<AdminTeamEditor teamData={viewingTeam} pool={pool} allTeamsRef={allTeams}/>}
           </div>
         )}
 
@@ -1412,24 +1464,34 @@ function MainApp({user,isAdmin,onLogout}){
               <div style={{fontSize:11,fontWeight:600,color:C.textLight,marginBottom:8,textTransform:"uppercase",fontFamily:"'DM Sans',sans-serif"}}>Asignar a usuario registrado</div>
               <div style={{display:"flex",flexDirection:"column",gap:6,maxHeight:250,overflowY:"auto",marginBottom:12}}>
                 {allTeams.filter(t=>t.uid&&t.uid!==transferTeam.uid&&t.uid!==user.uid).map(t=>(
-                  <div key={t.id} onClick={async()=>{
-                    if(!window.confirm(`¿Transferir ${transferTeam.teamName} a ${t.teamName} (${t.email})?`)) return;
-                    // Remove uid from old team
-                    await updateDoc(doc(db,"teams",transferTeam.id||transferTeam.uid),{uid:"",email:""});
-                    // Assign to new user — create new team doc with new uid
-                    const newRef=doc(db,"teams",t.uid);
-                    const newSnap=await getDoc(newRef);
-                    if(!newSnap.exists()||newSnap.data().uid!==t.uid){
-                      // Move team data to new uid doc
-                      await setDoc(newRef,{...transferTeam,uid:t.uid,email:t.email,id:t.uid});
+                  <div key={t.id||t.uid} onClick={async()=>{
+                    if(!window.confirm(`¿Asignar ${transferTeam.teamName} a ${t.email}?\nEse usuario dejará su equipo actual sin dueño.`)) return;
+                    const teamDocId=transferTeam.id||transferTeam.uid;
+                    // 1. Quitar dueño anterior de su equipo actual
+                    const prevTeamSnap=await getDocs(collection(db,"teams"));
+                    const prevTeamDoc=prevTeamSnap.docs.find(d=>d.data().uid===t.uid&&d.id!==teamDocId);
+                    if(prevTeamDoc) await updateDoc(doc(db,"teams",prevTeamDoc.id),{uid:"",email:""});
+                    // 2. Asignar nuevo dueño al equipo transferido
+                    await updateDoc(doc(db,"teams",teamDocId),{uid:t.uid,email:t.email});
+                    // 3. Actualizar pool entries para este equipo
+                    const poolRef=doc(db,"pool","players");
+                    const poolSnap=await getDoc(poolRef);
+                    if(poolSnap.exists()){
+                      const poolData={...poolSnap.data()};
+                      Object.keys(poolData).forEach(k=>{
+                        if(poolData[k].teamUid===transferTeam.uid||poolData[k].teamName===transferTeam.teamName){
+                          poolData[k]={...poolData[k],teamUid:t.uid,teamName:transferTeam.teamName};
+                        }
+                      });
+                      await setDoc(poolRef,poolData);
                     }
                     setTransferTeam(null);
-                    alert(`✅ Equipo transferido a ${t.teamName}`);
+                    alert(`✅ Equipo "${transferTeam.teamName}" asignado a ${t.email}`);
                   }}
                     style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:10,background:C.inputBg,border:`1px solid ${C.border}`,cursor:"pointer"}}
                     onMouseEnter={e=>e.currentTarget.style.borderColor=C.accent}
                     onMouseLeave={e=>e.currentTarget.style.borderColor=C.border}>
-                    <Avatar name={t.teamName} size={32}/>
+                    <Avatar name={t.teamName} size={32} colorId={t.teamColor}/>
                     <div style={{flex:1}}>
                       <div style={{fontSize:12,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{t.teamName}</div>
                       <div style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{t.email}</div>
@@ -1438,7 +1500,7 @@ function MainApp({user,isAdmin,onLogout}){
                 ))}
               </div>
               <button onClick={async()=>{
-                if(!window.confirm(`¿Quitar dueño de ${transferTeam.teamName}? El equipo quedará disponible para nuevos usuarios.`)) return;
+                if(!window.confirm(`¿Dejar "${transferTeam.teamName}" sin dueño?`)) return;
                 await updateDoc(doc(db,"teams",transferTeam.id||transferTeam.uid),{uid:"",email:""});
                 setTransferTeam(null);
               }} style={{width:"100%",padding:"10px",background:"#fff5f5",color:"#c0392b",border:"1px solid #ffcccc",borderRadius:10,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
