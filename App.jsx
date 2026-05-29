@@ -3,6 +3,9 @@ import { auth, db } from "./firebase";
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile } from "firebase/auth";
 import { doc, getDoc, setDoc, updateDoc, onSnapshot, collection, getDocs, deleteDoc } from "firebase/firestore";
 
+// Expose db for admin import scripts
+if (typeof window !== 'undefined') window.__app_db = db;
+
 // ─── COLORES ──────────────────────────────────────────────────────────────────
 const C = {
   bg:"#f8f8f8",
