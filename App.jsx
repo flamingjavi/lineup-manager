@@ -243,7 +243,7 @@ function Avatar({name,size=50,colorId}){
 }
 
 // ─── ADD PLAYER MODAL ─────────────────────────────────────────────────────────
-function AddPlayerModal({onAdd,onClose,currentCount,pool,teamName,editPlayer,onSaveEdit}){
+function AddPlayerModal({onAdd,onClose,currentCount,pool,teamName,editPlayer,onSaveEdit,isAdmin}){
   const isEdit=!!editPlayer;
   const[tab,setTab]=useState(isEdit?"manual":"search");
   const[query,setQuery]=useState("");
@@ -253,6 +253,8 @@ function AddPlayerModal({onAdd,onClose,currentCount,pool,teamName,editPlayer,onS
   const[mCountry,setMCountry]=useState(editPlayer?.country||"");
   const[mAge,setMAge]=useState(editPlayer?.age||"");
   const[mOverall,setMOverall]=useState(editPlayer?.overall||"");
+  const[mPrice,setMPrice]=useState(editPlayer?.price?.value||"");
+  const[mPriceUnit,setMPriceUnit]=useState(editPlayer?.price?.unit||"M");
   const[mErr,setMErr]=useState("");
   const remaining=26-currentCount;
 
@@ -277,7 +279,7 @@ function AddPlayerModal({onAdd,onClose,currentCount,pool,teamName,editPlayer,onS
     setMErr("");
     const primaryPos=mPos[0];
     const secondaryPos=mPos.slice(1).join("/");
-    const playerData={name:mName.trim(),pos:mPos.join("/"),primaryPos,secondaryPos:secondaryPos||null,country:mCountry.trim()||null,age:mAge?parseInt(mAge):null,overall:mOverall?parseInt(mOverall):null,poolKey};
+    const playerData={name:mName.trim(),pos:mPos.join("/"),primaryPos,secondaryPos:secondaryPos||null,country:mCountry.trim()||null,age:mAge?parseInt(mAge):null,overall:mOverall?parseInt(mOverall):null,price:mPrice?{value:parseFloat(mPrice),unit:mPriceUnit}:null,poolKey};
     if(isEdit) onSaveEdit({...editPlayer,...playerData});
     else onAdd({id:`p_${Date.now()}`,...playerData});
   };
@@ -356,6 +358,35 @@ function AddPlayerModal({onAdd,onClose,currentCount,pool,teamName,editPlayer,onS
                   onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.borderDark}/>
               </div>
             </div>
+            {/* PRICE - admin only */}
+            {isAdmin?(
+              <div style={{marginBottom:12}}>
+                <label style={{fontSize:11,fontWeight:600,color:C.textLight,display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:0.5,fontFamily:"'DM Sans',sans-serif"}}>💰 Valor de mercado</label>
+                <div style={{display:"flex",gap:6}}>
+                  <input value={mPrice} onChange={e=>setMPrice(e.target.value)} type="number" min="0" step="0.01" placeholder="23.5"
+                    style={{flex:1,padding:"10px 13px",borderRadius:10,border:`1.5px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:13,outline:"none",fontFamily:"monospace"}}
+                    onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.borderDark}/>
+                  <div style={{display:"flex",borderRadius:10,overflow:"hidden",border:`1.5px solid ${C.borderDark}`,flexShrink:0}}>
+                    {["M","K"].map(u=>(
+                      <button key={u} onClick={()=>setMPriceUnit(u)}
+                        style={{width:40,padding:"10px 0",border:"none",background:mPriceUnit===u?C.accent:C.inputBg,color:mPriceUnit===u?"#fff":C.textMid,fontSize:13,fontWeight:800,cursor:"pointer",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1,borderRight:u==="M"?`1px solid ${C.borderDark}`:"none"}}>
+                        {u}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div style={{fontSize:9,color:C.textFaint,marginTop:3,fontFamily:"'DM Sans',sans-serif"}}>M = millones · K = miles (ej: 23.5M o 500K)</div>
+              </div>
+            ):editPlayer?.price?(
+              <div style={{marginBottom:12,padding:"10px 13px",borderRadius:10,background:C.inputBg,border:`1px solid ${C.borderDark}`,display:"flex",alignItems:"center",gap:8}}>
+                <span style={{fontSize:13}}>🔒</span>
+                <div>
+                  <div style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.5}}>Valor de mercado</div>
+                  <div style={{fontSize:13,fontWeight:700,color:"#27ae60",fontFamily:"monospace"}}>💰 {editPlayer.price.value}{editPlayer.price.unit}</div>
+                </div>
+                <span style={{fontSize:9,color:C.textFaint,marginLeft:"auto",fontFamily:"'DM Sans',sans-serif"}}>Solo admins</span>
+              </div>
+            ):null}
             <label style={{fontSize:11,fontWeight:600,color:C.textLight,display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:0.5,fontFamily:"'DM Sans',sans-serif"}}>Posición preferida <span style={{fontSize:9,color:C.textFaint,textTransform:"none"}}>(primera seleccionada)</span></label>
             <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:8}}>
               {POSITIONS_LIST.map(p=>(
@@ -777,7 +808,7 @@ function AdminTeamEditor({teamData,pool,allTeamsRef}){
           setShowAddPlayer(false);
         }} onClose={()=>setShowAddPlayer(false)}/>}
 
-      {editingAdminPlayer&&<AddPlayerModal currentCount={squad.length} pool={pool} teamName={localData.teamName}
+      {editingAdminPlayer&&<AddPlayerModal currentCount={squad.length} pool={pool} teamName={localData.teamName} isAdmin={true}
         editPlayer={editingAdminPlayer}
         onSaveEdit={async updated=>{const ns=squad.map(p=>p.id===updated.id?updated:p);await save({squad:ns});setEditingAdminPlayer(null);}}
         onAdd={()=>{}} onClose={()=>setEditingAdminPlayer(null)}/>}
@@ -1120,7 +1151,6 @@ function MainApp({user,isAdmin,onLogout}){
                 <button onClick={()=>setShowPresidents(true)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>👤 Presidentes</button>
                 <button onClick={()=>setShowPool(true)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>🌍 Pool</button>
                 <button onClick={()=>setShowCreateTeam(true)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${C.accent}`,background:C.goldLight,color:C.accentDark,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>+ Equipo</button>
-                <MaintenanceToggle/>
               </div>
               {/* Collapsible teams list */}
               {showTeamsList&&(
@@ -1290,11 +1320,11 @@ function MainApp({user,isAdmin,onLogout}){
         </div>}
       </div>
 
-      {showAddPlayer&&<AddPlayerModal currentCount={squad.length} pool={pool} teamName={teamData?.teamName}
+      {showAddPlayer&&<AddPlayerModal currentCount={squad.length} pool={pool} teamName={teamData?.teamName} isAdmin={isAdmin}
         onAdd={async p=>{await saveTeam({squad:[...squad,p]});await addToPool(p,teamData?.teamName);setShowAddPlayer(false);}}
         onClose={()=>setShowAddPlayer(false)}/>}
 
-      {editingPlayer&&<AddPlayerModal currentCount={squad.length} pool={pool} teamName={teamData?.teamName}
+      {editingPlayer&&<AddPlayerModal currentCount={squad.length} pool={pool} teamName={teamData?.teamName} isAdmin={isAdmin}
         editPlayer={editingPlayer}
         onSaveEdit={async updated=>{
           const ns=squad.map(p=>p.id===updated.id?updated:p);
@@ -1708,6 +1738,7 @@ function MainApp({user,isAdmin,onLogout}){
                         <div style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>
                           {p.team||"—"}
                           {p.secondaryPos&&<span style={{color:C.textFaint}}> · {p.secondaryPos}</span>}
+                          {p.price&&<span style={{color:"#27ae60",fontWeight:700}}> · 💰{p.price.value}{p.price.unit}</span>}
                         </div>
                       </div>
                       <div style={{display:"flex",alignItems:"center",gap:8}}>
@@ -1747,7 +1778,7 @@ function MainApp({user,isAdmin,onLogout}){
                       <div style={{fontSize:13,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"'DM Sans',sans-serif"}}>{p.name}</div>
                       {p.locked&&<span style={{fontSize:10,flexShrink:0}}>🔒</span>}
                     </div>
-                    <div style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{p.country||"—"} · <span style={{fontFamily:"monospace",color:C.accent,fontWeight:700}}>{p.primaryPos||p.pos?.split("/")?.[0]}</span>{p.age?` · ${p.age}a`:""}{p.overall?` · ${p.overall}⭐`:""}</div>
+                    <div style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{p.country||"—"} · <span style={{fontFamily:"monospace",color:C.accent,fontWeight:700}}>{p.primaryPos||p.pos?.split("/")?.[0]}</span>{p.age?` · ${p.age}a`:""}{p.overall?` · ${p.overall}⭐`:""}{p.price?<span style={{color:"#27ae60",fontWeight:700}}> · 💰{p.price.value}{p.price.unit}</span>:""}</div>
                   </div>
                   <div style={{display:"flex",gap:5}}>
                     {!p.locked&&!p.poolKey?.startsWith("fc26_")&&(
