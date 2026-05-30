@@ -239,12 +239,14 @@ function ColorPicker({selected,onChange}){
 }
 
 // ─── AVATAR ───────────────────────────────────────────────────────────────────
-function Avatar({name,size=50,colorId}){
+function Avatar({name,size=50,colorId,overall}){
   const i=name?name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase():"?";
   const color=getTeamColor(colorId);
+  const label=overall?String(overall):i;
+  const fontSize=overall?size*0.36:size*0.32;
   return(
     <div style={{width:size,height:size,borderRadius:"50%",background:`linear-gradient(135deg,${color.dark},${color.bg})`,border:"2.5px solid rgba(255,255,255,0.9)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 3px 10px rgba(0,0,0,0.15)",flexShrink:0}}>
-      <span style={{fontSize:size*0.32,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:0.5}}>{i}</span>
+      <span style={{fontSize,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:overall?0:0.5}}>{label}</span>
     </div>
   );
 }
@@ -424,7 +426,7 @@ function PickFromSquad({squad,posLabel,onPick,onClose,usedIds,posFilter,isBench}
   const[showAll,setShowAll]=useState(isBench||!posFilter);
   const[filter,setFilter]=useState("");
 
-  const available=squad.filter(p=>!usedIds?.includes(p.poolKey||p.id));
+  const available=squad.filter(p=>!usedIds?.some(uid=>uid===(p.poolKey||p.id)||p.poolKey===uid||p.id===uid));
   const inPosition=posFilter?available.filter(p=>(p.pos?.split("/")||[]).includes(posFilter)||(p.primaryPos===posFilter)):available;
   const list=showAll?available.filter(p=>p.name.toLowerCase().includes(filter.toLowerCase())||p.pos?.toLowerCase().includes(filter.toLowerCase())):inPosition.filter(p=>p.name.toLowerCase().includes(filter.toLowerCase()));
 
@@ -496,7 +498,7 @@ function PlayerSpot({pos,player,readOnly,onClick,onRemove,isDragOver,onDragOver,
             draggable={!readOnly}
             onDragStart={readOnly?undefined:e=>{e.stopPropagation();onDragStart&&onDragStart(pos.id);}}>
             <div onClick={readOnly?undefined:e=>{e.stopPropagation();setShowMenu(v=>!v);}}>
-              <Avatar name={player.name} size={38} colorId={teamColor}/>
+              <Avatar name={player.name} size={38} colorId={teamColor} overall={player.overall}/>
               {isDragOver&&<div style={{position:"absolute",inset:-2,borderRadius:"50%",border:`2px dashed ${C.accent}`,pointerEvents:"none"}}/>}
             </div>
             {showMenu&&!readOnly&&(
@@ -599,7 +601,7 @@ function Bench({subs,readOnly,onClickSub,onDragStart,teamColor}){
               <>
                 <div style={{position:"relative",display:"flex",justifyContent:"center",width:"100%"}}>
                   <div style={{width:36,height:36,borderRadius:"50%",background:`linear-gradient(135deg,${color.dark},${color.bg})`,border:"2.5px solid rgba(255,255,255,0.9)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 8px rgba(0,0,0,0.12)"}}>
-                    <span style={{fontSize:10,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif"}}>{sub.name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()}</span>
+                    <span style={{fontSize:10,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif"}}>{sub.overall||sub.name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()}</span>
                   </div>
                   <div style={{position:"absolute",bottom:-5,left:"50%",transform:"translateX(-50%)",background:accent,borderRadius:4,padding:"0 4px",minWidth:22,textAlign:"center"}}>
                     <span style={{fontSize:6,fontWeight:900,color:"#fff",fontFamily:"monospace"}}>{sub.pos.split("/")[0]}</span>
@@ -899,8 +901,12 @@ function AdminTeamEditor({teamData,pool,allTeamsRef}){
             </div>
             <div style={{overflowY:"auto",flex:1,padding:"10px 14px 16px",display:"flex",flexDirection:"column",gap:6}}>
               {(()=>{
-                const usedIds=[...Object.values(lineup.starters||{}).filter(Boolean).map(p=>p.poolKey||p.id),...(lineup.subs||[]).filter(Boolean).map(p=>p.poolKey||p.id)];
-                const reserves=squad.filter(p=>!usedIds.includes(p.poolKey||p.id));
+                const starterPlayers=Object.values(lineup.starters||{}).filter(Boolean);
+                const subPlayers=(lineup.subs||[]).filter(Boolean);
+                const isUsed=(p)=>
+                  starterPlayers.some(s=>(s.poolKey&&s.poolKey===(p.poolKey||p.id))||(p.poolKey&&p.poolKey===(s.poolKey||s.id))||(p.id===s.id))||
+                  subPlayers.some(s=>(s.poolKey&&s.poolKey===(p.poolKey||p.id))||(p.poolKey&&p.poolKey===(s.poolKey||s.id))||(p.id===s.id));
+                const reserves=squad.filter(p=>!isUsed(p));
                 if(reserves.length===0) return <div style={{textAlign:"center",color:C.textFaint,fontSize:13,padding:"24px 0",fontFamily:"'DM Sans',sans-serif"}}>No hay reservas — todos los jugadores están convocados.</div>;
                 return reserves.map(p=>(
                   <div key={p.id} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 11px",borderRadius:10,background:C.inputBg,border:`1px solid ${C.border}`}}>
@@ -922,6 +928,8 @@ function AdminTeamEditor({teamData,pool,allTeamsRef}){
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 // ─── IMPORT BUTTON ────────────────────────────────────────────────────────────
+const EXCEL_TEAM_COLORS={"AFC Bournemouth":"red","Inter Miami FC":"pink","Malaga CF":"sky","SV Werder Bremen":"green","Seattle Sounders FC":"teal","AFC Ajax":"red","Real Sociedad de Fútbol":"sky","Sporting CP":"green","Feyenord SC":"red","Racing Club":"sky","Olympique Lyonnais":"red","Paris FC":"blue","F.C. Porto":"sky","Wrexham A.F.C.":"red","Parma Calcio":"gold","ACF Fiorentina":"purple","Palermo FC":"pink","Hull City AFC":"orange","Leeds United F.C.":"navy","FC Schalke 04":"sky","Wolverhampton Wanderers FC":"orange","Leicester City FC":"sky","Lens":"gold","Rayo Vallecano de Madrid S.A.D.":"maroon","RB Leipzig":"red","Club Atlético Independiente":"red","Getafe CF":"sky","Nottingham Forest FC":"red","Rangers":"sky","Abeerden FC":"red","Celtic FC":"green","Napoli SC":"sky"};
+
 function ImportButton({allTeams,pool,user,onDone}){
   const[status,setStatus]=useState("idle");
   const[log,setLog]=useState([]);
@@ -1025,10 +1033,13 @@ function ImportButton({allTeams,pool,user,onDone}){
       // Clear old pool entries
       Object.keys(poolData).forEach(k=>{if(poolData[k].teamName===teamName||poolData[k].teamUid===firestoreTeam.uid) delete poolData[k];});
       // Add new pool entries
-      players.forEach(p=>{if(p.poolKey) poolData[p.poolKey]={name:p.name,pos:p.pos,country:p.country||null,overall:p.overall||null,price:p.price||null,teamName,teamUid:firestoreTeam.uid||firestoreTeam.id};});
+      players.forEach(p=>{if(p.poolKey) poolData[p.poolKey]={name:p.name,pos:p.pos,country:p.country||null,overall:p.overall||null,age:p.age||null,price:p.price||null,teamName,teamUid:firestoreTeam.uid||firestoreTeam.id};});
       // Update Firestore - use id field (works for teams with and without presidents)
       const teamDocId=firestoreTeam.id||firestoreTeam.uid;
-      await updateDoc(doc(db,"teams",teamDocId),{squad:players});
+      const patch={squad:players};
+      const excelColor=EXCEL_TEAM_COLORS[excelName]||EXCEL_TEAM_COLORS[teamName];
+      if(excelColor) patch.teamColor=excelColor;
+      await updateDoc(doc(db,"teams",teamDocId),patch);
       addLog(`✅ ${teamName} (${players.length} jug.)`);
       ok++;
     }
@@ -1206,7 +1217,7 @@ function MainApp({user,isAdmin,onLogout}){
     const poolRef=doc(db,"pool","players");
     const snap=await getDoc(poolRef);
     const current=snap.exists()?snap.data():{};
-    await setDoc(poolRef,{...current,[player.poolKey]:{name:player.name,pos:player.pos,country:player.country||null,overall:player.overall||null,teamName:tName,teamUid:user.uid}});
+    await setDoc(poolRef,{...current,[player.poolKey]:{name:player.name,pos:player.pos,country:player.country||null,overall:player.overall||null,age:player.age||null,price:player.price||null,teamName:tName,teamUid:user.uid}});
   };
 
   const removeFromPool=async(player)=>{
@@ -1389,7 +1400,7 @@ function MainApp({user,isAdmin,onLogout}){
                   {[...allTeams].sort((a,b)=>(a.teamName||"").localeCompare(b.teamName||"")).map(t=>{
                     const isTeamAdmin=adminsList.some(a=>a.id===t.uid);
                     const isMe=t.uid===user.uid;
-                    const isSelected=viewingTeam?.uid===t.uid;
+                    const isSelected=viewingTeam&&(viewingTeam.id||viewingTeam.uid)===(t.id||t.uid);
                     return(
                       <div key={t.id||t.uid} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 10px",borderRadius:9,border:`1.5px solid ${isSelected?C.accent:C.border}`,background:isSelected?C.goldLight:C.inputBg}}>
                         <div style={{width:10,height:10,borderRadius:"50%",background:getTeamColor(t.teamColor).bg,flexShrink:0,border:"1px solid rgba(0,0,0,0.15)"}}/>
@@ -1520,11 +1531,12 @@ function MainApp({user,isAdmin,onLogout}){
           </div>
           {/* RESERVES */}
           {(()=>{
-            const usedIds=[
-              ...Object.values(activeLineup?.starters||{}).filter(Boolean).map(p=>p.poolKey||p.id),
-              ...(activeLineup?.subs||[]).filter(Boolean).map(p=>p.poolKey||p.id)
-            ];
-            const reserves=squad.filter(p=>!usedIds.includes(p.poolKey||p.id));
+            const starterPlayers=Object.values(activeLineup?.starters||{}).filter(Boolean);
+            const subPlayers=(activeLineup?.subs||[]).filter(Boolean);
+            const isUsed=(p)=>
+              starterPlayers.some(s=>(s.poolKey&&s.poolKey===(p.poolKey||p.id))||(s.id&&s.id===(p.poolKey||p.id))||(p.poolKey&&p.poolKey===(s.poolKey||s.id))||(p.id===s.id))||
+              subPlayers.some(s=>(s.poolKey&&s.poolKey===(p.poolKey||p.id))||(s.id&&s.id===(p.poolKey||p.id))||(p.poolKey&&p.poolKey===(s.poolKey||s.id))||(p.id===s.id));
+            const reserves=squad.filter(p=>!isUsed(p));
             if(reserves.length===0) return null;
             return(
               <div style={{width:"100%",order:4,background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"13px 14px",boxShadow:`0 2px 12px rgba(0,0,0,0.04)`}}>
@@ -1728,7 +1740,7 @@ function MainApp({user,isAdmin,onLogout}){
                   // Delete team doc
                   await deleteDoc(doc(db,"teams",t.id||t.uid));
                   setDeleteTeamTarget(null);
-                  if(viewingTeam?.uid===t.uid) setViewingTeam(null);
+                  if(viewingTeam&&(viewingTeam.id||viewingTeam.uid)===(t.id||t.uid)) setViewingTeam(null);
                 }}
                   style={{flex:1,padding:"10px",borderRadius:10,border:"none",background:"#c0392b",color:"#fff",fontSize:13,fontWeight:800,cursor:"pointer",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>
                   ELIMINAR
@@ -1868,7 +1880,7 @@ function MainApp({user,isAdmin,onLogout}){
                         </div>
                         <div style={{flex:1,minWidth:0}}>
                           <div style={{fontSize:11,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"'DM Sans',sans-serif"}}>{p.name}</div>
-                          {(p.country||p.overall)&&<div style={{fontSize:9,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{[p.country,p.overall?`${p.overall}⭐`:null].filter(Boolean).join(" · ")}</div>}
+                          {(p.country||p.overall||p.age)&&<div style={{fontSize:9,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{[p.country,p.age?`${p.age}a`:null,p.overall?`${p.overall}⭐`:null].filter(Boolean).join(" · ")}</div>}
                         </div>
                         <span style={{fontSize:8,fontWeight:700,color:C.accent,background:C.goldLight,padding:"2px 6px",borderRadius:5,fontFamily:"monospace",border:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{p.pos?.split("/")?.[0]}</span>
                         <button onClick={async e=>{
@@ -1959,8 +1971,8 @@ function MainApp({user,isAdmin,onLogout}){
               {[
                 ["Posición",(poolPlayer.p?.pos||poolPlayer.pos)?.split("/")?.[0]],
                 ["País",poolPlayer.p?.country||poolPlayer.country],
-                ["Edad",poolPlayer.p?.age?`${poolPlayer.p.age} años`:poolPlayer.age?`${poolPlayer.age} años`:null],
-                ["Media",poolPlayer.p?.overall||poolPlayer.overall?`${poolPlayer.p?.overall||poolPlayer.overall} ⭐`:null],
+                ["Edad",(poolPlayer.p?.age||poolPlayer.age)?`${poolPlayer.p?.age||poolPlayer.age} años`:null],
+                ["Media",(poolPlayer.p?.overall||poolPlayer.overall)?`${poolPlayer.p?.overall||poolPlayer.overall} ⭐`:null],
                 ["Valor de mercado",(poolPlayer.p?.price||poolPlayer.price)?`💰 ${(poolPlayer.p?.price||poolPlayer.price)?.value}${(poolPlayer.p?.price||poolPlayer.price)?.unit}`:null],
               ].filter(([,v])=>v).map(([label,val])=>(
                 <div key={label} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
