@@ -943,7 +943,7 @@ function ImportButton({allTeams,pool,user,onDone}){
   const[importing,setImporting]=useState(false);
   const fileRef=useRef(null);
 
-  const POS_MAP={'POR':'GK','DFC':'CB','DFD':'RB','DFI':'LB','LD':'RWB','LI':'LWB','MCD':'CDM','MC':'CM','MD':'RM','MI':'LM','MCO':'CAM','ED':'RW','EI':'LW','DC':'ST','CO':'CF'};
+  const POS_MAP={'GK':'POR','RB':'DFD','CB':'DFC','LB':'DFI','CDM':'MCD','CM':'MC','CAM':'MCO','RM':'MD','LM':'MI','RW':'ED','LW':'EI','ST':'DC','RWB':'RWB','LWB':'LWB','CF':'DC','DM':'MCD','AM':'MCO','SS':'MCO'};
 
   const convertPos=raw=>{
     if(!raw) return 'CM';
