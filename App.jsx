@@ -1448,21 +1448,25 @@ function MainApp({user,isAdmin,onLogout}){
                 <button onClick={()=>setShowCreateTeam(true)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${C.accent}`,background:C.goldLight,color:C.accentDark,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>+ Equipo</button>
                 <button onClick={()=>setShowImport(true)} style={{padding:"5px 10px",borderRadius:8,border:"1px solid #27ae60",background:"#f0fff4",color:"#27ae60",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>📥 Importar</button>
                 <button onClick={async()=>{
-                  if(!window.confirm("¿Crear alineaciones Liga y Copa para todos los equipos que no las tengan?")) return;
-                  const defaultLineup=(name)=>({id:`${name.toLowerCase()}_${Date.now()}`,name,formation:"4-3-3",starters:{},subs:Array(7).fill(null),code:""});
+                  if(!window.confirm("¿Renombrar 'Alineación A' → 'Liga' y crear 'Copa' para todos los equipos?")) return;
                   let count=0;
                   for(const t of allTeams){
                     const ref=doc(db,"teams",t.id||t.uid);
-                    const existing=t.lineups||[];
-                    const hasLiga=existing.some(l=>l.name==="Liga");
-                    const hasCopa=existing.some(l=>l.name==="Copa");
-                    if(!hasLiga||!hasCopa){
-                      const toAdd=[...(!hasLiga?[defaultLineup("Liga")]:[]),...(!hasCopa?[defaultLineup("Copa")]:[])];const updated=[...existing,...toAdd];
-                      await updateDoc(ref,{lineups:updated});
-                      count++;
+                    let lineups=[...(t.lineups||[])];
+                    let changed=false;
+                    // Rename "Alineación A" to "Liga"
+                    lineups=lineups.map(l=>{
+                      if(l.name==="Alineación A"||l.name==="Alineacion A"){changed=true;return{...l,name:"Liga"};}
+                      return l;
+                    });
+                    // Add "Copa" if missing
+                    if(!lineups.some(l=>l.name==="Copa")){
+                      lineups.push({id:`copa_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,name:"Copa",formation:"4-3-3",starters:{},subs:Array(7).fill(null),code:""});
+                      changed=true;
                     }
+                    if(changed){await updateDoc(ref,{lineups});count++;}
                   }
-                  alert(`✅ Alineaciones creadas en ${count} equipos.`);
+                  alert(`✅ ${count} equipos actualizados.`);
                 }} style={{padding:"5px 10px",borderRadius:8,border:`1px solid #9b59b6`,background:"#f5f0ff",color:"#9b59b6",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>⚽ Liga/Copa</button>
               </div>
               {/* Collapsible teams list */}
