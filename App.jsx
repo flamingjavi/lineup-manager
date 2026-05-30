@@ -626,6 +626,7 @@ function Bench({subs,readOnly,onClickSub,onDragStart,teamColor}){
 
 // ─── ADMIN TEAM EDITOR ────────────────────────────────────────────────────────
 function AdminTeamEditor({teamData,pool,allTeamsRef}){
+  const teamDocId=teamData.id||teamData.uid; // Use doc ID, works for teams with/without president
   const[showAddPlayer,setShowAddPlayer]=useState(false);
   const[pickModal,setPickModal]=useState(null);
   const[saving,setSaving]=useState(false);
@@ -636,17 +637,18 @@ function AdminTeamEditor({teamData,pool,allTeamsRef}){
   const[editingAdminPlayer,setEditingAdminPlayer]=useState(null);
   const[transferAdminPlayer,setTransferAdminPlayer]=useState(null);
   const dragSubIdx=useRef(null);
+  const dragFromPosId=useRef(null);
   const[dragOverPos,setDragOverPos]=useState(null);
 
   useEffect(()=>{
-    const unsub=onSnapshot(doc(db,"teams",teamData.uid),snap=>{
-      if(snap.exists()) setLocalData({uid:snap.id,...snap.data()});
+    const unsub=onSnapshot(doc(db,"teams",teamDocId),snap=>{
+      if(snap.exists()) setLocalData({id:snap.id,...snap.data()});
     });
     return unsub;
-  },[teamData.uid]);
+  },[teamDocId]);
 
-  const save=async patch=>{setSaving(true);await updateDoc(doc(db,"teams",localData.uid),patch);setSaving(false);};
-  const allLineups=localData.lineups||[{formation:"4-3-3",starters:{},subs:Array(7).fill(null)}];
+  const save=async patch=>{setSaving(true);await updateDoc(doc(db,"teams",teamDocId),patch);setSaving(false);};
+  const allLineups=localData.lineups||[{id:"a",name:"Alineación A",formation:"4-3-3",starters:{},subs:Array(7).fill(null)}];
   const lineup=allLineups.find(l=>l.id===activeAdminLineupId)||allLineups[0]||{formation:"4-3-3",starters:{},subs:Array(7).fill(null)};
   const squad=localData.squad||[];
   const positions=FORMATIONS[lineup.formation]||FORMATIONS["4-3-3"];
@@ -689,10 +691,25 @@ function AdminTeamEditor({teamData,pool,allTeamsRef}){
   };
 
   const handleDrop=async posId=>{
-    if(dragSubIdx.current===null) return;
-    const idx=dragSubIdx.current;
-    await updateLineup(l=>{const sub=l.subs[idx];if(!sub) return l;const evicted=l.starters[posId]||null;const s=[...l.subs];s[idx]=evicted;return{starters:{...l.starters,[posId]:sub},subs:s};});
-    dragSubIdx.current=null;setDragOverPos(null);
+    if(dragFromPosId.current!==null){
+      const fromId=dragFromPosId.current;
+      dragFromPosId.current=null;
+      if(fromId===posId){setDragOverPos(null);return;}
+      await updateLineup(l=>{
+        const s={...l.starters};
+        const tmp=s[fromId]||null;
+        s[fromId]=s[posId]||null;
+        s[posId]=tmp;
+        if(!s[fromId]) delete s[fromId];
+        if(!s[posId]) delete s[posId];
+        return{starters:s};
+      });
+    } else if(dragSubIdx.current!==null){
+      const idx=dragSubIdx.current;
+      await updateLineup(l=>{const sub=l.subs[idx];if(!sub) return l;const evicted=l.starters[posId]||null;const s=[...l.subs];s[idx]=evicted;return{starters:{...l.starters,[posId]:sub},subs:s};});
+      dragSubIdx.current=null;
+    }
+    setDragOverPos(null);
   };
 
   return(
@@ -716,16 +733,23 @@ function AdminTeamEditor({teamData,pool,allTeamsRef}){
           {allLineups.map(l=>(
             <div key={l.id} style={{display:"flex",alignItems:"center",gap:2}}>
               <button onClick={()=>setActiveAdminLineupId(l.id)}
-                style={{padding:"3px 9px",borderRadius:7,border:`1.5px solid ${lineup.id===l.id?C.accent:C.borderDark}`,background:lineup.id===l.id?C.accent:C.inputBg,color:lineup.id===l.id?"#fff":C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
-                {l.name}
+                style={{padding:"3px 9px",borderRadius:7,border:`1.5px solid ${lineup.id===l.id?C.accent:C.borderDark}`,background:lineup.id===l.id?C.accent:C.inputBg,color:lineup.id===l.id?"#fff":l.locked?C.textFaint:C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",display:"flex",alignItems:"center",gap:4}}>
+                {l.locked&&"🔒"}{l.name}
               </button>
               {lineup.id===l.id&&(
                 <>
                   <button onClick={()=>{
+                    const nl=allLineups.map(x=>x.id===l.id?{...x,locked:!l.locked}:x);
+                    save({lineups:nl});
+                  }} title={l.locked?"Desbloquear":"Bloquear alineación"}
+                    style={{padding:"2px 6px",borderRadius:5,border:l.locked?`1px solid ${C.accent}`:`1px solid ${C.borderDark}`,background:l.locked?C.goldLight:C.inputBg,color:l.locked?C.accent:C.textFaint,fontSize:11,cursor:"pointer"}}>
+                    {l.locked?"🔒":"🔓"}
+                  </button>
+                  {!l.locked&&<button onClick={()=>{
                     const n=window.prompt("Nuevo nombre:",l.name);
                     if(n?.trim()) save({lineups:allLineups.map(x=>x.id===l.id?{...x,name:n.trim()}:x)});
-                  }} style={{padding:"2px 5px",borderRadius:5,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:10,cursor:"pointer"}}>✏️</button>
-                  {allLineups.length>1&&<button onClick={()=>{
+                  }} style={{padding:"2px 5px",borderRadius:5,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:10,cursor:"pointer"}}>✏️</button>}
+                  {allLineups.length>1&&!l.locked&&<button onClick={()=>{
                     if(!window.confirm(`¿Borrar "${l.name}"?`)) return;
                     const nl=allLineups.filter(x=>x.id!==l.id);
                     save({lineups:nl});
@@ -753,11 +777,12 @@ function AdminTeamEditor({teamData,pool,allTeamsRef}){
       </div>
       <div style={{padding:"12px 14px 14px",display:"flex",gap:14,flexWrap:"wrap"}}>
         <div style={{flex:"1 1 220px"}}>
-          <Field positions={positions} lineup={lineup} readOnly={false}
+          <Field positions={positions} lineup={lineup} readOnly={!!lineup?.locked}
             onClickPos={(id,label)=>setPickModal({type:"starter",posId:id,posLabel:label})}
             onRemovePos={async posId=>{await updateLineup(l=>{const s={...l.starters};delete s[posId];return{starters:s};});}}
             dragOverPos={dragOverPos} onDragOver={setDragOverPos} onDragLeave={()=>setDragOverPos(null)} onDrop={handleDrop}
-            onDragStartPos={posId=>{dragSubIdx.current=null;setDragOverPos(null);handleDrop._fromPos=posId;}}/>
+            onDragStartPos={posId=>{dragFromPosId.current=posId;dragSubIdx.current=null;}}
+            teamColor={localData.teamColor}/>
         </div>
         <div style={{flex:"0 0 175px",minWidth:160,display:"flex",flexDirection:"column",gap:10}}>
           <Bench subs={lineup.subs} readOnly={false}
@@ -966,17 +991,13 @@ function ImportButton({allTeams,pool,user,onDone}){
       }
     }
 
-    // Match with Firestore teams
+    // Match with Firestore teams — include teams without presidents
     const matched={};
     const notFound=[];
     for(const [excelName,players] of Object.entries(teams)){
-      // Try exact match first
       let ft=allTeams.find(t=>t.teamName===excelName);
-      // Try normalized match
       if(!ft) ft=allTeams.find(t=>normalize(t.teamName)===normalize(excelName));
-      // Try partial match
       if(!ft) ft=allTeams.find(t=>normalize(t.teamName).includes(normalize(excelName).split(' ')[0])||normalize(excelName).includes(normalize(t.teamName).split(' ')[0]));
-      
       if(ft) matched[ft.teamName]={firestoreTeam:ft,players,excelName};
       else notFound.push(excelName);
     }
@@ -1005,8 +1026,9 @@ function ImportButton({allTeams,pool,user,onDone}){
       Object.keys(poolData).forEach(k=>{if(poolData[k].teamName===teamName||poolData[k].teamUid===firestoreTeam.uid) delete poolData[k];});
       // Add new pool entries
       players.forEach(p=>{if(p.poolKey) poolData[p.poolKey]={name:p.name,pos:p.pos,country:p.country||null,overall:p.overall||null,price:p.price||null,teamName,teamUid:firestoreTeam.uid||firestoreTeam.id};});
-      // Update Firestore
-      await updateDoc(doc(db,"teams",firestoreTeam.id||firestoreTeam.uid),{squad:players});
+      // Update Firestore - use id field (works for teams with and without presidents)
+      const teamDocId=firestoreTeam.id||firestoreTeam.uid;
+      await updateDoc(doc(db,"teams",teamDocId),{squad:players});
       addLog(`✅ ${teamName} (${players.length} jug.)`);
       ok++;
     }
@@ -1127,6 +1149,7 @@ function MainApp({user,isAdmin,onLogout}){
   const[showSquadManager,setShowSquadManager]=useState(false);
   const[showSquadList,setShowSquadList]=useState(false);
   const[editingPlayer,setEditingPlayer]=useState(null);
+  const[showPublicPool,setShowPublicPool]=useState(false);
   const[showAddPlayer,setShowAddPlayer]=useState(false);
   const[pickModal,setPickModal]=useState(null);
   const[dragOverPos,setDragOverPos]=useState(null);
@@ -1139,8 +1162,17 @@ function MainApp({user,isAdmin,onLogout}){
   useEffect(()=>{
     const ref=doc(db,"teams",user.uid);
     const unsub=onSnapshot(ref,snap=>{
-      if(snap.exists()) setTeamData(snap.data());
-      else{
+      if(snap.exists()){
+        const data=snap.data();
+        // Deduplicate squad
+        const seen=new Set();
+        const squad=(data.squad||[]).filter(p=>{
+          const key=p.poolKey||p.id;
+          if(seen.has(key)) return false;
+          seen.add(key); return true;
+        });
+        setTeamData({...data,squad});
+      } else{
         const init={uid:user.uid,email:user.email,teamName:user.displayName||"Mi Equipo",squad:[],lineups:[{id:"a",name:"Alineación A",formation:"4-3-3",starters:{},subs:Array(7).fill(null)}],createdAt:new Date().toISOString()};
         setDoc(ref,init);setTeamData(init);
       }
@@ -1316,6 +1348,10 @@ function MainApp({user,isAdmin,onLogout}){
             style={{padding:"5px 9px",borderRadius:8,border:`1.5px solid ${showSquadList?TA.accent:C.borderDark}`,background:showSquadList?TA.accent:C.inputBg,color:showSquadList?"#fff":C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
             📋
           </button>
+          <button onClick={()=>setShowPublicPool(true)}
+            style={{padding:"5px 9px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+            🌍
+          </button>
           <button onClick={onLogout} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${C.border}`,background:C.inputBg,color:C.textMid,fontSize:10,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Salir</button>
         </div>
       </div>
@@ -1386,27 +1422,26 @@ function MainApp({user,isAdmin,onLogout}){
             <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:9}}>
               {lineups.map(l=>(
                 <div key={l.id} style={{display:"flex",alignItems:"center",gap:6}}>
-                  <button onClick={()=>{setActiveLineupId(l.id);setShowLineupPanel(false);}}
-                    style={{flex:1,padding:"8px 13px",borderRadius:9,border:`1.5px solid ${activeLineupId===l.id?C.accent:C.borderDark}`,background:activeLineupId===l.id?C.accent:C.inputBg,color:activeLineupId===l.id?"#fff":C.textMid,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textAlign:"left"}}>
+                  <button onClick={()=>{if(!l.locked){setActiveLineupId(l.id);setShowLineupPanel(false);}}}
+                    style={{flex:1,padding:"8px 13px",borderRadius:9,border:`1.5px solid ${activeLineupId===l.id?TA.accent:C.borderDark}`,background:activeLineupId===l.id?TA.accent:C.inputBg,color:activeLineupId===l.id?"#fff":l.locked?C.textFaint:C.textMid,fontSize:12,fontWeight:700,cursor:l.locked?"not-allowed":"pointer",fontFamily:"'DM Sans',sans-serif",textAlign:"left",display:"flex",alignItems:"center",gap:6}}>
+                    {l.locked&&<span style={{fontSize:11}}>🔒</span>}
                     {l.name}
                   </button>
-                  {/* Rename */}
-                  <button onClick={()=>{
-                    const newName=window.prompt("Nuevo nombre:",l.name);
-                    if(newName&&newName.trim()){
-                      const nl=lineups.map(x=>x.id===l.id?{...x,name:newName.trim()}:x);
-                      saveTeam({lineups:nl});
-                    }
-                  }} style={{padding:"7px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:12,cursor:"pointer"}}>✏️</button>
-                  {/* Delete — only if more than 1 lineup */}
-                  {lineups.length>1&&(
-                    <button onClick={async()=>{
-                      if(!window.confirm(`¿Borrar "${l.name}"?`)) return;
-                      const nl=lineups.filter(x=>x.id!==l.id);
-                      await saveTeam({lineups:nl});
-                      if(activeLineupId===l.id) setActiveLineupId(nl[0].id);
-                    }} style={{padding:"7px 10px",borderRadius:8,border:"1px solid #ffcccc",background:"#fff5f5",color:"#c0392b",fontSize:12,cursor:"pointer"}}>🗑️</button>
-                  )}
+                  {!l.locked&&<>
+                    <button onClick={()=>{
+                      const newName=window.prompt("Nuevo nombre:",l.name);
+                      if(newName&&newName.trim()){const nl=lineups.map(x=>x.id===l.id?{...x,name:newName.trim()}:x);saveTeam({lineups:nl});}
+                    }} style={{padding:"7px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:12,cursor:"pointer"}}>✏️</button>
+                    {lineups.length>1&&(
+                      <button onClick={async()=>{
+                        if(!window.confirm(`¿Borrar "${l.name}"?`)) return;
+                        const nl=lineups.filter(x=>x.id!==l.id);
+                        await saveTeam({lineups:nl});
+                        if(activeLineupId===l.id) setActiveLineupId(nl[0].id);
+                      }} style={{padding:"7px 10px",borderRadius:8,border:"1px solid #ffcccc",background:"#fff5f5",color:"#c0392b",fontSize:12,cursor:"pointer"}}>🗑️</button>
+                    )}
+                  </>}
+                  {l.locked&&<span style={{fontSize:9,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",flexShrink:0}}>Bloqueada</span>}
                 </div>
               ))}
             </div>
@@ -1414,8 +1449,8 @@ function MainApp({user,isAdmin,onLogout}){
             <div style={{display:"flex",gap:8}}>
               <input value={newLineupName} onChange={e=>setNewLineupName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addLineup()} placeholder="Nueva alineación…"
                 style={{flex:1,padding:"8px 12px",borderRadius:9,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:12,outline:"none",fontFamily:"'DM Sans',sans-serif"}}
-                onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.borderDark}/>
-              <button onClick={addLineup} style={{padding:"8px 15px",borderRadius:9,background:C.accent,color:"#fff",border:"none",cursor:"pointer",fontSize:12,fontWeight:800,fontFamily:"'DM Sans',sans-serif"}}>+ Crear</button>
+                onFocus={e=>e.target.style.borderColor=TA.accent} onBlur={e=>e.target.style.borderColor=C.borderDark}/>
+              <button onClick={addLineup} style={{padding:"8px 15px",borderRadius:9,background:TA.accent,color:"#fff",border:"none",cursor:"pointer",fontSize:12,fontWeight:800,fontFamily:"'DM Sans',sans-serif"}}>+ Crear</button>
             </div>
           </div>
         )}
@@ -1466,7 +1501,7 @@ function MainApp({user,isAdmin,onLogout}){
         {/* FIELD + BENCH + RESERVES — ocultar si admin está viendo otro equipo o si showSquadList */}
         {!viewingTeam&&!showSquadList&&<div style={{paddingTop:12,display:"flex",gap:14,flexWrap:"wrap"}}>
           <div style={{flex:"1 1 260px",minWidth:240}}>
-            <Field positions={positions} lineup={activeLineup} readOnly={false}
+            <Field positions={positions} lineup={activeLineup} readOnly={!!activeLineup?.locked}
               onClickPos={(id,label)=>setPickModal({type:"starter",posId:id,posLabel:label})}
               onRemovePos={handleRemovePos}
               dragOverPos={dragOverPos} onDragOver={setDragOverPos} onDragLeave={()=>setDragOverPos(null)} onDrop={handleDrop}
@@ -1474,7 +1509,7 @@ function MainApp({user,isAdmin,onLogout}){
               teamColor={teamData?.teamColor}/>
           </div>
           <div style={{width:"100%",order:3}}>
-            <Bench subs={activeLineup?.subs} readOnly={false}
+            <Bench subs={activeLineup?.subs} readOnly={!!activeLineup?.locked}
               onClickSub={i=>{
                 const sub=activeLineup?.subs?.[i];
                 if(sub) setPickModal({type:"subMenu",subIdx:i,posLabel:`Suplente ${i+1}`,currentPlayer:sub});
@@ -1864,35 +1899,79 @@ function MainApp({user,isAdmin,onLogout}){
         </div>
       )}
 
+      {/* PUBLIC POOL - all users */}
+      {showPublicPool&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(8px)"}} onClick={()=>setShowPublicPool(false)}>
+          <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:22,width:"100%",maxWidth:480,maxHeight:"88vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 24px 60px rgba(0,0,0,0.15)"}} onClick={e=>e.stopPropagation()}>
+            <div style={{padding:"14px 18px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+              <span style={{fontSize:15,fontWeight:800,color:C.text,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>🌍 POOL GLOBAL</span>
+              <span style={{fontSize:11,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{Object.keys(pool).length} jugadores</span>
+              <button onClick={()=>setShowPublicPool(false)} style={{marginLeft:"auto",background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:"50%",width:30,height:30,color:C.textMid,cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+            </div>
+            <div style={{overflowY:"auto",flex:1,padding:"10px 14px 16px"}}>
+              {(()=>{
+                const POS_ORDER=["GK","SW","CB","RB","LB","RWB","LWB","CDM","DM","CM","RM","LM","CAM","RAM","LAM","RW","LW","CF","ST"];
+                const sorted=Object.entries(pool).sort((a,b)=>(a[1].teamName||"").localeCompare(b[1].teamName||"")||(POS_ORDER.indexOf(a[1].pos?.split("/")?.[0])-POS_ORDER.indexOf(b[1].pos?.split("/")?.[0])));
+                let lastTeam=null;
+                return sorted.map(([key,p])=>{
+                  const showHeader=p.teamName!==lastTeam;
+                  lastTeam=p.teamName;
+                  const tc=getTeamColor(allTeams.find(t=>t.teamName===p.teamName)?.teamColor);
+                  return(
+                    <div key={key}>
+                      {showHeader&&<div style={{padding:"8px 2px 3px",borderBottom:`1px solid ${C.border}`,marginBottom:3,marginTop:10}}>
+                        <span style={{fontSize:11,fontWeight:800,color:C.textMid,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>⚽ {p.teamName}</span>
+                      </div>}
+                      <div onClick={()=>setPoolPlayer({p,key})}
+                        style={{display:"flex",alignItems:"center",gap:8,padding:"5px 8px",borderRadius:8,background:C.inputBg,border:`1px solid ${C.border}`,marginBottom:3,cursor:"pointer"}}
+                        onMouseEnter={e=>e.currentTarget.style.borderColor=C.accent}
+                        onMouseLeave={e=>e.currentTarget.style.borderColor=C.border}>
+                        <div style={{width:24,height:24,borderRadius:"50%",background:`linear-gradient(135deg,${tc.dark},${tc.bg})`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                          <span style={{fontSize:8,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif"}}>{p.name?.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()}</span>
+                        </div>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:11,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"'DM Sans',sans-serif"}}>{p.name}</div>
+                        </div>
+                        <span style={{fontSize:8,fontWeight:700,color:C.accent,background:C.goldLight,padding:"2px 6px",borderRadius:5,fontFamily:"monospace",border:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{p.pos?.split("/")?.[0]}</span>
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* POOL PLAYER DETAIL */}
       {poolPlayer&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:2100,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(8px)"}} onClick={()=>setPoolPlayer(null)}>
-          <div style={{background:C.card,border:`2px solid ${C.accent}`,borderRadius:22,width:"100%",maxWidth:320,overflow:"hidden",boxShadow:"0 24px 60px rgba(0,0,0,0.25)"}} onClick={e=>e.stopPropagation()}>
-            <div style={{background:`linear-gradient(135deg,${C.accentDark},${C.accent})`,padding:"24px 20px",textAlign:"center",position:"relative"}}>
-              <div style={{width:64,height:64,borderRadius:"50%",background:"rgba(255,255,255,0.2)",border:"3px solid rgba(255,255,255,0.8)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 10px"}}>
-                <span style={{fontSize:22,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif"}}>{poolPlayer.p.name?.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()}</span>
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:2100,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(8px)"}} onClick={()=>setPoolPlayer(null)}>
+          <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:18,width:"100%",maxWidth:320,boxShadow:"0 24px 60px rgba(0,0,0,0.15)"}} onClick={e=>e.stopPropagation()}>
+            <div style={{padding:"16px 18px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12}}>
+              <Avatar name={poolPlayer.p?.name||poolPlayer.name} size={44} colorId={allTeams.find(t=>t.teamName===(poolPlayer.p?.teamName||poolPlayer.teamName))?.teamColor}/>
+              <div style={{flex:1}}>
+                <div style={{fontSize:15,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{poolPlayer.p?.name||poolPlayer.name}</div>
+                <div style={{fontSize:11,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>⚽ {poolPlayer.p?.teamName||poolPlayer.teamName}</div>
               </div>
-              <div style={{fontSize:18,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>{poolPlayer.p.name}</div>
-              <div style={{fontSize:12,color:"rgba(255,255,255,0.8)",fontFamily:"'DM Sans',sans-serif",marginTop:2}}>⚽ {poolPlayer.p.teamName}</div>
-              <button onClick={()=>setPoolPlayer(null)} style={{position:"absolute",top:12,right:12,background:"rgba(255,255,255,0.2)",border:"none",borderRadius:"50%",width:28,height:28,color:"#fff",cursor:"pointer",fontSize:15,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+              <button onClick={()=>setPoolPlayer(null)} style={{background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:"50%",width:28,height:28,color:C.textMid,cursor:"pointer",fontSize:15,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
             </div>
-            <div style={{padding:"16px 20px 20px",display:"flex",flexDirection:"column",gap:10}}>
+            <div style={{padding:"14px 18px",display:"flex",flexDirection:"column",gap:0}}>
               {[
-                ["📍 Posición",poolPlayer.p.pos||"—"],
-                ["🌍 País",poolPlayer.p.country||"—"],
-                ["🎂 Edad",poolPlayer.p.age?`${poolPlayer.p.age} años`:"—"],
-                ["⭐ Media",poolPlayer.p.overall||"—"],
-              ].map(([label,val])=>(
-                <div key={label} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 12px",borderRadius:9,background:C.inputBg,border:`1px solid ${C.border}`}}>
-                  <span style={{fontSize:12,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{label}</span>
-                  <span style={{fontSize:13,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{val}</span>
+                ["Posición",(poolPlayer.p?.pos||poolPlayer.pos)?.split("/")?.[0]],
+                ["País",poolPlayer.p?.country||poolPlayer.country],
+                ["Edad",poolPlayer.p?.age?`${poolPlayer.p.age} años`:poolPlayer.age?`${poolPlayer.age} años`:null],
+                ["Media",poolPlayer.p?.overall||poolPlayer.overall?`${poolPlayer.p?.overall||poolPlayer.overall} ⭐`:null],
+                ["Valor de mercado",(poolPlayer.p?.price||poolPlayer.price)?`💰 ${(poolPlayer.p?.price||poolPlayer.price)?.value}${(poolPlayer.p?.price||poolPlayer.price)?.unit}`:null],
+              ].filter(([,v])=>v).map(([label,val])=>(
+                <div key={label} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
+                  <span style={{fontSize:11,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{label}</span>
+                  <span style={{fontSize:12,fontWeight:700,color:label==="Valor de mercado"?"#27ae60":C.text,fontFamily:"'DM Sans',sans-serif"}}>{val}</span>
                 </div>
               ))}
             </div>
           </div>
         </div>
       )}
-
       {/* SUB MENU MODAL */}
       {pickModal?.type==="subMenu"&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(8px)"}} onClick={()=>setPickModal(null)}>
