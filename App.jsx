@@ -426,7 +426,14 @@ function PickFromSquad({squad,posLabel,onPick,onClose,usedIds,posFilter,isBench}
   const[showAll,setShowAll]=useState(isBench||!posFilter);
   const[filter,setFilter]=useState("");
 
-  const available=squad.filter(p=>!usedIds?.some(uid=>uid===(p.poolKey||p.id)||p.poolKey===uid||p.id===uid));
+  const matchP=(a,b)=>
+    (a.poolKey&&b.poolKey&&a.poolKey===b.poolKey)||
+    (a.id&&b.id&&a.id===b.id)||
+    (a.poolKey&&(a.poolKey===b.id||a.poolKey===b.poolKey))||
+    (b.poolKey&&(b.poolKey===a.id||b.poolKey===a.poolKey))||
+    (a.name&&b.name&&a.name.trim().toLowerCase()===b.name.trim().toLowerCase());
+  const usedPlayers=(usedIds||[]).map(uid=>squad.find(p=>p.poolKey===uid||p.id===uid)).filter(Boolean);
+  const available=squad.filter(p=>!usedPlayers.some(u=>matchP(p,u))&&!usedIds?.some(uid=>uid===(p.poolKey||p.id)));
   const inPosition=posFilter?available.filter(p=>(p.pos?.split("/")||[]).includes(posFilter)||(p.primaryPos===posFilter)):available;
   const list=showAll?available.filter(p=>p.name.toLowerCase().includes(filter.toLowerCase())||p.pos?.toLowerCase().includes(filter.toLowerCase())):inPosition.filter(p=>p.name.toLowerCase().includes(filter.toLowerCase()));
 
@@ -1175,13 +1182,21 @@ function MainApp({user,isAdmin,onLogout}){
     const unsub=onSnapshot(ref,snap=>{
       if(snap.exists()){
         const data=snap.data();
-        // Deduplicate squad
+        // Deduplicate by poolKey, id, AND name
         const seen=new Set();
+        const seenNames=new Set();
         const squad=(data.squad||[]).filter(p=>{
           const key=p.poolKey||p.id;
-          if(seen.has(key)) return false;
-          seen.add(key); return true;
+          const name=(p.name||"").trim().toLowerCase();
+          if(seen.has(key)||seenNames.has(name)) return false;
+          seen.add(key);
+          if(name) seenNames.add(name);
+          return true;
         });
+        // If duplicates were found, save cleaned squad back to Firestore
+        if(squad.length<(data.squad||[]).length){
+          updateDoc(ref,{squad});
+        }
         setTeamData({...data,squad});
       } else{
         const init={uid:user.uid,email:user.email,teamName:user.displayName||"Mi Equipo",squad:[],lineups:[{id:"a",name:"Alineación A",formation:"4-3-3",starters:{},subs:Array(7).fill(null)}],createdAt:new Date().toISOString()};
@@ -1533,9 +1548,13 @@ function MainApp({user,isAdmin,onLogout}){
           {(()=>{
             const starterPlayers=Object.values(activeLineup?.starters||{}).filter(Boolean);
             const subPlayers=(activeLineup?.subs||[]).filter(Boolean);
-            const isUsed=(p)=>
-              starterPlayers.some(s=>(s.poolKey&&s.poolKey===(p.poolKey||p.id))||(s.id&&s.id===(p.poolKey||p.id))||(p.poolKey&&p.poolKey===(s.poolKey||s.id))||(p.id===s.id))||
-              subPlayers.some(s=>(s.poolKey&&s.poolKey===(p.poolKey||p.id))||(s.id&&s.id===(p.poolKey||p.id))||(p.poolKey&&p.poolKey===(s.poolKey||s.id))||(p.id===s.id));
+            const matchP=(a,b)=>
+              (a.poolKey&&b.poolKey&&a.poolKey===b.poolKey)||
+              (a.id&&b.id&&a.id===b.id)||
+              (a.poolKey&&(a.poolKey===b.id||a.poolKey===b.poolKey))||
+              (b.poolKey&&(b.poolKey===a.id||b.poolKey===a.poolKey))||
+              (a.name&&b.name&&a.name.trim().toLowerCase()===b.name.trim().toLowerCase());
+            const isUsed=(p)=>starterPlayers.some(s=>matchP(p,s))||subPlayers.some(s=>matchP(p,s));
             const reserves=squad.filter(p=>!isUsed(p));
             if(reserves.length===0) return null;
             return(
