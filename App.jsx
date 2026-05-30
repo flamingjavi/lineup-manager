@@ -1038,26 +1038,39 @@ function ImportButton({allTeams,pool,user,onDone}){
     let poolData={...pool};
     let ok=0;
 
-    for(const [teamName,{firestoreTeam,players}] of Object.entries(parsedTeams.matched)){
+    for(const [teamName,{firestoreTeam,players,excelName}] of Object.entries(parsedTeams.matched)){
+      // Skip if not selected
       if(!selectedTeams.has(teamName)){addLog(`⏭️ ${teamName} — omitido`);continue;}
-      // Clear old pool entries
-      Object.keys(poolData).forEach(k=>{if(poolData[k].teamName===teamName||poolData[k].teamUid===firestoreTeam.uid) delete poolData[k];});
-      // Add new pool entries
-      players.forEach(p=>{if(p.poolKey) poolData[p.poolKey]={name:p.name,pos:p.pos,country:p.country||null,overall:p.overall||null,age:p.age||null,price:p.price||null,teamName,teamUid:firestoreTeam.uid||firestoreTeam.id};});
-      // Update Firestore - use id field (works for teams with and without presidents)
-      const teamDocId=firestoreTeam.id||firestoreTeam.uid;
       // Skip if squad is locked
-      if(firestoreTeam.squadLocked){addLog(`🔒 ${teamName} — plantilla bloqueada, omitida`);continue;}
+      if(firestoreTeam.squadLocked){addLog(`🔒 ${teamName} — bloqueado`);continue;}
+
+      const teamDocId=firestoreTeam.id||firestoreTeam.uid;
+
+      // Clear old pool entries for this team
+      Object.keys(poolData).forEach(k=>{
+        if(poolData[k].teamName===teamName||poolData[k].teamUid===(firestoreTeam.uid||firestoreTeam.id)) delete poolData[k];
+      });
+      // Add new pool entries
+      players.forEach(p=>{
+        if(p.poolKey) poolData[p.poolKey]={name:p.name,pos:p.pos,country:p.country||null,overall:p.overall||null,age:p.age||null,price:p.price||null,teamName,teamUid:firestoreTeam.uid||firestoreTeam.id};
+      });
+
+      // Build patch
       const patch={squad:players};
       const excelColor=EXCEL_TEAM_COLORS[excelName]||EXCEL_TEAM_COLORS[teamName];
       if(excelColor) patch.teamColor=excelColor;
-      await updateDoc(doc(db,"teams",teamDocId),patch);
-      addLog(`✅ ${teamName} (${players.length} jug.)`);
-      ok++;
+
+      try{
+        await updateDoc(doc(db,"teams",teamDocId),patch);
+        addLog(`✅ ${teamName} (${players.length} jug.)`);
+        ok++;
+      } catch(err){
+        addLog(`❌ ${teamName} — error: ${err.message}`);
+      }
     }
 
     await setDoc(doc(db,"pool","players"),poolData);
-    addLog(`\n🏆 Listo: ${ok} equipos importados.`);
+    addLog(`🏆 Listo: ${ok} equipos importados.`);
     if(parsedTeams.notFound.length) addLog(`⚠️ Sin coincidencia: ${parsedTeams.notFound.join(", ")}`);
     setStatus("done");
     setImporting(false);
