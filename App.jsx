@@ -614,10 +614,10 @@ function Bench({subs,readOnly,onClickSub,onDragStart,teamColor}){
               <>
                 <div style={{position:"relative",display:"flex",justifyContent:"center",width:"100%"}}>
                   <div style={{width:36,height:36,borderRadius:"50%",background:`linear-gradient(135deg,${color.dark},${color.bg})`,border:"2.5px solid rgba(255,255,255,0.9)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 8px rgba(0,0,0,0.12)"}}>
-                    <span style={{fontSize:10,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif"}}>{sub.overall||sub.name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()}</span>
+                    <span style={{fontSize:sub.overall?11:9,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif"}}>{sub.overall||sub.name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()}</span>
                   </div>
                   <div style={{position:"absolute",bottom:-5,left:"50%",transform:"translateX(-50%)",background:accent,borderRadius:4,padding:"0 4px",minWidth:22,textAlign:"center"}}>
-                    <span style={{fontSize:6,fontWeight:900,color:"#fff",fontFamily:"monospace"}}>{sub.pos.split("/")[0]}</span>
+                    <span style={{fontSize:6,fontWeight:900,color:"#fff",fontFamily:"monospace"}}>{(sub.primaryPos||sub.pos?.split("/")?.[0]||"")}</span>
                   </div>
                 </div>
                 <div style={{textAlign:"center",width:"100%",paddingTop:5}}>
