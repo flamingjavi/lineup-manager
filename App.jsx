@@ -557,6 +557,11 @@ function PlayerSpot({pos,player,readOnly,onClick,onRemove,isDragOver,onDragOver,
 function Field({positions,lineup,readOnly,onClickPos,onRemovePos,dragOverPos,onDragOver,onDragLeave,onDrop,onDragStartPos,teamColor}){
   return(
     <div style={{position:"relative",width:"100%",paddingBottom:"133%",borderRadius:16,overflow:"hidden",boxShadow:"0 16px 48px rgba(0,0,0,0.18)"}}>
+      {lineup?.code&&(
+        <div style={{position:"absolute",top:8,right:8,zIndex:20,background:"rgba(0,0,0,0.55)",borderRadius:6,padding:"2px 8px",backdropFilter:"blur(4px)"}}>
+          <span style={{fontSize:9,fontWeight:700,color:"rgba(255,255,255,0.9)",fontFamily:"monospace",letterSpacing:1}}>{lineup.code}</span>
+        </div>
+      )}
       <div style={{position:"absolute",inset:0,background:"linear-gradient(180deg,#1a5c2a 0%,#1e6b30 25%,#1a5c2a 50%,#1e6b30 75%,#1a5c2a 100%)"}}/>
       <svg style={{position:"absolute",top:0,left:0,width:"100%",height:"100%"}} viewBox="0 0 100 133" preserveAspectRatio="none">
         {[0,1,2,3,4,5,6,7,8,9,10,11,12].map(i=><rect key={i} x="0" y={i*10.25} width="100" height="10.25" fill={i%2===0?"rgba(0,0,0,0.06)":"rgba(255,255,255,0.03)"}/>)}
@@ -941,6 +946,7 @@ function ImportButton({allTeams,pool,user,onDone}){
   const[log,setLog]=useState([]);
   const[parsedTeams,setParsedTeams]=useState(null);
   const[importing,setImporting]=useState(false);
+  const[selectedTeams,setSelectedTeams]=useState(new Set());
   const fileRef=useRef(null);
 
   const POS_MAP={'GK':'GK','RB':'RB','CB':'CB','LB':'LB','CDM':'CDM','CM':'CM','CAM':'CAM','RM':'RM','LM':'LM','RW':'RW','LW':'LW','ST':'ST','CF':'ST','RWB':'RB','LWB':'LB','DM':'CDM','AM':'CAM','SS':'CAM'};
@@ -1017,11 +1023,8 @@ function ImportButton({allTeams,pool,user,onDone}){
     }
 
     setParsedTeams({matched,notFound,totalPlayers:Object.values(teams).flat().length});
-    setLog([
-      `✅ Archivo leído: ${Object.keys(teams).length} equipos`,
-      `✅ Coincidencias: ${Object.keys(matched).length} equipos`,
-      notFound.length?`⚠️ Sin coincidencia: ${notFound.length} equipos`:null,
-    ].filter(Boolean));
+    setSelectedTeams(new Set(Object.keys(matched)));
+    setLog([]);
     setStatus("preview");
   };
 
@@ -1036,6 +1039,7 @@ function ImportButton({allTeams,pool,user,onDone}){
     let ok=0;
 
     for(const [teamName,{firestoreTeam,players}] of Object.entries(parsedTeams.matched)){
+      if(!selectedTeams.has(teamName)){addLog(`⏭️ ${teamName} — omitido`);continue;}
       // Clear old pool entries
       Object.keys(poolData).forEach(k=>{if(poolData[k].teamName===teamName||poolData[k].teamUid===firestoreTeam.uid) delete poolData[k];});
       // Add new pool entries
@@ -1057,6 +1061,7 @@ function ImportButton({allTeams,pool,user,onDone}){
     if(parsedTeams.notFound.length) addLog(`⚠️ Sin coincidencia: ${parsedTeams.notFound.join(", ")}`);
     setStatus("done");
     setImporting(false);
+    setSelectedTeams(new Set());
   };
 
   return(
@@ -1081,22 +1086,41 @@ function ImportButton({allTeams,pool,user,onDone}){
 
       {status==="preview"&&parsedTeams&&(
         <div>
-          <div style={{background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 12px",maxHeight:200,overflowY:"auto",fontFamily:"'DM Sans',sans-serif",fontSize:11,lineHeight:1.8,marginBottom:12}}>
-            {log.map((l,i)=><div key={i} style={{color:l.startsWith("⚠️")?"#e67e22":"#27ae60"}}>{l}</div>)}
+          <div style={{background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 12px",fontFamily:"'DM Sans',sans-serif",fontSize:11,lineHeight:1.8,marginBottom:10}}>
+            <span style={{color:"#27ae60"}}>✅ Archivo leído · {Object.keys(parsedTeams.matched).length} equipos encontrados</span>
+            {parsedTeams.notFound.length>0&&<div style={{color:"#e67e22",marginTop:2}}>⚠️ Sin coincidencia: {parsedTeams.notFound.join(", ")}</div>}
           </div>
-          {parsedTeams.notFound.length>0&&(
-            <div style={{background:"#fffbf0",border:"1px solid #f0d060",borderRadius:9,padding:"8px 12px",marginBottom:12,fontSize:10,color:"#7a6000",fontFamily:"'DM Sans',sans-serif"}}>
-              <strong>Sin coincidencia:</strong> {parsedTeams.notFound.join(", ")}
+          {/* Team selector */}
+          <div style={{fontSize:11,fontWeight:700,color:C.textLight,marginBottom:6,textTransform:"uppercase",letterSpacing:0.5,fontFamily:"'DM Sans',sans-serif",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <span>Elegir equipos a importar</span>
+            <div style={{display:"flex",gap:6}}>
+              <button onClick={()=>setSelectedTeams(new Set(Object.keys(parsedTeams.matched)))} style={{fontSize:9,padding:"2px 8px",borderRadius:6,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Todos</button>
+              <button onClick={()=>setSelectedTeams(new Set())} style={{fontSize:9,padding:"2px 8px",borderRadius:6,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Ninguno</button>
             </div>
-          )}
+          </div>
+          <div style={{maxHeight:220,overflowY:"auto",display:"flex",flexDirection:"column",gap:4,marginBottom:12}}>
+            {Object.entries(parsedTeams.matched).sort((a,b)=>a[0].localeCompare(b[0])).map(([teamName,{firestoreTeam,players}])=>{
+              const on=selectedTeams.has(teamName);
+              const tc=getTeamColor(firestoreTeam.teamColor);
+              return(
+                <div key={teamName} onClick={()=>setSelectedTeams(prev=>{const n=new Set(prev);on?n.delete(teamName):n.add(teamName);return n;})}
+                  style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",borderRadius:9,background:on?tc.bg+"18":C.inputBg,border:`1px solid ${on?tc.bg:C.border}`,cursor:"pointer",transition:"all .15s"}}>
+                  <div style={{width:10,height:10,borderRadius:"50%",background:on?tc.bg:C.borderDark,flexShrink:0,transition:"background .15s"}}/>
+                  <div style={{flex:1,fontSize:11,fontWeight:700,color:on?C.text:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>{teamName}</div>
+                  <span style={{fontSize:9,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>{players.length} jug.</span>
+                  <span style={{fontSize:11}}>{on?"✅":"⬜"}</span>
+                </div>
+              );
+            })}
+          </div>
           <div style={{display:"flex",gap:8}}>
-            <button onClick={()=>{setStatus("idle");setParsedTeams(null);setLog([]);}}
+            <button onClick={()=>{setStatus("idle");setParsedTeams(null);setLog([]);setSelectedTeams(new Set());}}
               style={{flex:1,padding:"11px",background:C.inputBg,color:C.textMid,border:`1px solid ${C.border}`,borderRadius:10,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
               Cancelar
             </button>
-            <button onClick={runImport} disabled={importing}
-              style={{flex:2,padding:"11px",background:"#27ae60",color:"#fff",border:"none",borderRadius:10,fontSize:14,fontWeight:800,cursor:"pointer",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>
-              IMPORTAR {Object.keys(parsedTeams.matched).length} EQUIPOS
+            <button onClick={runImport} disabled={selectedTeams.size===0}
+              style={{flex:2,padding:"11px",background:selectedTeams.size===0?"#ccc":"#27ae60",color:"#fff",border:"none",borderRadius:10,fontSize:14,fontWeight:800,cursor:selectedTeams.size===0?"not-allowed":"pointer",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>
+              IMPORTAR {selectedTeams.size} EQUIPOS
             </button>
           </div>
         </div>
@@ -1423,6 +1447,23 @@ function MainApp({user,isAdmin,onLogout}){
                 <button onClick={()=>setShowPool(true)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>🌍 Pool</button>
                 <button onClick={()=>setShowCreateTeam(true)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${C.accent}`,background:C.goldLight,color:C.accentDark,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>+ Equipo</button>
                 <button onClick={()=>setShowImport(true)} style={{padding:"5px 10px",borderRadius:8,border:"1px solid #27ae60",background:"#f0fff4",color:"#27ae60",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>📥 Importar</button>
+                <button onClick={async()=>{
+                  if(!window.confirm("¿Crear alineaciones Liga y Copa para todos los equipos que no las tengan?")) return;
+                  const defaultLineup=(name)=>({id:`${name.toLowerCase()}_${Date.now()}`,name,formation:"4-3-3",starters:{},subs:Array(7).fill(null),code:""});
+                  let count=0;
+                  for(const t of allTeams){
+                    const ref=doc(db,"teams",t.id||t.uid);
+                    const existing=t.lineups||[];
+                    const hasLiga=existing.some(l=>l.name==="Liga");
+                    const hasCopa=existing.some(l=>l.name==="Copa");
+                    if(!hasLiga||!hasCopa){
+                      const toAdd=[...(!hasLiga?[defaultLineup("Liga")]:[]),...(!hasCopa?[defaultLineup("Copa")]:[])];const updated=[...existing,...toAdd];
+                      await updateDoc(ref,{lineups:updated});
+                      count++;
+                    }
+                  }
+                  alert(`✅ Alineaciones creadas en ${count} equipos.`);
+                }} style={{padding:"5px 10px",borderRadius:8,border:`1px solid #9b59b6`,background:"#f5f0ff",color:"#9b59b6",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>⚽ Liga/Copa</button>
               </div>
               {/* Collapsible teams list */}
               {showTeamsList&&(
@@ -1500,11 +1541,46 @@ function MainApp({user,isAdmin,onLogout}){
         {showFormations&&(
           <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:12,marginTop:10,display:"flex",gap:5,flexWrap:"wrap",boxShadow:`0 2px 12px rgba(196,154,42,0.06)`}}>
             {Object.keys(FORMATIONS).map(f=>(
-              <button key={f} onClick={()=>{updateActive(()=>({formation:f,starters:{}}));setShowFormations(false);}}
-                style={{padding:"5px 11px",borderRadius:8,border:`1.5px solid ${activeLineup?.formation===f?C.accent:C.borderDark}`,background:activeLineup?.formation===f?C.accent:C.inputBg,color:activeLineup?.formation===f?"#fff":C.textMid,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"monospace"}}>
+              <button key={f} onClick={()=>{
+                // Preserve players when changing formation
+                updateActive(l=>{
+                  const oldPositions=FORMATIONS[l.formation]||FORMATIONS["4-3-3"];
+                  const newPositions=FORMATIONS[f]||FORMATIONS["4-3-3"];
+                  const oldStarters=l.starters||{};
+                  // Collect all old players with their position labels
+                  const oldPlayers=oldPositions.map(p=>({label:p.label,player:oldStarters[p.id]||null})).filter(p=>p.player);
+                  // Try to map to new positions by label
+                  const newStarters={};
+                  const used=new Set();
+                  newPositions.forEach(np=>{
+                    const match=oldPlayers.find(op=>!used.has(op)&&op.label===np.label);
+                    if(match){newStarters[np.id]=match.player;used.add(match);}
+                  });
+                  // Fill remaining new positions with leftover players (in order)
+                  const leftover=oldPlayers.filter(op=>!used.has(op));
+                  newPositions.forEach(np=>{
+                    if(!newStarters[np.id]&&leftover.length>0) newStarters[np.id]=leftover.shift().player;
+                  });
+                  return{formation:f,starters:newStarters};
+                });
+                setShowFormations(false);
+              }}
+                style={{padding:"5px 11px",borderRadius:8,border:`1.5px solid ${activeLineup?.formation===f?TA.accent:C.borderDark}`,background:activeLineup?.formation===f?TA.accent:C.inputBg,color:activeLineup?.formation===f?"#fff":C.textMid,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"monospace"}}>
                 {f}
               </button>
             ))}
+          </div>
+        )}
+
+        {/* CODE FIELD */}
+        {!viewingTeam&&!showSquadList&&activeLineup&&(
+          <div style={{marginTop:8,display:"flex",alignItems:"center",gap:8}}>
+            <span style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",whiteSpace:"nowrap"}}>Código FC26:</span>
+            <input value={activeLineup.code||""} maxLength={30} placeholder="Ej: 8A3F-9K2D"
+              onChange={e=>{const v=e.target.value.slice(0,30);updateActive(()=>({code:v}));}}
+              style={{flex:1,padding:"5px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:12,outline:"none",fontFamily:"monospace",maxWidth:200}}
+              onFocus={e=>e.target.style.borderColor=TA.accent} onBlur={e=>e.target.style.borderColor=C.borderDark}/>
+            {activeLineup.code&&<span style={{fontSize:9,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>{activeLineup.code.length}/30</span>}
           </div>
         )}
 
@@ -1905,6 +1981,13 @@ function MainApp({user,isAdmin,onLogout}){
               <span style={{fontSize:11,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{Object.keys(pool).length} jugadores</span>
               <button onClick={()=>setShowPool(false)} style={{marginLeft:"auto",background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:"50%",width:30,height:30,color:C.textMid,cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
             </div>
+            {/* Search bar */}
+            <div style={{padding:"10px 14px",borderBottom:`1px solid ${C.border}`,flexShrink:0}}>
+              <input id="pool-admin-search" autoFocus placeholder="🔍 Buscar jugador..." defaultValue=""
+                onChange={e=>{const v=e.target.value;document.querySelectorAll('[data-pool-row]').forEach(el=>{const name=el.dataset.name||"";const team=el.dataset.team||"";el.style.display=(name+team).toLowerCase().includes(v.toLowerCase())?"":"none";});document.querySelectorAll('[data-pool-header]').forEach(el=>{const next=el.nextElementSibling;el.style.display=next&&next.style.display!=="none"?"":"none";});}}
+                style={{width:"100%",padding:"8px 12px",borderRadius:10,border:`1.5px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:12,outline:"none",fontFamily:"'DM Sans',sans-serif"}}
+                onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.borderDark}/>
+            </div>
             <div style={{overflowY:"auto",flex:1,padding:"10px 14px 16px",display:"flex",flexDirection:"column",gap:5}}>
               {Object.keys(pool).length===0&&<div style={{textAlign:"center",color:C.textFaint,fontSize:13,padding:"32px 0",fontFamily:"'DM Sans',sans-serif"}}>No hay jugadores en el pool todavía.</div>}
               {(()=>{
@@ -1922,18 +2005,19 @@ function MainApp({user,isAdmin,onLogout}){
                   lastTeam=p.teamName;
                   return(
                     <div key={key}>
-                      {showTeamHeader&&<div style={{padding:"8px 2px 3px",borderBottom:`1px solid ${C.border}`,marginBottom:3,marginTop:lastTeam?10:0}}>
+                      {showTeamHeader&&<div data-pool-header style={{padding:"8px 2px 3px",borderBottom:`1px solid ${C.border}`,marginBottom:3,marginTop:lastTeam?10:0}}>
                         <span style={{fontSize:10,fontWeight:800,color:C.textMid,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>⚽ {p.teamName}</span>
                       </div>}
-                      <div onClick={()=>setPoolPlayer({key,p})}
+                      <div data-pool-row data-name={(p.name||"").toLowerCase()} data-team={(p.teamName||"").toLowerCase()}
+                        onClick={()=>setPoolPlayer({key,p})}
                         style={{display:"flex",alignItems:"center",gap:8,padding:"5px 8px",borderRadius:8,background:C.inputBg,border:`1px solid ${C.border}`,marginBottom:3,cursor:"pointer"}}
                         onMouseEnter={e=>e.currentTarget.style.borderColor=C.accent}
                         onMouseLeave={e=>e.currentTarget.style.borderColor=C.border}>
                         <div style={{width:26,height:26,borderRadius:"50%",background:`linear-gradient(135deg,${C.accentDark},${C.accent})`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                          <span style={{fontSize:9,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif"}}>{p.name?.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()}</span>
+                          <span style={{fontSize:9,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif"}}>{p.overall||p.name?.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()}</span>
                         </div>
                         <div style={{flex:1,minWidth:0}}>
-                          <div style={{fontSize:11,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"'DM Sans',sans-serif"}}>{p.name}</div>
+                          <div style={{fontSize:11,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"'DM Sans',sans-serif"}}>{p.name} <span style={{fontWeight:400,color:C.textLight}}>· {p.teamName}</span></div>
                           {(p.country||p.overall||p.age)&&<div style={{fontSize:9,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{[p.country,p.age?`${p.age}a`:null,p.overall?`${p.overall}⭐`:null].filter(Boolean).join(" · ")}</div>}
                         </div>
                         <span style={{fontSize:8,fontWeight:700,color:C.accent,background:C.goldLight,padding:"2px 6px",borderRadius:5,fontFamily:"monospace",border:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{p.pos?.split("/")?.[0]}</span>
@@ -1965,7 +2049,6 @@ function MainApp({user,isAdmin,onLogout}){
         </div>
       )}
 
-      {/* PUBLIC POOL - all users */}
       {showPublicPool&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(8px)"}} onClick={()=>setShowPublicPool(false)}>
           <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:22,width:"100%",maxWidth:480,maxHeight:"88vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 24px 60px rgba(0,0,0,0.15)"}} onClick={e=>e.stopPropagation()}>
@@ -1973,6 +2056,13 @@ function MainApp({user,isAdmin,onLogout}){
               <span style={{fontSize:15,fontWeight:800,color:C.text,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>🌍 POOL GLOBAL</span>
               <span style={{fontSize:11,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{Object.keys(pool).length} jugadores</span>
               <button onClick={()=>setShowPublicPool(false)} style={{marginLeft:"auto",background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:"50%",width:30,height:30,color:C.textMid,cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+            </div>
+            {/* Search bar */}
+            <div style={{padding:"10px 14px",borderBottom:`1px solid ${C.border}`,flexShrink:0}}>
+              <input autoFocus placeholder="🔍 Buscar jugador..." defaultValue=""
+                onChange={e=>{const v=e.target.value.toLowerCase();document.querySelectorAll('[data-pub-row]').forEach(el=>{const name=el.dataset.name||"";const team=el.dataset.team||"";el.style.display=(name+team).includes(v)?"":"none";});document.querySelectorAll('[data-pub-header]').forEach(el=>{const rows=el.parentElement?.querySelectorAll('[data-pub-row]');const anyVisible=rows&&Array.from(rows).some(r=>r.style.display!=="none");el.style.display=anyVisible?"":"none";});}}
+                style={{width:"100%",padding:"8px 12px",borderRadius:10,border:`1.5px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:12,outline:"none",fontFamily:"'DM Sans',sans-serif"}}
+                onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.borderDark}/>
             </div>
             <div style={{overflowY:"auto",flex:1,padding:"10px 14px 16px"}}>
               {(()=>{
@@ -1985,18 +2075,20 @@ function MainApp({user,isAdmin,onLogout}){
                   const tc=getTeamColor(allTeams.find(t=>t.teamName===p.teamName)?.teamColor);
                   return(
                     <div key={key}>
-                      {showHeader&&<div style={{padding:"8px 2px 3px",borderBottom:`1px solid ${C.border}`,marginBottom:3,marginTop:10}}>
+                      {showHeader&&<div data-pub-header style={{padding:"8px 2px 3px",borderBottom:`1px solid ${C.border}`,marginBottom:3,marginTop:10}}>
                         <span style={{fontSize:11,fontWeight:800,color:C.textMid,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>⚽ {p.teamName}</span>
                       </div>}
-                      <div onClick={()=>setPoolPlayer({p,key})}
+                      <div data-pub-row data-name={(p.name||"").toLowerCase()} data-team={(p.teamName||"").toLowerCase()}
+                        onClick={()=>setPoolPlayer({p,key})}
                         style={{display:"flex",alignItems:"center",gap:8,padding:"5px 8px",borderRadius:8,background:C.inputBg,border:`1px solid ${C.border}`,marginBottom:3,cursor:"pointer"}}
                         onMouseEnter={e=>e.currentTarget.style.borderColor=C.accent}
                         onMouseLeave={e=>e.currentTarget.style.borderColor=C.border}>
                         <div style={{width:24,height:24,borderRadius:"50%",background:`linear-gradient(135deg,${tc.dark},${tc.bg})`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                          <span style={{fontSize:8,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif"}}>{p.name?.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()}</span>
+                          <span style={{fontSize:8,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif"}}>{p.overall||p.name?.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()}</span>
                         </div>
                         <div style={{flex:1,minWidth:0}}>
-                          <div style={{fontSize:11,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"'DM Sans',sans-serif"}}>{p.name}</div>
+                          <div style={{fontSize:11,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"'DM Sans',sans-serif"}}>{p.name} <span style={{fontWeight:400,color:C.textLight}}>· {p.teamName}</span></div>
+                          {p.overall&&<div style={{fontSize:9,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{p.overall}⭐{p.country?` · ${p.country}`:""}</div>}
                         </div>
                         <span style={{fontSize:8,fontWeight:700,color:C.accent,background:C.goldLight,padding:"2px 6px",borderRadius:5,fontFamily:"monospace",border:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{p.pos?.split("/")?.[0]}</span>
                       </div>
