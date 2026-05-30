@@ -30,38 +30,38 @@ const C = {
 
 // ─── FORMACIONES FC26 ─────────────────────────────────────────────────────────
 const FORMATIONS = {
-  "3-1-4-2":   [{id:"gk",label:"GK",x:50,y:88},{id:"cb1",label:"CB",x:68,y:74},{id:"cb2",label:"CB",x:50,y:75},{id:"cb3",label:"CB",x:32,y:74},{id:"cdm",label:"CDM",x:50,y:63},{id:"rm",label:"RM",x:82,y:50},{id:"cm1",label:"CM",x:62,y:50},{id:"cm2",label:"CM",x:38,y:50},{id:"lm",label:"LM",x:18,y:50},{id:"st1",label:"ST",x:63,y:22},{id:"st2",label:"ST",x:37,y:22}],
-  "3-4-1-2":   [{id:"gk",label:"GK",x:50,y:88},{id:"cb1",label:"CB",x:68,y:74},{id:"cb2",label:"CB",x:50,y:75},{id:"cb3",label:"CB",x:32,y:74},{id:"rm",label:"RM",x:82,y:56},{id:"cm1",label:"CM",x:62,y:56},{id:"cm2",label:"CM",x:38,y:56},{id:"lm",label:"LM",x:18,y:56},{id:"cam",label:"CAM",x:50,y:38},{id:"st1",label:"ST",x:63,y:22},{id:"st2",label:"ST",x:37,y:22}],
-  "3-4-2-1":   [{id:"gk",label:"GK",x:50,y:88},{id:"cb1",label:"CB",x:68,y:74},{id:"cb2",label:"CB",x:50,y:75},{id:"cb3",label:"CB",x:32,y:74},{id:"rm",label:"RM",x:82,y:56},{id:"cm1",label:"CM",x:62,y:56},{id:"cm2",label:"CM",x:38,y:56},{id:"lm",label:"LM",x:18,y:56},{id:"rf",label:"RF",x:65,y:34},{id:"lf",label:"LF",x:35,y:34},{id:"st",label:"ST",x:50,y:16}],
-  "3-4-3":     [{id:"gk",label:"GK",x:50,y:88},{id:"cb1",label:"CB",x:68,y:74},{id:"cb2",label:"CB",x:50,y:75},{id:"cb3",label:"CB",x:32,y:74},{id:"rm",label:"RM",x:82,y:52},{id:"cm1",label:"CM",x:62,y:52},{id:"cm2",label:"CM",x:38,y:52},{id:"lm",label:"LM",x:18,y:52},{id:"rw",label:"RW",x:78,y:24},{id:"st",label:"ST",x:50,y:17},{id:"lw",label:"LW",x:22,y:24}],
-  "3-5-2":     [{id:"gk",label:"GK",x:50,y:88},{id:"cb1",label:"CB",x:68,y:74},{id:"cb2",label:"CB",x:50,y:75},{id:"cb3",label:"CB",x:32,y:74},{id:"rwb",label:"RWB",x:85,y:52},{id:"cm1",label:"CM",x:67,y:50},{id:"cm2",label:"CM",x:50,y:47},{id:"cm3",label:"CM",x:33,y:50},{id:"lwb",label:"LWB",x:15,y:52},{id:"st1",label:"ST",x:63,y:21},{id:"st2",label:"ST",x:37,y:21}],
-  "4-1-2-1-2": [{id:"gk",label:"GK",x:50,y:88},{id:"rb",label:"RB",x:80,y:72},{id:"cb1",label:"CB",x:62,y:73},{id:"cb2",label:"CB",x:38,y:73},{id:"lb",label:"LB",x:20,y:72},{id:"cdm",label:"CDM",x:50,y:60},{id:"cm1",label:"CM",x:72,y:48},{id:"cm2",label:"CM",x:28,y:48},{id:"cam",label:"CAM",x:50,y:36},{id:"st1",label:"ST",x:63,y:20},{id:"st2",label:"ST",x:37,y:20}],
-  "4-1-2-1-2(2)":[{id:"gk",label:"GK",x:50,y:88},{id:"rb",label:"RB",x:80,y:72},{id:"cb1",label:"CB",x:62,y:73},{id:"cb2",label:"CB",x:38,y:73},{id:"lb",label:"LB",x:20,y:72},{id:"cdm",label:"CDM",x:50,y:61},{id:"rm",label:"RM",x:78,y:46},{id:"lm",label:"LM",x:22,y:46},{id:"cam",label:"CAM",x:50,y:34},{id:"st1",label:"ST",x:63,y:20},{id:"st2",label:"ST",x:37,y:20}],
-  "4-1-3-2":   [{id:"gk",label:"GK",x:50,y:88},{id:"rb",label:"RB",x:80,y:72},{id:"cb1",label:"CB",x:62,y:73},{id:"cb2",label:"CB",x:38,y:73},{id:"lb",label:"LB",x:20,y:72},{id:"cdm",label:"CDM",x:50,y:61},{id:"rm",label:"RM",x:75,y:47},{id:"cm",label:"CM",x:50,y:47},{id:"lm",label:"LM",x:25,y:47},{id:"st1",label:"ST",x:63,y:22},{id:"st2",label:"ST",x:37,y:22}],
-  "4-1-4-1":   [{id:"gk",label:"GK",x:50,y:88},{id:"rb",label:"RB",x:80,y:72},{id:"cb1",label:"CB",x:62,y:73},{id:"cb2",label:"CB",x:38,y:73},{id:"lb",label:"LB",x:20,y:72},{id:"cdm",label:"CDM",x:50,y:61},{id:"rm",label:"RM",x:82,y:46},{id:"cm1",label:"CM",x:63,y:47},{id:"cm2",label:"CM",x:37,y:47},{id:"lm",label:"LM",x:18,y:46},{id:"st",label:"ST",x:50,y:17}],
-  "4-2-1-3":   [{id:"gk",label:"GK",x:50,y:88},{id:"rb",label:"RB",x:80,y:72},{id:"cb1",label:"CB",x:62,y:73},{id:"cb2",label:"CB",x:38,y:73},{id:"lb",label:"LB",x:20,y:72},{id:"cdm1",label:"CDM",x:65,y:59},{id:"cdm2",label:"CDM",x:35,y:59},{id:"cam",label:"CAM",x:50,y:42},{id:"rw",label:"RW",x:78,y:23},{id:"st",label:"ST",x:50,y:17},{id:"lw",label:"LW",x:22,y:23}],
-  "4-2-2-2":   [{id:"gk",label:"GK",x:50,y:88},{id:"rb",label:"RB",x:80,y:72},{id:"cb1",label:"CB",x:62,y:73},{id:"cb2",label:"CB",x:38,y:73},{id:"lb",label:"LB",x:20,y:72},{id:"cdm1",label:"CDM",x:65,y:59},{id:"cdm2",label:"CDM",x:35,y:59},{id:"ram",label:"RAM",x:70,y:40},{id:"lam",label:"LAM",x:30,y:40},{id:"st1",label:"ST",x:63,y:21},{id:"st2",label:"ST",x:37,y:21}],
-  "4-2-3-1":   [{id:"gk",label:"GK",x:50,y:88},{id:"rb",label:"RB",x:80,y:72},{id:"cb1",label:"CB",x:62,y:72},{id:"cb2",label:"CB",x:38,y:72},{id:"lb",label:"LB",x:20,y:72},{id:"cdm1",label:"CDM",x:62,y:57},{id:"cdm2",label:"CDM",x:38,y:57},{id:"ram",label:"RAM",x:76,y:36},{id:"cam",label:"CAM",x:50,y:34},{id:"lam",label:"LAM",x:24,y:36},{id:"st",label:"ST",x:50,y:16}],
-  "4-2-3-1(2)":[{id:"gk",label:"GK",x:50,y:88},{id:"rb",label:"RB",x:80,y:72},{id:"cb1",label:"CB",x:62,y:72},{id:"cb2",label:"CB",x:38,y:72},{id:"lb",label:"LB",x:20,y:72},{id:"cdm1",label:"CDM",x:65,y:59},{id:"cdm2",label:"CDM",x:35,y:59},{id:"rw",label:"RW",x:78,y:36},{id:"cam",label:"CAM",x:50,y:34},{id:"lw",label:"LW",x:22,y:36},{id:"st",label:"ST",x:50,y:16}],
-  "4-2-4":     [{id:"gk",label:"GK",x:50,y:88},{id:"rb",label:"RB",x:80,y:72},{id:"cb1",label:"CB",x:62,y:73},{id:"cb2",label:"CB",x:38,y:73},{id:"lb",label:"LB",x:20,y:72},{id:"cdm1",label:"CDM",x:63,y:58},{id:"cdm2",label:"CDM",x:37,y:58},{id:"rw",label:"RW",x:82,y:24},{id:"rf",label:"RF",x:60,y:20},{id:"lf",label:"LF",x:40,y:20},{id:"lw",label:"LW",x:18,y:24}],
-  "4-3-1-2":   [{id:"gk",label:"GK",x:50,y:88},{id:"rb",label:"RB",x:80,y:72},{id:"cb1",label:"CB",x:62,y:73},{id:"cb2",label:"CB",x:38,y:73},{id:"lb",label:"LB",x:20,y:72},{id:"cm1",label:"CM",x:72,y:54},{id:"cm2",label:"CM",x:50,y:54},{id:"cm3",label:"CM",x:28,y:54},{id:"cam",label:"CAM",x:50,y:38},{id:"st1",label:"ST",x:63,y:21},{id:"st2",label:"ST",x:37,y:21}],
-  "4-3-2-1":   [{id:"gk",label:"GK",x:50,y:88},{id:"rb",label:"RB",x:80,y:72},{id:"cb1",label:"CB",x:62,y:73},{id:"cb2",label:"CB",x:38,y:73},{id:"lb",label:"LB",x:20,y:72},{id:"cm1",label:"CM",x:72,y:54},{id:"cm2",label:"CM",x:50,y:54},{id:"cm3",label:"CM",x:28,y:54},{id:"rf",label:"RF",x:65,y:33},{id:"lf",label:"LF",x:35,y:33},{id:"st",label:"ST",x:50,y:16}],
-  "4-3-3":     [{id:"gk",label:"GK",x:50,y:88},{id:"rb",label:"RB",x:80,y:70},{id:"cb1",label:"CB",x:62,y:71},{id:"cb2",label:"CB",x:38,y:71},{id:"lb",label:"LB",x:20,y:70},{id:"cm1",label:"CM",x:74,y:50},{id:"cm2",label:"CM",x:50,y:47},{id:"cm3",label:"CM",x:26,y:50},{id:"rw",label:"RW",x:80,y:26},{id:"st",label:"ST",x:50,y:17},{id:"lw",label:"LW",x:20,y:26}],
-  "4-3-3(2)":  [{id:"gk",label:"GK",x:50,y:88},{id:"rb",label:"RB",x:80,y:72},{id:"cb1",label:"CB",x:62,y:73},{id:"cb2",label:"CB",x:38,y:73},{id:"lb",label:"LB",x:20,y:72},{id:"cm1",label:"CM",x:72,y:53},{id:"cam",label:"CAM",x:50,y:44},{id:"cm2",label:"CM",x:28,y:53},{id:"rw",label:"RW",x:78,y:24},{id:"st",label:"ST",x:50,y:15},{id:"lw",label:"LW",x:22,y:24}],
-  "4-3-3(3)":  [{id:"gk",label:"GK",x:50,y:88},{id:"rb",label:"RB",x:80,y:72},{id:"cb1",label:"CB",x:62,y:73},{id:"cb2",label:"CB",x:38,y:73},{id:"lb",label:"LB",x:20,y:72},{id:"cdm",label:"CDM",x:50,y:62},{id:"cm1",label:"CM",x:70,y:49},{id:"cm2",label:"CM",x:30,y:49},{id:"rw",label:"RW",x:78,y:24},{id:"st",label:"ST",x:50,y:15},{id:"lw",label:"LW",x:22,y:24}],
-  "4-3-3(4)":  [{id:"gk",label:"GK",x:50,y:88},{id:"rb",label:"RB",x:80,y:72},{id:"cb1",label:"CB",x:62,y:73},{id:"cb2",label:"CB",x:38,y:73},{id:"lb",label:"LB",x:20,y:72},{id:"cdm1",label:"CDM",x:65,y:60},{id:"cdm2",label:"CDM",x:35,y:60},{id:"cm",label:"CM",x:50,y:48},{id:"rw",label:"RW",x:78,y:24},{id:"st",label:"ST",x:50,y:15},{id:"lw",label:"LW",x:22,y:24}],
-  "4-4-1-1(2)":[{id:"gk",label:"GK",x:50,y:88},{id:"rb",label:"RB",x:80,y:72},{id:"cb1",label:"CB",x:62,y:73},{id:"cb2",label:"CB",x:38,y:73},{id:"lb",label:"LB",x:20,y:72},{id:"rm",label:"RM",x:82,y:52},{id:"cm1",label:"CM",x:62,y:52},{id:"cm2",label:"CM",x:38,y:52},{id:"lm",label:"LM",x:18,y:52},{id:"cam",label:"CAM",x:50,y:35},{id:"st",label:"ST",x:50,y:18}],
-  "4-4-2":     [{id:"gk",label:"GK",x:50,y:88},{id:"rb",label:"RB",x:80,y:70},{id:"cb1",label:"CB",x:62,y:71},{id:"cb2",label:"CB",x:38,y:71},{id:"lb",label:"LB",x:20,y:70},{id:"rm",label:"RM",x:80,y:50},{id:"cm1",label:"CM",x:60,y:50},{id:"cm2",label:"CM",x:40,y:50},{id:"lm",label:"LM",x:20,y:50},{id:"st1",label:"ST",x:63,y:22},{id:"st2",label:"ST",x:37,y:22}],
-  "4-4-2(2)":  [{id:"gk",label:"GK",x:50,y:88},{id:"rb",label:"RB",x:80,y:72},{id:"cb1",label:"CB",x:62,y:73},{id:"cb2",label:"CB",x:38,y:73},{id:"lb",label:"LB",x:20,y:72},{id:"rm",label:"RM",x:82,y:53},{id:"cdm1",label:"CDM",x:62,y:60},{id:"cdm2",label:"CDM",x:38,y:60},{id:"lm",label:"LM",x:18,y:53},{id:"st1",label:"ST",x:63,y:21},{id:"st2",label:"ST",x:37,y:21}],
-  "4-5-1":     [{id:"gk",label:"GK",x:50,y:88},{id:"rb",label:"RB",x:80,y:72},{id:"cb1",label:"CB",x:62,y:73},{id:"cb2",label:"CB",x:38,y:73},{id:"lb",label:"LB",x:20,y:72},{id:"rm",label:"RM",x:85,y:50},{id:"cm1",label:"CM",x:67,y:50},{id:"cm2",label:"CM",x:50,y:48},{id:"cm3",label:"CM",x:33,y:50},{id:"lm",label:"LM",x:15,y:50},{id:"st",label:"ST",x:50,y:18}],
-  "4-5-1(2)":  [{id:"gk",label:"GK",x:50,y:88},{id:"rb",label:"RB",x:80,y:72},{id:"cb1",label:"CB",x:62,y:73},{id:"cb2",label:"CB",x:38,y:73},{id:"lb",label:"LB",x:20,y:72},{id:"rm",label:"RM",x:85,y:50},{id:"cm1",label:"CM",x:67,y:50},{id:"cam",label:"CAM",x:50,y:38},{id:"cm2",label:"CM",x:33,y:50},{id:"lm",label:"LM",x:15,y:50},{id:"st",label:"ST",x:50,y:18}],
-  "5-2-1-2":   [{id:"gk",label:"GK",x:50,y:88},{id:"rwb",label:"RWB",x:86,y:68},{id:"cb1",label:"CB",x:70,y:74},{id:"cb2",label:"CB",x:50,y:75},{id:"cb3",label:"CB",x:30,y:74},{id:"lwb",label:"LWB",x:14,y:68},{id:"cm1",label:"CM",x:65,y:54},{id:"cm2",label:"CM",x:35,y:54},{id:"cam",label:"CAM",x:50,y:40},{id:"st1",label:"ST",x:63,y:22},{id:"st2",label:"ST",x:37,y:22}],
-  "5-2-3":     [{id:"gk",label:"GK",x:50,y:88},{id:"rwb",label:"RWB",x:86,y:68},{id:"cb1",label:"CB",x:70,y:74},{id:"cb2",label:"CB",x:50,y:75},{id:"cb3",label:"CB",x:30,y:74},{id:"lwb",label:"LWB",x:14,y:68},{id:"cm1",label:"CM",x:65,y:52},{id:"cm2",label:"CM",x:35,y:52},{id:"rw",label:"RW",x:78,y:24},{id:"st",label:"ST",x:50,y:17},{id:"lw",label:"LW",x:22,y:24}],
-  "5-3-2":     [{id:"gk",label:"GK",x:50,y:88},{id:"rwb",label:"RWB",x:86,y:68},{id:"cb1",label:"CB",x:68,y:73},{id:"cb2",label:"CB",x:50,y:75},{id:"cb3",label:"CB",x:32,y:73},{id:"lwb",label:"LWB",x:14,y:68},{id:"cm1",label:"CM",x:70,y:49},{id:"cm2",label:"CM",x:50,y:47},{id:"cm3",label:"CM",x:30,y:49},{id:"st1",label:"ST",x:63,y:22},{id:"st2",label:"ST",x:37,y:22}],
-  "5-4-1":     [{id:"gk",label:"GK",x:50,y:88},{id:"rwb",label:"RWB",x:86,y:69},{id:"cb1",label:"CB",x:68,y:74},{id:"cb2",label:"CB",x:50,y:75},{id:"cb3",label:"CB",x:32,y:74},{id:"lwb",label:"LWB",x:14,y:69},{id:"rm",label:"RM",x:80,y:50},{id:"cm1",label:"CM",x:60,y:50},{id:"cm2",label:"CM",x:40,y:50},{id:"lm",label:"LM",x:20,y:50},{id:"st",label:"ST",x:50,y:18}],
+  "3-1-4-2":   [{id:"gk",label:"POR",x:50,y:88},{id:"cb1",label:"DFC",x:68,y:74},{id:"cb2",label:"DFC",x:50,y:75},{id:"cb3",label:"DFC",x:32,y:74},{id:"cdm",label:"MCD",x:50,y:63},{id:"rm",label:"MD",x:82,y:50},{id:"cm1",label:"MC",x:62,y:50},{id:"cm2",label:"MC",x:38,y:50},{id:"lm",label:"MI",x:18,y:50},{id:"st1",label:"DC",x:63,y:22},{id:"st2",label:"DC",x:37,y:22}],
+  "3-4-1-2":   [{id:"gk",label:"POR",x:50,y:88},{id:"cb1",label:"DFC",x:68,y:74},{id:"cb2",label:"DFC",x:50,y:75},{id:"cb3",label:"DFC",x:32,y:74},{id:"rm",label:"MD",x:82,y:56},{id:"cm1",label:"MC",x:62,y:56},{id:"cm2",label:"MC",x:38,y:56},{id:"lm",label:"MI",x:18,y:56},{id:"cam",label:"MCO",x:50,y:38},{id:"st1",label:"DC",x:63,y:22},{id:"st2",label:"DC",x:37,y:22}],
+  "3-4-2-1":   [{id:"gk",label:"POR",x:50,y:88},{id:"cb1",label:"DFC",x:68,y:74},{id:"cb2",label:"DFC",x:50,y:75},{id:"cb3",label:"DFC",x:32,y:74},{id:"rm",label:"MD",x:82,y:56},{id:"cm1",label:"MC",x:62,y:56},{id:"cm2",label:"MC",x:38,y:56},{id:"lm",label:"MI",x:18,y:56},{id:"rf",label:"RF",x:65,y:34},{id:"lf",label:"LF",x:35,y:34},{id:"st",label:"DC",x:50,y:16}],
+  "3-4-3":     [{id:"gk",label:"POR",x:50,y:88},{id:"cb1",label:"DFC",x:68,y:74},{id:"cb2",label:"DFC",x:50,y:75},{id:"cb3",label:"DFC",x:32,y:74},{id:"rm",label:"MD",x:82,y:52},{id:"cm1",label:"MC",x:62,y:52},{id:"cm2",label:"MC",x:38,y:52},{id:"lm",label:"MI",x:18,y:52},{id:"rw",label:"ED",x:78,y:24},{id:"st",label:"DC",x:50,y:17},{id:"lw",label:"EI",x:22,y:24}],
+  "3-5-2":     [{id:"gk",label:"POR",x:50,y:88},{id:"cb1",label:"DFC",x:68,y:74},{id:"cb2",label:"DFC",x:50,y:75},{id:"cb3",label:"DFC",x:32,y:74},{id:"rwb",label:"RWB",x:85,y:52},{id:"cm1",label:"MC",x:67,y:50},{id:"cm2",label:"MC",x:50,y:47},{id:"cm3",label:"MC",x:33,y:50},{id:"lwb",label:"LWB",x:15,y:52},{id:"st1",label:"DC",x:63,y:21},{id:"st2",label:"DC",x:37,y:21}],
+  "4-1-2-1-2": [{id:"gk",label:"POR",x:50,y:88},{id:"rb",label:"DFD",x:80,y:72},{id:"cb1",label:"DFC",x:62,y:73},{id:"cb2",label:"DFC",x:38,y:73},{id:"lb",label:"DFI",x:20,y:72},{id:"cdm",label:"MCD",x:50,y:60},{id:"cm1",label:"MC",x:72,y:48},{id:"cm2",label:"MC",x:28,y:48},{id:"cam",label:"MCO",x:50,y:36},{id:"st1",label:"DC",x:63,y:20},{id:"st2",label:"DC",x:37,y:20}],
+  "4-1-2-1-2(2)":[{id:"gk",label:"POR",x:50,y:88},{id:"rb",label:"DFD",x:80,y:72},{id:"cb1",label:"DFC",x:62,y:73},{id:"cb2",label:"DFC",x:38,y:73},{id:"lb",label:"DFI",x:20,y:72},{id:"cdm",label:"MCD",x:50,y:61},{id:"rm",label:"MD",x:78,y:46},{id:"lm",label:"MI",x:22,y:46},{id:"cam",label:"MCO",x:50,y:34},{id:"st1",label:"DC",x:63,y:20},{id:"st2",label:"DC",x:37,y:20}],
+  "4-1-3-2":   [{id:"gk",label:"POR",x:50,y:88},{id:"rb",label:"DFD",x:80,y:72},{id:"cb1",label:"DFC",x:62,y:73},{id:"cb2",label:"DFC",x:38,y:73},{id:"lb",label:"DFI",x:20,y:72},{id:"cdm",label:"MCD",x:50,y:61},{id:"rm",label:"MD",x:75,y:47},{id:"cm",label:"MC",x:50,y:47},{id:"lm",label:"MI",x:25,y:47},{id:"st1",label:"DC",x:63,y:22},{id:"st2",label:"DC",x:37,y:22}],
+  "4-1-4-1":   [{id:"gk",label:"POR",x:50,y:88},{id:"rb",label:"DFD",x:80,y:72},{id:"cb1",label:"DFC",x:62,y:73},{id:"cb2",label:"DFC",x:38,y:73},{id:"lb",label:"DFI",x:20,y:72},{id:"cdm",label:"MCD",x:50,y:61},{id:"rm",label:"MD",x:82,y:46},{id:"cm1",label:"MC",x:63,y:47},{id:"cm2",label:"MC",x:37,y:47},{id:"lm",label:"MI",x:18,y:46},{id:"st",label:"DC",x:50,y:17}],
+  "4-2-1-3":   [{id:"gk",label:"POR",x:50,y:88},{id:"rb",label:"DFD",x:80,y:72},{id:"cb1",label:"DFC",x:62,y:73},{id:"cb2",label:"DFC",x:38,y:73},{id:"lb",label:"DFI",x:20,y:72},{id:"cdm1",label:"MCD",x:65,y:59},{id:"cdm2",label:"MCD",x:35,y:59},{id:"cam",label:"MCO",x:50,y:42},{id:"rw",label:"ED",x:78,y:23},{id:"st",label:"DC",x:50,y:17},{id:"lw",label:"EI",x:22,y:23}],
+  "4-2-2-2":   [{id:"gk",label:"POR",x:50,y:88},{id:"rb",label:"DFD",x:80,y:72},{id:"cb1",label:"DFC",x:62,y:73},{id:"cb2",label:"DFC",x:38,y:73},{id:"lb",label:"DFI",x:20,y:72},{id:"cdm1",label:"MCD",x:65,y:59},{id:"cdm2",label:"MCD",x:35,y:59},{id:"ram",label:"RAM",x:70,y:40},{id:"lam",label:"LAM",x:30,y:40},{id:"st1",label:"DC",x:63,y:21},{id:"st2",label:"DC",x:37,y:21}],
+  "4-2-3-1":   [{id:"gk",label:"POR",x:50,y:88},{id:"rb",label:"DFD",x:80,y:72},{id:"cb1",label:"DFC",x:62,y:72},{id:"cb2",label:"DFC",x:38,y:72},{id:"lb",label:"DFI",x:20,y:72},{id:"cdm1",label:"MCD",x:62,y:57},{id:"cdm2",label:"MCD",x:38,y:57},{id:"ram",label:"RAM",x:76,y:36},{id:"cam",label:"MCO",x:50,y:34},{id:"lam",label:"LAM",x:24,y:36},{id:"st",label:"DC",x:50,y:16}],
+  "4-2-3-1(2)":[{id:"gk",label:"POR",x:50,y:88},{id:"rb",label:"DFD",x:80,y:72},{id:"cb1",label:"DFC",x:62,y:72},{id:"cb2",label:"DFC",x:38,y:72},{id:"lb",label:"DFI",x:20,y:72},{id:"cdm1",label:"MCD",x:65,y:59},{id:"cdm2",label:"MCD",x:35,y:59},{id:"rw",label:"ED",x:78,y:36},{id:"cam",label:"MCO",x:50,y:34},{id:"lw",label:"EI",x:22,y:36},{id:"st",label:"DC",x:50,y:16}],
+  "4-2-4":     [{id:"gk",label:"POR",x:50,y:88},{id:"rb",label:"DFD",x:80,y:72},{id:"cb1",label:"DFC",x:62,y:73},{id:"cb2",label:"DFC",x:38,y:73},{id:"lb",label:"DFI",x:20,y:72},{id:"cdm1",label:"MCD",x:63,y:58},{id:"cdm2",label:"MCD",x:37,y:58},{id:"rw",label:"ED",x:82,y:24},{id:"rf",label:"RF",x:60,y:20},{id:"lf",label:"LF",x:40,y:20},{id:"lw",label:"EI",x:18,y:24}],
+  "4-3-1-2":   [{id:"gk",label:"POR",x:50,y:88},{id:"rb",label:"DFD",x:80,y:72},{id:"cb1",label:"DFC",x:62,y:73},{id:"cb2",label:"DFC",x:38,y:73},{id:"lb",label:"DFI",x:20,y:72},{id:"cm1",label:"MC",x:72,y:54},{id:"cm2",label:"MC",x:50,y:54},{id:"cm3",label:"MC",x:28,y:54},{id:"cam",label:"MCO",x:50,y:38},{id:"st1",label:"DC",x:63,y:21},{id:"st2",label:"DC",x:37,y:21}],
+  "4-3-2-1":   [{id:"gk",label:"POR",x:50,y:88},{id:"rb",label:"DFD",x:80,y:72},{id:"cb1",label:"DFC",x:62,y:73},{id:"cb2",label:"DFC",x:38,y:73},{id:"lb",label:"DFI",x:20,y:72},{id:"cm1",label:"MC",x:72,y:54},{id:"cm2",label:"MC",x:50,y:54},{id:"cm3",label:"MC",x:28,y:54},{id:"rf",label:"RF",x:65,y:33},{id:"lf",label:"LF",x:35,y:33},{id:"st",label:"DC",x:50,y:16}],
+  "4-3-3":     [{id:"gk",label:"POR",x:50,y:88},{id:"rb",label:"DFD",x:80,y:70},{id:"cb1",label:"DFC",x:62,y:71},{id:"cb2",label:"DFC",x:38,y:71},{id:"lb",label:"DFI",x:20,y:70},{id:"cm1",label:"MC",x:74,y:50},{id:"cm2",label:"MC",x:50,y:47},{id:"cm3",label:"MC",x:26,y:50},{id:"rw",label:"ED",x:80,y:26},{id:"st",label:"DC",x:50,y:17},{id:"lw",label:"EI",x:20,y:26}],
+  "4-3-3(2)":  [{id:"gk",label:"POR",x:50,y:88},{id:"rb",label:"DFD",x:80,y:72},{id:"cb1",label:"DFC",x:62,y:73},{id:"cb2",label:"DFC",x:38,y:73},{id:"lb",label:"DFI",x:20,y:72},{id:"cm1",label:"MC",x:72,y:53},{id:"cam",label:"MCO",x:50,y:44},{id:"cm2",label:"MC",x:28,y:53},{id:"rw",label:"ED",x:78,y:24},{id:"st",label:"DC",x:50,y:15},{id:"lw",label:"EI",x:22,y:24}],
+  "4-3-3(3)":  [{id:"gk",label:"POR",x:50,y:88},{id:"rb",label:"DFD",x:80,y:72},{id:"cb1",label:"DFC",x:62,y:73},{id:"cb2",label:"DFC",x:38,y:73},{id:"lb",label:"DFI",x:20,y:72},{id:"cdm",label:"MCD",x:50,y:62},{id:"cm1",label:"MC",x:70,y:49},{id:"cm2",label:"MC",x:30,y:49},{id:"rw",label:"ED",x:78,y:24},{id:"st",label:"DC",x:50,y:15},{id:"lw",label:"EI",x:22,y:24}],
+  "4-3-3(4)":  [{id:"gk",label:"POR",x:50,y:88},{id:"rb",label:"DFD",x:80,y:72},{id:"cb1",label:"DFC",x:62,y:73},{id:"cb2",label:"DFC",x:38,y:73},{id:"lb",label:"DFI",x:20,y:72},{id:"cdm1",label:"MCD",x:65,y:60},{id:"cdm2",label:"MCD",x:35,y:60},{id:"cm",label:"MC",x:50,y:48},{id:"rw",label:"ED",x:78,y:24},{id:"st",label:"DC",x:50,y:15},{id:"lw",label:"EI",x:22,y:24}],
+  "4-4-1-1(2)":[{id:"gk",label:"POR",x:50,y:88},{id:"rb",label:"DFD",x:80,y:72},{id:"cb1",label:"DFC",x:62,y:73},{id:"cb2",label:"DFC",x:38,y:73},{id:"lb",label:"DFI",x:20,y:72},{id:"rm",label:"MD",x:82,y:52},{id:"cm1",label:"MC",x:62,y:52},{id:"cm2",label:"MC",x:38,y:52},{id:"lm",label:"MI",x:18,y:52},{id:"cam",label:"MCO",x:50,y:35},{id:"st",label:"DC",x:50,y:18}],
+  "4-4-2":     [{id:"gk",label:"POR",x:50,y:88},{id:"rb",label:"DFD",x:80,y:70},{id:"cb1",label:"DFC",x:62,y:71},{id:"cb2",label:"DFC",x:38,y:71},{id:"lb",label:"DFI",x:20,y:70},{id:"rm",label:"MD",x:80,y:50},{id:"cm1",label:"MC",x:60,y:50},{id:"cm2",label:"MC",x:40,y:50},{id:"lm",label:"MI",x:20,y:50},{id:"st1",label:"DC",x:63,y:22},{id:"st2",label:"DC",x:37,y:22}],
+  "4-4-2(2)":  [{id:"gk",label:"POR",x:50,y:88},{id:"rb",label:"DFD",x:80,y:72},{id:"cb1",label:"DFC",x:62,y:73},{id:"cb2",label:"DFC",x:38,y:73},{id:"lb",label:"DFI",x:20,y:72},{id:"rm",label:"MD",x:82,y:53},{id:"cdm1",label:"MCD",x:62,y:60},{id:"cdm2",label:"MCD",x:38,y:60},{id:"lm",label:"MI",x:18,y:53},{id:"st1",label:"DC",x:63,y:21},{id:"st2",label:"DC",x:37,y:21}],
+  "4-5-1":     [{id:"gk",label:"POR",x:50,y:88},{id:"rb",label:"DFD",x:80,y:72},{id:"cb1",label:"DFC",x:62,y:73},{id:"cb2",label:"DFC",x:38,y:73},{id:"lb",label:"DFI",x:20,y:72},{id:"rm",label:"MD",x:85,y:50},{id:"cm1",label:"MC",x:67,y:50},{id:"cm2",label:"MC",x:50,y:48},{id:"cm3",label:"MC",x:33,y:50},{id:"lm",label:"MI",x:15,y:50},{id:"st",label:"DC",x:50,y:18}],
+  "4-5-1(2)":  [{id:"gk",label:"POR",x:50,y:88},{id:"rb",label:"DFD",x:80,y:72},{id:"cb1",label:"DFC",x:62,y:73},{id:"cb2",label:"DFC",x:38,y:73},{id:"lb",label:"DFI",x:20,y:72},{id:"rm",label:"MD",x:85,y:50},{id:"cm1",label:"MC",x:67,y:50},{id:"cam",label:"MCO",x:50,y:38},{id:"cm2",label:"MC",x:33,y:50},{id:"lm",label:"MI",x:15,y:50},{id:"st",label:"DC",x:50,y:18}],
+  "5-2-1-2":   [{id:"gk",label:"POR",x:50,y:88},{id:"rwb",label:"RWB",x:86,y:68},{id:"cb1",label:"DFC",x:70,y:74},{id:"cb2",label:"DFC",x:50,y:75},{id:"cb3",label:"DFC",x:30,y:74},{id:"lwb",label:"LWB",x:14,y:68},{id:"cm1",label:"MC",x:65,y:54},{id:"cm2",label:"MC",x:35,y:54},{id:"cam",label:"MCO",x:50,y:40},{id:"st1",label:"DC",x:63,y:22},{id:"st2",label:"DC",x:37,y:22}],
+  "5-2-3":     [{id:"gk",label:"POR",x:50,y:88},{id:"rwb",label:"RWB",x:86,y:68},{id:"cb1",label:"DFC",x:70,y:74},{id:"cb2",label:"DFC",x:50,y:75},{id:"cb3",label:"DFC",x:30,y:74},{id:"lwb",label:"LWB",x:14,y:68},{id:"cm1",label:"MC",x:65,y:52},{id:"cm2",label:"MC",x:35,y:52},{id:"rw",label:"ED",x:78,y:24},{id:"st",label:"DC",x:50,y:17},{id:"lw",label:"EI",x:22,y:24}],
+  "5-3-2":     [{id:"gk",label:"POR",x:50,y:88},{id:"rwb",label:"RWB",x:86,y:68},{id:"cb1",label:"DFC",x:68,y:73},{id:"cb2",label:"DFC",x:50,y:75},{id:"cb3",label:"DFC",x:32,y:73},{id:"lwb",label:"LWB",x:14,y:68},{id:"cm1",label:"MC",x:70,y:49},{id:"cm2",label:"MC",x:50,y:47},{id:"cm3",label:"MC",x:30,y:49},{id:"st1",label:"DC",x:63,y:22},{id:"st2",label:"DC",x:37,y:22}],
+  "5-4-1":     [{id:"gk",label:"POR",x:50,y:88},{id:"rwb",label:"RWB",x:86,y:69},{id:"cb1",label:"DFC",x:68,y:74},{id:"cb2",label:"DFC",x:50,y:75},{id:"cb3",label:"DFC",x:32,y:74},{id:"lwb",label:"LWB",x:14,y:69},{id:"rm",label:"MD",x:80,y:50},{id:"cm1",label:"MC",x:60,y:50},{id:"cm2",label:"MC",x:40,y:50},{id:"lm",label:"MI",x:20,y:50},{id:"st",label:"DC",x:50,y:18}],
 };
 
-const POSITIONS_LIST = ["GK","SW","CB","RB","LB","RWB","LWB","CDM","DM","CM","RM","LM","CAM","RAM","LAM","RW","LW","CF","ST"];
+const POSITIONS_LIST = ["POR","SW","DFC","DFD","DFI","RWB","LWB","MCD","MCD","MC","MD","MI","MCO","RAM","LAM","ED","EI","CF","DC"];
 
 const FC26_DB = [
   {id:1,name:"T. Courtois",pos:"GK",team:"Real Madrid",age:32},
@@ -426,12 +426,13 @@ function PickFromSquad({squad,posLabel,onPick,onClose,usedIds,posFilter,isBench}
   const[showAll,setShowAll]=useState(isBench||!posFilter);
   const[filter,setFilter]=useState("");
 
+  const norm=s=>String(s||"").toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/\s+/g," ");
   const matchP=(a,b)=>
     (a.poolKey&&b.poolKey&&a.poolKey===b.poolKey)||
     (a.id&&b.id&&a.id===b.id)||
     (a.poolKey&&(a.poolKey===b.id||a.poolKey===b.poolKey))||
     (b.poolKey&&(b.poolKey===a.id||b.poolKey===a.poolKey))||
-    (a.name&&b.name&&a.name.trim().toLowerCase()===b.name.trim().toLowerCase());
+    (a.name&&b.name&&norm(a.name)===norm(b.name));
   const usedPlayers=(usedIds||[]).map(uid=>squad.find(p=>p.poolKey===uid||p.id===uid)).filter(Boolean);
   const available=squad.filter(p=>!usedPlayers.some(u=>matchP(p,u))&&!usedIds?.some(uid=>uid===(p.poolKey||p.id)));
   const inPosition=posFilter?available.filter(p=>(p.pos?.split("/")||[]).includes(posFilter)||(p.primaryPos===posFilter)):available;
@@ -908,12 +909,10 @@ function AdminTeamEditor({teamData,pool,allTeamsRef}){
             </div>
             <div style={{overflowY:"auto",flex:1,padding:"10px 14px 16px",display:"flex",flexDirection:"column",gap:6}}>
               {(()=>{
-                const starterPlayers=Object.values(lineup.starters||{}).filter(Boolean);
-                const subPlayers=(lineup.subs||[]).filter(Boolean);
-                const isUsed=(p)=>
-                  starterPlayers.some(s=>(s.poolKey&&s.poolKey===(p.poolKey||p.id))||(p.poolKey&&p.poolKey===(s.poolKey||s.id))||(p.id===s.id))||
-                  subPlayers.some(s=>(s.poolKey&&s.poolKey===(p.poolKey||p.id))||(p.poolKey&&p.poolKey===(s.poolKey||s.id))||(p.id===s.id));
-                const reserves=squad.filter(p=>!isUsed(p));
+                const norm=s=>String(s||"").toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+                const usedNames=new Set([...Object.values(lineup.starters||{}).filter(Boolean).map(p=>norm(p.name)),...(lineup.subs||[]).filter(Boolean).map(p=>norm(p.name))]);
+                const usedKeys=new Set([...Object.values(lineup.starters||{}).filter(Boolean).flatMap(p=>[p.poolKey,p.id].filter(Boolean)),...(lineup.subs||[]).filter(Boolean).flatMap(p=>[p.poolKey,p.id].filter(Boolean))]);
+                const reserves=squad.filter(p=>!usedKeys.has(p.poolKey)&&!usedKeys.has(p.id)&&!usedNames.has(norm(p.name)));
                 if(reserves.length===0) return <div style={{textAlign:"center",color:C.textFaint,fontSize:13,padding:"24px 0",fontFamily:"'DM Sans',sans-serif"}}>No hay reservas — todos los jugadores están convocados.</div>;
                 return reserves.map(p=>(
                   <div key={p.id} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 11px",borderRadius:10,background:C.inputBg,border:`1px solid ${C.border}`}}>
@@ -1043,6 +1042,8 @@ function ImportButton({allTeams,pool,user,onDone}){
       players.forEach(p=>{if(p.poolKey) poolData[p.poolKey]={name:p.name,pos:p.pos,country:p.country||null,overall:p.overall||null,age:p.age||null,price:p.price||null,teamName,teamUid:firestoreTeam.uid||firestoreTeam.id};});
       // Update Firestore - use id field (works for teams with and without presidents)
       const teamDocId=firestoreTeam.id||firestoreTeam.uid;
+      // Skip if squad is locked
+      if(firestoreTeam.squadLocked){addLog(`🔒 ${teamName} — plantilla bloqueada, omitida`);continue;}
       const patch={squad:players};
       const excelColor=EXCEL_TEAM_COLORS[excelName]||EXCEL_TEAM_COLORS[teamName];
       if(excelColor) patch.teamColor=excelColor;
@@ -1277,16 +1278,30 @@ function MainApp({user,isAdmin,onLogout}){
     if(pickModal.type==="starter"){
       await updateActive(l=>{
         const newStarters={...l.starters};
+        const newSubs=[...l.subs];
+        const currentInPos=newStarters[pickModal.posId]||null;
+        // Find if player comes from bench
+        const fromBenchIdx=newSubs.findIndex(s=>matchPlayer(s,player));
+        // Remove player from wherever it was
         Object.keys(newStarters).forEach(k=>{if(matchPlayer(newStarters[k],player)) delete newStarters[k];});
-        const newSubs=l.subs.map(s=>matchPlayer(s,player)?null:s);
+        // Place old starter into bench slot if player came from bench
+        if(fromBenchIdx>=0&&currentInPos) newSubs[fromBenchIdx]=currentInPos;
+        else if(fromBenchIdx>=0) newSubs[fromBenchIdx]=null;
+        else newSubs.forEach((s,i)=>{if(matchPlayer(s,player)) newSubs[i]=null;});
         newStarters[pickModal.posId]=player;
         return{starters:newStarters,subs:newSubs};
       });
     } else {
       await updateActive(l=>{
         const newStarters={...l.starters};
-        Object.keys(newStarters).forEach(k=>{if(matchPlayer(newStarters[k],player)) delete newStarters[k];});
-        const newSubs=l.subs.map((s,i)=>i===pickModal.subIdx?player:(matchPlayer(s,player)?null:s));
+        const newSubs=[...l.subs];
+        const currentInSlot=newSubs[pickModal.subIdx]||null;
+        // Find if player comes from 11
+        const fromStarterKey=Object.keys(newStarters).find(k=>matchPlayer(newStarters[k],player));
+        if(fromStarterKey&&currentInSlot) newStarters[fromStarterKey]=currentInSlot;
+        else if(fromStarterKey) delete newStarters[fromStarterKey];
+        newSubs.forEach((s,i)=>{if(i!==pickModal.subIdx&&matchPlayer(s,player)) newSubs[i]=null;});
+        newSubs[pickModal.subIdx]=player;
         return{starters:newStarters,subs:newSubs};
       });
     }
@@ -1510,17 +1525,33 @@ function MainApp({user,isAdmin,onLogout}){
               <ColorPicker selected={teamData.teamColor||"blue"} onChange={color=>saveTeam({teamColor:color})}/>
             </div>
             {/* Squad management */}
-            <div style={{padding:"12px 16px"}}>
+            <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`}}>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
                 <span style={{fontSize:14}}>👥</span>
                 <div style={{fontSize:13,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>Plantilla</div>
                 <span style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{squad.length}/26</span>
                 <button onClick={()=>setShowSquadManager(true)}
-                  style={{marginLeft:"auto",padding:"6px 13px",background:C.accent,color:"#fff",border:"none",borderRadius:8,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                  style={{marginLeft:"auto",padding:"6px 13px",background:TA.accent,color:"#fff",border:"none",borderRadius:8,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
                   Gestionar
                 </button>
               </div>
             </div>
+            {/* Squad import lock - admin only */}
+            {isAdmin&&(
+            <div style={{padding:"10px 16px"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <span style={{fontSize:14}}>{teamData.squadLocked?"🔒":"🔓"}</span>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:12,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>Bloquear importación Excel</div>
+                  <div style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>Si está bloqueado, el Excel no reemplazará esta plantilla</div>
+                </div>
+                <button onClick={()=>saveTeam({squadLocked:!teamData.squadLocked})}
+                  style={{padding:"6px 12px",borderRadius:8,border:`1px solid ${teamData.squadLocked?C.accent:C.borderDark}`,background:teamData.squadLocked?C.goldLight:C.inputBg,color:teamData.squadLocked?C.accent:C.textMid,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                  {teamData.squadLocked?"Bloqueado":"Bloquear"}
+                </button>
+              </div>
+            </div>
+            )}
           </div>
         )}
 
@@ -1546,16 +1577,20 @@ function MainApp({user,isAdmin,onLogout}){
           </div>
           {/* RESERVES */}
           {(()=>{
-            const starterPlayers=Object.values(activeLineup?.starters||{}).filter(Boolean);
-            const subPlayers=(activeLineup?.subs||[]).filter(Boolean);
-            const matchP=(a,b)=>
-              (a.poolKey&&b.poolKey&&a.poolKey===b.poolKey)||
-              (a.id&&b.id&&a.id===b.id)||
-              (a.poolKey&&(a.poolKey===b.id||a.poolKey===b.poolKey))||
-              (b.poolKey&&(b.poolKey===a.id||b.poolKey===a.poolKey))||
-              (a.name&&b.name&&a.name.trim().toLowerCase()===b.name.trim().toLowerCase());
-            const isUsed=(p)=>starterPlayers.some(s=>matchP(p,s))||subPlayers.some(s=>matchP(p,s));
-            const reserves=squad.filter(p=>!isUsed(p));
+            const norm=s=>String(s||"").toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+            const usedNames=new Set([
+              ...Object.values(activeLineup?.starters||{}).filter(Boolean).map(p=>norm(p.name)),
+              ...(activeLineup?.subs||[]).filter(Boolean).map(p=>norm(p.name))
+            ]);
+            const usedKeys=new Set([
+              ...Object.values(activeLineup?.starters||{}).filter(Boolean).flatMap(p=>[p.poolKey,p.id].filter(Boolean)),
+              ...(activeLineup?.subs||[]).filter(Boolean).flatMap(p=>[p.poolKey,p.id].filter(Boolean))
+            ]);
+            const reserves=squad.filter(p=>
+              !usedKeys.has(p.poolKey)&&
+              !usedKeys.has(p.id)&&
+              !usedNames.has(norm(p.name))
+            );
             if(reserves.length===0) return null;
             return(
               <div style={{width:"100%",order:4,background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"13px 14px",boxShadow:`0 2px 12px rgba(0,0,0,0.04)`}}>
@@ -1873,7 +1908,7 @@ function MainApp({user,isAdmin,onLogout}){
             <div style={{overflowY:"auto",flex:1,padding:"10px 14px 16px",display:"flex",flexDirection:"column",gap:5}}>
               {Object.keys(pool).length===0&&<div style={{textAlign:"center",color:C.textFaint,fontSize:13,padding:"32px 0",fontFamily:"'DM Sans',sans-serif"}}>No hay jugadores en el pool todavía.</div>}
               {(()=>{
-                const POS_ORDER=["GK","SW","CB","RB","LB","RWB","LWB","CDM","DM","CM","RM","LM","CAM","RAM","LAM","RW","LW","CF","ST"];
+                const POS_ORDER=["POR","SW","DFC","DFD","DFI","RWB","LWB","MCD","MCD","MC","MD","MI","MCO","RAM","LAM","ED","EI","CF","DC"];
                 const sorted=Object.entries(pool).sort((a,b)=>{
                   const teamCmp=(a[1].teamName||"").localeCompare(b[1].teamName||"");
                   if(teamCmp!==0) return teamCmp;
@@ -1941,7 +1976,7 @@ function MainApp({user,isAdmin,onLogout}){
             </div>
             <div style={{overflowY:"auto",flex:1,padding:"10px 14px 16px"}}>
               {(()=>{
-                const POS_ORDER=["GK","SW","CB","RB","LB","RWB","LWB","CDM","DM","CM","RM","LM","CAM","RAM","LAM","RW","LW","CF","ST"];
+                const POS_ORDER=["POR","SW","DFC","DFD","DFI","RWB","LWB","MCD","MCD","MC","MD","MI","MCO","RAM","LAM","ED","EI","CF","DC"];
                 const sorted=Object.entries(pool).sort((a,b)=>(a[1].teamName||"").localeCompare(b[1].teamName||"")||(POS_ORDER.indexOf(a[1].pos?.split("/")?.[0])-POS_ORDER.indexOf(b[1].pos?.split("/")?.[0])));
                 let lastTeam=null;
                 return sorted.map(([key,p])=>{
@@ -2030,7 +2065,7 @@ function MainApp({user,isAdmin,onLogout}){
 
       {/* SQUAD LIST VIEW */}
       {!viewingTeam&&showSquadList&&(()=>{
-        const POS_ORDER=["GK","SW","CB","RB","LB","RWB","LWB","CDM","DM","CM","RM","LM","CAM","RAM","LAM","RW","LW","CF","ST"];
+        const POS_ORDER=["POR","SW","DFC","DFD","DFI","RWB","LWB","MCD","MCD","MC","MD","MI","MCO","RAM","LAM","ED","EI","CF","DC"];
         const sorted=[...squad].sort((a,b)=>{
           const ai=POS_ORDER.indexOf(a.primaryPos||a.pos?.split("/")?.[0]);
           const bi=POS_ORDER.indexOf(b.primaryPos||b.pos?.split("/")?.[0]);
