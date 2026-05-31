@@ -1446,39 +1446,43 @@ function MainApp({user,isAdmin,onLogout}){
           <div style={{paddingTop:12}}>
             <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 14px",boxShadow:`0 2px 12px rgba(196,154,42,0.06)`}}>
               {/* Header */}
-              <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-                <button onClick={()=>setShowTeamsList(v=>!v)}
-                  style={{flex:1,display:"flex",alignItems:"center",gap:6,background:"none",border:"none",cursor:"pointer",padding:0}}>
-                  <span style={{fontSize:10,fontWeight:700,color:C.textLight,textTransform:"uppercase",letterSpacing:0.5,fontFamily:"'DM Sans',sans-serif"}}>
-                    Equipos ({allTeams.length}) {showTeamsList?"▲":"▼"}
-                  </span>
-                </button>
-                <button onClick={()=>setShowAdminManager(true)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>👑 Admins</button>
-                <button onClick={()=>setShowPresidents(true)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>👤 Presidentes</button>
-                <button onClick={()=>setShowPool(true)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>🌍 Pool</button>
-                <button onClick={()=>setShowCreateTeam(true)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${C.accent}`,background:C.goldLight,color:C.accentDark,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>+ Equipo</button>
-                <button onClick={()=>setShowImport(true)} style={{padding:"5px 10px",borderRadius:8,border:"1px solid #27ae60",background:"#f0fff4",color:"#27ae60",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>📥 Importar</button>
-                <button onClick={async()=>{
-                  if(!window.confirm("¿Renombrar 'Alineación A' → 'Liga' y crear 'Copa' para todos los equipos?")) return;
-                  let count=0;
-                  for(const t of allTeams){
-                    const ref=doc(db,"teams",t.id||t.uid);
-                    let lineups=[...(t.lineups||[])];
-                    let changed=false;
-                    // Rename "Alineación A" to "Liga"
-                    lineups=lineups.map(l=>{
-                      if(l.name==="Alineación A"||l.name==="Alineacion A"){changed=true;return{...l,name:"Liga"};}
-                      return l;
-                    });
-                    // Add "Copa" if missing
-                    if(!lineups.some(l=>l.name==="Copa")){
-                      lineups.push({id:`copa_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,name:"Copa",formation:"4-3-3",starters:{},subs:Array(7).fill(null),code:""});
-                      changed=true;
+              <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                {/* Fila 1: título + botones principales */}
+                <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                  <button onClick={()=>setShowTeamsList(v=>!v)}
+                    style={{flex:1,display:"flex",alignItems:"center",gap:6,background:"none",border:"none",cursor:"pointer",padding:0}}>
+                    <span style={{fontSize:10,fontWeight:700,color:C.textLight,textTransform:"uppercase",letterSpacing:0.5,fontFamily:"'DM Sans',sans-serif"}}>
+                      Equipos ({allTeams.length}) {showTeamsList?"▲":"▼"}
+                    </span>
+                  </button>
+                  <button onClick={()=>setShowAdminManager(true)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>👑 Admins</button>
+                  <button onClick={()=>setShowPresidents(true)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>👤 Presidentes</button>
+                  <button onClick={()=>setShowPool(true)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>🌍 Pool</button>
+                  <button onClick={()=>setShowCreateTeam(true)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${C.accent}`,background:C.goldLight,color:C.accentDark,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>+ Equipo</button>
+                </div>
+                {/* Fila 2: acciones globales */}
+                <div style={{display:"flex",gap:6}}>
+                  <button onClick={()=>setShowImport(true)} style={{flex:1,padding:"5px 10px",borderRadius:8,border:"1px solid #27ae60",background:"#f0fff4",color:"#27ae60",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>📥 Importar Excel</button>
+                  <button onClick={async()=>{
+                    if(!window.confirm("¿Renombrar 'Alineación A' → 'Liga' y crear 'Copa' para todos los equipos?")) return;
+                    let count=0;
+                    for(const t of allTeams){
+                      const ref=doc(db,"teams",t.id||t.uid);
+                      let lineups=[...(t.lineups||[])];
+                      let changed=false;
+                      lineups=lineups.map(l=>{
+                        if(l.name==="Alineación A"||l.name==="Alineacion A"){changed=true;return{...l,name:"Liga"};}
+                        return l;
+                      });
+                      if(!lineups.some(l=>l.name==="Copa")){
+                        lineups.push({id:`copa_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,name:"Copa",formation:"4-3-3",starters:{},subs:Array(7).fill(null),code:""});
+                        changed=true;
+                      }
+                      if(changed){await updateDoc(ref,{lineups});count++;}
                     }
-                    if(changed){await updateDoc(ref,{lineups});count++;}
-                  }
-                  alert(`✅ ${count} equipos actualizados.`);
-                }} style={{padding:"5px 10px",borderRadius:8,border:`1px solid #9b59b6`,background:"#f5f0ff",color:"#9b59b6",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>⚽ Liga/Copa</button>
+                    alert(`✅ ${count} equipos actualizados.`);
+                  }} style={{flex:1,padding:"5px 10px",borderRadius:8,border:`1px solid #9b59b6`,background:"#f5f0ff",color:"#9b59b6",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>⚽ Liga/Copa</button>
+                </div>
               </div>
               {/* Collapsible teams list */}
               {showTeamsList&&(
