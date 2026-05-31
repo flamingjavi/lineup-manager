@@ -335,7 +335,7 @@ function AddPlayerModal({onAdd,onClose,currentCount,pool,teamName,editPlayer,onS
                       <div style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{p.team} · {p.age}a</div>
                       {takenBy&&<span style={{fontSize:9,color:"#c0392b",fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>🔒 Tomado por {takenBy}</span>}
                     </div>
-                    <span style={{fontSize:10,fontWeight:700,color:C.textLight,background:C.inputBg,padding:"3px 8px",borderRadius:6,fontFamily:"monospace",border:`1px solid ${C.border}`}}>{p.pos}</span>
+                    <span style={{fontSize:10,fontWeight:700,color:C.textLight,background:C.inputBg,padding:"3px 8px",borderRadius:6,fontFamily:"monospace",border:`1px solid ${C.border}`}}>{p.primaryPos||(p.pos||"").split("/")?.[0]}</span>
                   </div>
                 );
               })}
@@ -616,7 +616,7 @@ function Bench({subs,readOnly,onClickSub,onDragStart,teamColor}){
                   <span style={{fontSize:sub.overall?11:9,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif"}}>{sub.overall||sub.name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()}</span>
                 </div>
                 <div style={{background:accent,borderRadius:4,padding:"1px 5px",textAlign:"center"}}>
-                  <span style={{fontSize:6,fontWeight:900,color:"#fff",fontFamily:"monospace"}}>{sub.primaryPos||(sub.pos||"").split("/")?.[0]}</span>
+                  <span style={{fontSize:6,fontWeight:900,color:"#fff",fontFamily:"monospace"}}>{(sub.primaryPos||sub.pos||"").split("/")?.[0]}</span>
                 </div>
                 <div style={{textAlign:"center",width:"100%"}}>
                   <div style={{fontSize:7.5,fontWeight:800,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"'Bebas Neue',sans-serif",padding:"0 2px"}}>{sub.name.split(" ").slice(-1)[0].toUpperCase()}</div>
@@ -922,7 +922,7 @@ function AdminTeamEditor({teamData,pool,allTeamsRef}){
                     <Avatar name={p.name} size={36}/>
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{fontSize:13,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"'DM Sans',sans-serif"}}>{p.name}</div>
-                      <div style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{p.team||"—"} · <span style={{fontFamily:"monospace",color:C.accent,fontWeight:700}}>{p.pos}</span></div>
+                      <div style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{p.team||"—"} · <span style={{fontFamily:"monospace",color:C.accent,fontWeight:700}}>{p.primaryPos||(p.pos||"").split("/")?.[0]}</span></div>
                     </div>
                   </div>
                 ));
@@ -1233,7 +1233,43 @@ function MainApp({user,isAdmin,onLogout}){
         if(squad.length<(data.squad||[]).length){
           updateDoc(ref,{squad});
         }
-        setTeamData({...data,squad});
+
+        // Normalize positions to FC26 English
+        const POS_ES_TO_EN = {
+          // Spanish full names
+          "portero":"GK","arquero":"GK","guardameta":"GK",
+          "defensa central":"CB","defensa":"CB","central":"CB",
+          "lateral derecho":"RB","lateral izquierdo":"LB",
+          "mediocampista defensivo":"CDM","pivote":"CDM","mcd":"CDM","cdm":"CDM",
+          "mediocampista":"CM","centrocampista":"CM","mc":"CM",
+          "mediapunta":"CAM","enganche":"CAM","mco":"CAM","mcо":"CAM",
+          "extremo derecho":"RW","extremo izquierdo":"LW",
+          "interior derecho":"RM","interior izquierdo":"LM",
+          "delantero centro":"ST","delantero":"ST","punta":"ST","dc":"ST",
+          "carrilero derecho":"RB","carrilero izquierdo":"LB",
+          // Common Spanish abbreviations
+          "por":"GK","dfc":"CB","li":"LB","ld":"RB",
+          "mcd":"CDM","mc":"CM","mco":"CAM",
+          "ei":"LW","ed":"RW","mi":"LM","md":"RM",
+          // Also handle translated abbrevs that might appear
+          "dfd":"RB","dfi":"LB",
+        };
+        const normPos = (p) => {
+          const map = {"GK":"GK","CB":"CB","RB":"RB","LB":"LB","CDM":"CDM","CM":"CM","CAM":"CAM","RM":"RM","LM":"LM","RW":"RW","LW":"LW","ST":"ST","CF":"CF"};
+          const lo = (p||"").trim().toLowerCase();
+          return map[p] || map[(p||"").toUpperCase()] || POS_ES_TO_EN[lo] || p;
+        };
+        const normPosString = (posStr) => {
+          if (!posStr) return posStr;
+          return posStr.split("/").map(p => normPos(p.trim())).join("/");
+        };
+        const normalizedSquad = squad.map(pl => ({
+          ...pl,
+          pos: normPosString(pl.pos),
+          primaryPos: normPos(pl.primaryPos),
+          secondaryPos: normPosString(pl.secondaryPos),
+        }));
+        setTeamData({...data,squad:normalizedSquad});
       } else{
         const init={uid:user.uid,email:user.email,teamName:user.displayName||"Mi Equipo",squad:[],lineups:[{id:"a",name:"Alineación A",formation:"4-3-3",starters:{},subs:Array(7).fill(null)}],createdAt:new Date().toISOString()};
         setDoc(ref,init);setTeamData(init);
@@ -1244,7 +1280,12 @@ function MainApp({user,isAdmin,onLogout}){
 
   useEffect(()=>{
     if(!user) return;
-    const unsub=onSnapshot(collection(db,"teams"),snap=>{setAllTeams(snap.docs.map(d=>({id:d.id,...d.data()})));});
+    const unsub=onSnapshot(collection(db,"teams"),snap=>{
+      const normPos2=(p)=>{const M={"GK":"GK","CB":"CB","RB":"RB","LB":"LB","CDM":"CDM","CM":"CM","CAM":"CAM","RM":"RM","LM":"LM","RW":"RW","LW":"LW","ST":"ST","CF":"CF"};const ES={"mcd":"CDM","mc":"CM","mco":"CAM","dfc":"CB","li":"LB","ld":"RB","ei":"LW","ed":"RW","mi":"LM","md":"RM","dc":"ST","dfd":"RB","dfi":"LB","por":"GK","portero":"GK","defensa":"CB","pivote":"CDM","medio":"CM","mediapunta":"CAM","delantero":"ST"};const lo=(p||"").trim().toLowerCase();return M[p]||M[(p||"").toUpperCase()]||ES[lo]||p;};
+      const normPS=(s)=>{if(!s)return s;return s.split("/").map(p=>normPos2(p.trim())).join("/");};
+      const normalizeTeam=(d)=>({...d,squad:(d.squad||[]).map(pl=>({...pl,pos:normPS(pl.pos),primaryPos:normPos2(pl.primaryPos),secondaryPos:normPS(pl.secondaryPos)}))});
+      setAllTeams(snap.docs.map(d=>normalizeTeam({id:d.id,...d.data()})));
+    });
     return unsub;
   },[user]);
 
@@ -1696,7 +1737,7 @@ function MainApp({user,isAdmin,onLogout}){
                       <Avatar name={p.name} size={32}/>
                       <div>
                         <div style={{fontSize:11,fontWeight:700,color:C.textMid,fontFamily:"'DM Sans',sans-serif"}}>{p.name}</div>
-                        <div style={{fontSize:9,color:C.textLight,fontFamily:"monospace"}}>{p.pos}</div>
+                        <div style={{fontSize:9,color:C.textLight,fontFamily:"monospace"}}>{p.primaryPos||(p.pos||"").split("/")?.[0]}</div>
                       </div>
                     </div>
                   ))}
@@ -2151,7 +2192,7 @@ function MainApp({user,isAdmin,onLogout}){
           <div style={{background:C.card,border:`1.5px solid ${C.accent}`,borderRadius:16,overflow:"hidden",boxShadow:"0 16px 48px rgba(0,0,0,0.2)",minWidth:200}} onClick={e=>e.stopPropagation()}>
             <div style={{padding:"11px 16px",borderBottom:`1px solid ${C.border}`,background:C.goldLight}}>
               <div style={{fontSize:13,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{pickModal.currentPlayer?.name}</div>
-              <div style={{fontSize:10,color:C.textLight,fontFamily:"monospace"}}>{pickModal.currentPlayer?.pos}</div>
+              <div style={{fontSize:10,color:C.textLight,fontFamily:"monospace"}}>{pickModal.currentPlayer?.primaryPos||(pickModal.currentPlayer?.pos||"").split("/")?.[0]}</div>
             </div>
             <div onClick={()=>{const m={...pickModal,type:"sub"};setPickModal(m);}}
               style={{padding:"13px 18px",fontSize:13,fontWeight:700,color:C.text,cursor:"pointer",borderBottom:`1px solid ${C.border}`,fontFamily:"'DM Sans',sans-serif"}}
