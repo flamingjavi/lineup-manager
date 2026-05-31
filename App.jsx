@@ -616,7 +616,7 @@ function Bench({subs,readOnly,onClickSub,onDragStart,teamColor}){
                   <span style={{fontSize:sub.overall?11:9,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif"}}>{sub.overall||sub.name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()}</span>
                 </div>
                 <div style={{background:accent,borderRadius:4,padding:"1px 5px",textAlign:"center"}}>
-                  <span style={{fontSize:6,fontWeight:900,color:"#fff",fontFamily:"monospace"}}>{(sub.primaryPos||sub.pos||"").split("/")?.[0]}</span>
+                  <span style={{fontSize:6,fontWeight:900,color:"#fff",fontFamily:"monospace"}}>{(()=>{const POS_ES_TO_EN={POR:"GK",DFC:"CB",LD:"RB",LI:"LB",MCD:"CDM",MC:"CM",MCO:"CAM",MD:"RM",MI:"LM",ED:"RW",EI:"LW",DC:"ST",CF:"CF",DFD:"CB",DFI:"CB",LWB:"LB",RWB:"RB"};const raw=(sub.primaryPos||sub.pos||"").split("/")?.[0];return POS_ES_TO_EN[raw]||raw;})()}</span>
                 </div>
                 <div style={{textAlign:"center",width:"100%"}}>
                   <div style={{fontSize:7.5,fontWeight:800,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"'Bebas Neue',sans-serif",padding:"0 2px"}}>{sub.name.split(" ").slice(-1)[0].toUpperCase()}</div>
@@ -1446,10 +1446,9 @@ function MainApp({user,isAdmin,onLogout}){
           <div style={{paddingTop:12}}>
             <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 14px",boxShadow:`0 2px 12px rgba(196,154,42,0.06)`}}>
               {/* Header */}
-              <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
                 <button onClick={()=>setShowTeamsList(v=>!v)}
-                  style={{flex:1,display:"flex",alignItems:"center",gap:6,background:"none",border:"none",cursor:"pointer",padding:0,minWidth:80}}>
+                  style={{flex:1,display:"flex",alignItems:"center",gap:6,background:"none",border:"none",cursor:"pointer",padding:0}}>
                   <span style={{fontSize:10,fontWeight:700,color:C.textLight,textTransform:"uppercase",letterSpacing:0.5,fontFamily:"'DM Sans',sans-serif"}}>
                     Equipos ({allTeams.length}) {showTeamsList?"▲":"▼"}
                   </span>
@@ -1480,7 +1479,6 @@ function MainApp({user,isAdmin,onLogout}){
                   }
                   alert(`✅ ${count} equipos actualizados.`);
                 }} style={{padding:"5px 10px",borderRadius:8,border:`1px solid #9b59b6`,background:"#f5f0ff",color:"#9b59b6",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>⚽ Liga/Copa</button>
-                </div>
               </div>
               {/* Collapsible teams list */}
               {showTeamsList&&(
@@ -2174,10 +2172,12 @@ function MainApp({user,isAdmin,onLogout}){
 
       {/* SQUAD LIST VIEW */}
       {!viewingTeam&&showSquadList&&(()=>{
+        const POS_ES_TO_EN={POR:"GK",DFC:"CB",LD:"RB",LI:"LB",MCD:"CDM",MC:"CM",MCO:"CAM",MD:"RM",MI:"LM",ED:"RW",EI:"LW",DC:"ST",CF:"CF",DFD:"CB",DFI:"CB",LWB:"LB",RWB:"RB"};
+        const translatePos=p=>{const raw=p.primaryPos||p.pos?.split("/")?.[0]||"";return POS_ES_TO_EN[raw]||raw;};
         const POS_ORDER=["GK","CB","RB","LB","CDM","CM","CAM","RM","LM","RW","LW","ST","CF","SW"];
         const sorted=[...squad].sort((a,b)=>{
-          const ai=POS_ORDER.indexOf(a.primaryPos||a.pos?.split("/")?.[0]);
-          const bi=POS_ORDER.indexOf(b.primaryPos||b.pos?.split("/")?.[0]);
+          const ai=POS_ORDER.indexOf(translatePos(a));
+          const bi=POS_ORDER.indexOf(translatePos(b));
           return(ai===-1?99:ai)-(bi===-1?99:bi);
         });
         return(
@@ -2190,8 +2190,8 @@ function MainApp({user,isAdmin,onLogout}){
               </div>
               {sorted.length===0&&<div style={{padding:"32px",textAlign:"center",color:C.textFaint,fontSize:13,fontFamily:"'DM Sans',sans-serif"}}>No hay jugadores en la plantilla.</div>}
               {sorted.map((p,i)=>{
-                const prevPos=i>0?(sorted[i-1].primaryPos||sorted[i-1].pos?.split("/")?.[0]):null;
-                const currPos=p.primaryPos||p.pos?.split("/")?.[0];
+                const prevPos=i>0?translatePos(sorted[i-1]):null;
+                const currPos=translatePos(p);
                 const showDivider=currPos!==prevPos;
                 return(
                   <div key={p.id}>
