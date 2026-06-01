@@ -629,7 +629,7 @@ function Bench({subs,readOnly,onClickSub,onDragStart,teamColor}){
                   <span style={{fontSize:sub.overall?11:9,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif"}}>{sub.overall||sub.name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()}</span>
                 </div>
                 <div style={{background:accent,borderRadius:4,padding:"1px 5px",textAlign:"center"}}>
-                  <span style={{fontSize:6,fontWeight:900,color:"#fff",fontFamily:"monospace"}}>{(()=>{const POS_ES_TO_EN={POR:"GK",DFC:"CB",LD:"RB",LI:"LB",MCD:"CDM",MC:"CM",MCO:"CAM",MD:"RM",MI:"LM",ED:"RW",EI:"LW",DC:"ST",CF:"CF",DFD:"CB",DFI:"CB",LWB:"LB",RWB:"RB"};const raw=(sub.primaryPos||sub.pos||"").split("/")?.[0];return POS_ES_TO_EN[raw]||raw;})()}</span>
+                  <span style={{fontSize:6,fontWeight:900,color:"#fff",fontFamily:"monospace"}}>{normPos((sub.primaryPos||sub.pos||"").split("/")?.[0])}</span>
                 </div>
                 <div style={{textAlign:"center",width:"100%"}}>
                   <div style={{fontSize:7.5,fontWeight:800,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"'Bebas Neue',sans-serif",padding:"0 2px"}}>{sub.name.split(" ").slice(-1)[0].toUpperCase()}</div>
@@ -1247,14 +1247,16 @@ function MainApp({user,isAdmin,onLogout}){
           if(name) seenNames.add(name);
           return true;
         });
-        // Also normalize players inside lineups (starters & subs)
         const lineups=(data.lineups||[]).map(l=>({
           ...l,
           starters:Object.fromEntries(Object.entries(l.starters||{}).map(([k,v])=>[k,normPlayer(v)])),
           subs:(l.subs||[]).map(s=>normPlayer(s))
         }));
-        if(squad.length<(data.squad||[]).length){
-          updateDoc(ref,{squad});
+        // Save back if any Spanish positions were found or duplicates removed
+        const hadSpanish=(data.squad||[]).some(p=>p.pos&&Object.keys(POS_ES_EN).some(es=>p.pos.includes(es)));
+        const hadDupes=squad.length<(data.squad||[]).length;
+        if(hadSpanish||hadDupes){
+          updateDoc(ref,{squad,lineups});
         }
         setTeamData({...data,squad,lineups});
       } else{
