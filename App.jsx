@@ -666,6 +666,7 @@ function AdminTeamEditor({teamData,pool,allTeamsRef}){
   const[newLineupName,setNewLineupName]=useState("");
   const[editingAdminPlayer,setEditingAdminPlayer]=useState(null);
   const[transferAdminPlayer,setTransferAdminPlayer]=useState(null);
+  const[transferAllPlayers,setTransferAllPlayers]=useState(false);
   const dragSubIdx=useRef(null);
   const dragFromPosId=useRef(null);
   const[dragOverPos,setDragOverPos]=useState(null);
@@ -761,6 +762,10 @@ function AdminTeamEditor({teamData,pool,allTeamsRef}){
           <button onClick={()=>setShowReserves(true)}
             style={{padding:"4px 10px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",flexShrink:0}}>
             Ver reservas
+          </button>
+          <button onClick={()=>setTransferAllPlayers(true)}
+            style={{padding:"4px 10px",borderRadius:7,border:`1px solid #9b59b6`,background:"#f5f0ff",color:"#9b59b6",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",flexShrink:0}}>
+            🔄 Mover plantilla
           </button>
         </div>
         {/* Lineup selector + rename + delete + create */}
@@ -863,6 +868,48 @@ function AdminTeamEditor({teamData,pool,allTeamsRef}){
           </div>
         </div>
       </div>
+      {/* TRANSFER ALL PLAYERS MODAL */}
+      {transferAllPlayers&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:3000,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(8px)"}} onClick={()=>setTransferAllPlayers(false)}>
+          <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:22,width:"100%",maxWidth:400,maxHeight:"80vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 24px 60px rgba(0,0,0,0.15)"}} onClick={e=>e.stopPropagation()}>
+            <div style={{padding:"14px 18px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+              <span style={{fontSize:13,fontWeight:800,color:C.text,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>🔄 MOVER PLANTILLA COMPLETA</span>
+              <button onClick={()=>setTransferAllPlayers(false)} style={{marginLeft:"auto",background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:"50%",width:28,height:28,color:C.textMid,cursor:"pointer",fontSize:15,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+            </div>
+            <div style={{padding:"8px 14px 6px",borderBottom:`1px solid ${C.border}`,flexShrink:0}}>
+              <div style={{fontSize:11,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>
+                Mover <strong style={{color:"#9b59b6"}}>{squad.length} jugadores</strong> de <strong style={{color:C.text}}>{localData.teamName}</strong> a:
+              </div>
+              <div style={{fontSize:10,color:"#e67e22",fontFamily:"'DM Sans',sans-serif",marginTop:2}}>⚠️ El equipo origen queda vacío.</div>
+            </div>
+            <div style={{overflowY:"auto",flex:1,padding:"8px 14px 14px",display:"flex",flexDirection:"column",gap:6}}>
+              {(allTeamsRef||[]).filter(t=>(t.id||t.uid)!==(localData.id||localData.uid)).sort((a,b)=>(a.teamName||"").localeCompare(b.teamName||"")).map(t=>(
+                <div key={t.id||t.uid} onClick={async()=>{
+                  if(!window.confirm(`¿Mover TODOS los ${squad.length} jugadores a "${t.teamName}"?\nEsta acción vacía "${localData.teamName}".`)) return;
+                  const destRef=doc(db,"teams",t.id||t.uid);
+                  const destSnap=await getDoc(destRef);
+                  if(destSnap.exists()) await updateDoc(destRef,{squad:[...(destSnap.data().squad||[]),...squad]});
+                  const pRef=doc(db,"pool","players");const pSnap=await getDoc(pRef);
+                  if(pSnap.exists()){const pd={...pSnap.data()};squad.forEach(p=>{if(p.poolKey&&pd[p.poolKey])pd[p.poolKey]={...pd[p.poolKey],teamName:t.teamName,teamUid:t.uid||t.id};});await setDoc(pRef,pd);}
+                  await save({squad:[]});
+                  setTransferAllPlayers(false);
+                  alert(`✅ ${squad.length} jugadores movidos a ${t.teamName}`);
+                }}
+                  style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:10,background:C.inputBg,border:`1px solid ${C.border}`,cursor:"pointer"}}
+                  onMouseEnter={e=>e.currentTarget.style.borderColor="#9b59b6"}
+                  onMouseLeave={e=>e.currentTarget.style.borderColor=C.border}>
+                  <div style={{width:10,height:10,borderRadius:"50%",background:getTeamColor(t.teamColor).bg,flexShrink:0}}/>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:12,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{t.teamName}</div>
+                    <div style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{(t.squad||[]).length} jug. actuales</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {showAddPlayer&&<AddPlayerModal currentCount={squad.length} pool={pool} teamName={localData.teamName}
         onAdd={async p=>{
           await save({squad:[...squad,p]});
