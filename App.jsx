@@ -1226,6 +1226,7 @@ function MainApp({user,isAdmin,onLogout}){
   const[showSquadList,setShowSquadList]=useState(false);
   const[editingPlayer,setEditingPlayer]=useState(null);
   const[showPublicPool,setShowPublicPool]=useState(false);
+  const[shareLineup,setShareLineup]=useState(false);
   const[showAddPlayer,setShowAddPlayer]=useState(false);
   const[pickModal,setPickModal]=useState(null);
   const[dragOverPos,setDragOverPos]=useState(null);
@@ -1629,6 +1630,10 @@ function MainApp({user,isAdmin,onLogout}){
               style={{flex:1,padding:"5px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:12,outline:"none",fontFamily:"monospace",maxWidth:200}}
               onFocus={e=>e.target.style.borderColor=TA.accent} onBlur={e=>e.target.style.borderColor=C.borderDark}/>
             {activeLineup.code&&<span style={{fontSize:9,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>{activeLineup.code.length}/30</span>}
+            <button onClick={()=>setShareLineup(true)}
+              style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${TA.accent}`,background:TA.accentLight,color:TA.accent,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",whiteSpace:"nowrap",flexShrink:0}}>
+              📤 Compartir
+            </button>
           </div>
         )}
 
@@ -2178,6 +2183,70 @@ function MainApp({user,isAdmin,onLogout}){
           </div>
         </div>
       )}
+      {/* SHARE LINEUP MODAL */}
+      {shareLineup&&activeLineup&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(8px)"}} onClick={()=>setShareLineup(false)}>
+          <div style={{background:C.card,border:`2px solid ${TA.accent}`,borderRadius:22,width:"100%",maxWidth:420,maxHeight:"90vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 24px 60px rgba(0,0,0,0.2)"}} onClick={e=>e.stopPropagation()}>
+            <div style={{padding:"14px 18px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+              <span style={{fontSize:14,fontWeight:800,color:C.text,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>📤 COMPARTIR ALINEACIÓN</span>
+              <button onClick={()=>setShareLineup(false)} style={{marginLeft:"auto",background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:"50%",width:28,height:28,color:C.textMid,cursor:"pointer",fontSize:15,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+            </div>
+            <div style={{overflowY:"auto",flex:1,padding:"14px 18px"}}>
+              {(()=>{
+                const pos=positions;
+                const starters=activeLineup.starters||{};
+                const subs=(activeLineup.subs||[]).filter(Boolean);
+                const posOrder=["POR","DFC","DFD","DFI","MCD","MC","MCO","MD","MI","ED","EI","DC"];
+                // Group starters by position
+                const starterList=pos.map(p=>({posId:p.id,label:p.label,player:starters[p.id]||null}));
+                // Build text
+                const lines=[
+                  `⚽ ${teamData?.teamName||"Mi Equipo"} — ${activeLineup.name}`,
+                  `📋 ${activeLineup.formation}${activeLineup.code?` | 🔑 ${activeLineup.code}`:""}`,
+                  "",
+                  "🔵 TITULARES",
+                  ...starterList.map(s=>s.player?`${s.label}: ${s.player.name}`:`${s.label}: —`),
+                  "",
+                  "🪑 BANCA",
+                  ...subs.map((s,i)=>`${i+1}. ${s.name} (${s.primaryPos||s.pos?.split("/")?.[0]||"—"})`),
+                  "",
+                  "— Federación Liga Simulada ⚽"
+                ];
+                const text=lines.join("\n");
+                return(
+                  <div>
+                    {/* Preview */}
+                    <div style={{background:"#1a1a2e",borderRadius:14,padding:"16px",marginBottom:14,fontFamily:"monospace",fontSize:11,color:"#e0e0e0",lineHeight:1.8,whiteSpace:"pre-wrap",border:`1px solid ${TA.accent}44`}}>
+                      {text}
+                    </div>
+                    {/* Buttons */}
+                    <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                      <button onClick={async()=>{
+                        if(navigator.share){
+                          try{await navigator.share({title:`${teamData?.teamName} — ${activeLineup.name}`,text});}
+                          catch(e){}
+                        } else {
+                          await navigator.clipboard.writeText(text);
+                          alert("✅ Copiado al portapapeles");
+                        }
+                      }} style={{width:"100%",padding:"12px",background:TA.accent,color:"#fff",border:"none",borderRadius:11,fontSize:14,fontWeight:800,cursor:"pointer",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>
+                        {navigator.share?"📤 COMPARTIR":"📋 COPIAR"}
+                      </button>
+                      <button onClick={async()=>{
+                        await navigator.clipboard.writeText(text);
+                        alert("✅ Copiado al portapapeles");
+                      }} style={{width:"100%",padding:"10px",background:C.inputBg,color:C.textMid,border:`1px solid ${C.border}`,borderRadius:11,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                        📋 Copiar texto
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* SUB MENU MODAL */}
       {pickModal?.type==="subMenu"&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(8px)"}} onClick={()=>setPickModal(null)}>
