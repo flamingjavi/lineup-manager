@@ -628,9 +628,6 @@ function Bench({subs,readOnly,onClickSub,onDragStart,teamColor}){
                 <div style={{width:36,height:36,borderRadius:"50%",background:`linear-gradient(135deg,${color.dark},${color.bg})`,border:"2.5px solid rgba(255,255,255,0.9)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 8px rgba(0,0,0,0.12)",flexShrink:0}}>
                   <span style={{fontSize:sub.overall?11:9,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif"}}>{sub.overall||sub.name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()}</span>
                 </div>
-                <div style={{background:accent,borderRadius:4,padding:"1px 5px",textAlign:"center"}}>
-                  <span style={{fontSize:6,fontWeight:900,color:"#fff",fontFamily:"monospace"}}>{(POS_ES_EN[(sub.primaryPos||sub.pos||"").split("/")?.[0]])||(sub.primaryPos||sub.pos||"").split("/")?.[0]}</span>
-                </div>
                 <div style={{textAlign:"center",width:"100%"}}>
                   <div style={{fontSize:7.5,fontWeight:800,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"'Bebas Neue',sans-serif",padding:"0 2px"}}>{sub.name.split(" ").slice(-1)[0].toUpperCase()}</div>
                 </div>
@@ -2201,12 +2198,14 @@ function MainApp({user,isAdmin,onLogout}){
 
       {/* SQUAD LIST VIEW */}
       {!viewingTeam&&showSquadList&&(()=>{
-        const POS_ES_TO_EN={POR:"GK",DFC:"CB",LD:"RB",LI:"LB",MCD:"CDM",MC:"CM",MCO:"CAM",MD:"RM",MI:"LM",ED:"RW",EI:"LW",DC:"ST",CF:"CF",DFD:"CB",DFI:"CB",LWB:"LB",RWB:"RB"};
-        const translatePos=p=>{const raw=p.primaryPos||p.pos?.split("/")?.[0]||"";return POS_ES_TO_EN[raw]||raw;};
-        const POS_ORDER=["GK","CB","RB","LB","CDM","CM","CAM","RM","LM","RW","LW","ST","CF","SW"];
+        const POS_ORDER=["GK","CB","RB","LB","CDM","CM","CAM","RM","LM","RW","LW","ST","CF"];
+        const getPos=p=>{
+          const raw=(p.primaryPos||p.pos||"").split("/")?.[0].trim();
+          return POS_ES_EN[raw]||raw;
+        };
         const sorted=[...squad].sort((a,b)=>{
-          const ai=POS_ORDER.indexOf(translatePos(a));
-          const bi=POS_ORDER.indexOf(translatePos(b));
+          const ai=POS_ORDER.indexOf(getPos(a));
+          const bi=POS_ORDER.indexOf(getPos(b));
           return(ai===-1?99:ai)-(bi===-1?99:bi);
         });
         return(
@@ -2219,8 +2218,8 @@ function MainApp({user,isAdmin,onLogout}){
               </div>
               {sorted.length===0&&<div style={{padding:"32px",textAlign:"center",color:C.textFaint,fontSize:13,fontFamily:"'DM Sans',sans-serif"}}>No hay jugadores en la plantilla.</div>}
               {sorted.map((p,i)=>{
-                const prevPos=i>0?translatePos(sorted[i-1]):null;
-                const currPos=translatePos(p);
+                const prevPos=i>0?getPos(sorted[i-1]):null;
+                const currPos=getPos(p);
                 const showDivider=currPos!==prevPos;
                 return(
                   <div key={p.id}>
