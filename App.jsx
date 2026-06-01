@@ -2263,62 +2263,173 @@ function MainApp({user,isAdmin,onLogout}){
       {/* SHARE LINEUP MODAL */}
       {shareLineup&&activeLineup&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(8px)"}} onClick={()=>setShareLineup(false)}>
-          <div style={{background:C.card,border:`2px solid ${TA.accent}`,borderRadius:22,width:"100%",maxWidth:420,maxHeight:"90vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 24px 60px rgba(0,0,0,0.2)"}} onClick={e=>e.stopPropagation()}>
+          <div style={{background:C.card,border:`2px solid ${TA.accent}`,borderRadius:22,width:"100%",maxWidth:380,display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 24px 60px rgba(0,0,0,0.2)"}} onClick={e=>e.stopPropagation()}>
             <div style={{padding:"14px 18px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
               <span style={{fontSize:14,fontWeight:800,color:C.text,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>📤 COMPARTIR ALINEACIÓN</span>
               <button onClick={()=>setShareLineup(false)} style={{marginLeft:"auto",background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:"50%",width:28,height:28,color:C.textMid,cursor:"pointer",fontSize:15,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
             </div>
-            <div style={{overflowY:"auto",flex:1,padding:"14px 18px"}}>
-              {(()=>{
+            <div style={{padding:"16px 18px 20px",display:"flex",flexDirection:"column",gap:10}}>
+              <div style={{fontSize:12,color:C.textLight,fontFamily:"'DM Sans',sans-serif",textAlign:"center"}}>
+                Se generará una imagen con el campo, los jugadores y la banca.
+              </div>
+              <button onClick={async()=>{
+                const lineup=activeLineup;
+                const starters=lineup.starters||{};
+                const subs=(lineup.subs||[]).filter(Boolean);
                 const pos=positions;
+                const tc=getTeamColor(teamData?.teamColor);
+
+                // Canvas setup
+                const W=800,H=1100;
+                const canvas=document.createElement("canvas");
+                canvas.width=W;canvas.height=H;
+                const ctx=canvas.getContext("2d");
+
+                // Background
+                const bg=ctx.createLinearGradient(0,0,0,H);
+                bg.addColorStop(0,"#0f0f1e");bg.addColorStop(1,"#1a1a2e");
+                ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+
+                // Header
+                ctx.fillStyle=tc.bg;
+                ctx.fillRect(0,0,W,90);
+                ctx.fillStyle="#fff";
+                ctx.font="bold 36px 'Arial Black',sans-serif";
+                ctx.textAlign="center";
+                ctx.fillText((teamData?.teamName||"").toUpperCase(),W/2,52);
+                ctx.font="18px Arial,sans-serif";
+                ctx.fillStyle="rgba(255,255,255,0.8)";
+                ctx.fillText(`${lineup.name}  •  ${lineup.formation}${lineup.code?`  🔑 ${lineup.code}`:""}`,W/2,78);
+
+                // Field background
+                const FX=30,FY=100,FW=W-60,FH=620;
+                const fieldGrad=ctx.createLinearGradient(FX,FY,FX,FY+FH);
+                fieldGrad.addColorStop(0,"#1a5c2a");fieldGrad.addColorStop(0.5,"#1e6b30");fieldGrad.addColorStop(1,"#1a5c2a");
+                ctx.fillStyle=fieldGrad;
+                ctx.beginPath();ctx.roundRect(FX,FY,FW,FH,14);ctx.fill();
+
+                // Field lines
+                ctx.strokeStyle="rgba(255,255,255,0.25)";ctx.lineWidth=1.5;
+                // Border
+                ctx.strokeRect(FX+15,FY+15,FW-30,FH-30);
+                // Center line
+                ctx.beginPath();ctx.moveTo(FX+15,FY+FH/2);ctx.lineTo(FX+FW-15,FY+FH/2);ctx.stroke();
+                // Center circle
+                ctx.beginPath();ctx.arc(FX+FW/2,FY+FH/2,55,0,Math.PI*2);ctx.stroke();
+                ctx.beginPath();ctx.arc(FX+FW/2,FY+FH/2,3,0,Math.PI*2);ctx.fillStyle="rgba(255,255,255,0.3)";ctx.fill();
+                // Penalty areas
+                ctx.strokeRect(FX+15+FW*0.22,FY+15,FW*0.56,FH*0.14);
+                ctx.strokeRect(FX+15+FW*0.22,FY+FH-15-FH*0.14,FW*0.56,FH*0.14);
+                // Goal areas
+                ctx.strokeRect(FX+15+FW*0.36,FY+15,FW*0.28,FH*0.06);
+                ctx.strokeRect(FX+15+FW*0.36,FY+FH-15-FH*0.06,FW*0.28,FH*0.06);
+
+                // Draw players
+                const R=26;
+                pos.forEach(p=>{
+                  const player=starters[p.id];
+                  const px=FX+FW*(p.x/100);
+                  const py=FY+FH*(p.y/100);
+                  // Shadow
+                  ctx.shadowColor="rgba(0,0,0,0.4)";ctx.shadowBlur=8;
+                  // Circle
+                  const grad=ctx.createRadialGradient(px-5,py-5,2,px,py,R);
+                  grad.addColorStop(0,tc.bg);grad.addColorStop(1,tc.dark);
+                  ctx.fillStyle=grad;
+                  ctx.beginPath();ctx.arc(px,py,R,0,Math.PI*2);ctx.fill();
+                  ctx.shadowBlur=0;
+                  ctx.strokeStyle="rgba(255,255,255,0.9)";ctx.lineWidth=2;
+                  ctx.beginPath();ctx.arc(px,py,R,0,Math.PI*2);ctx.stroke();
+                  // Overall or initials
+                  ctx.fillStyle="#fff";ctx.textAlign="center";
+                  if(player&&player.overall){
+                    ctx.font="bold 17px 'Arial Black',sans-serif";
+                    ctx.fillText(player.overall,px,py+6);
+                  } else if(player){
+                    ctx.font="bold 13px Arial,sans-serif";
+                    ctx.fillText(player.name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase(),px,py+5);
+                  } else {
+                    ctx.fillStyle="rgba(255,255,255,0.3)";
+                    ctx.font="bold 13px Arial,sans-serif";
+                    ctx.fillText(p.label,px,py+5);
+                  }
+                  // Name below
+                  if(player){
+                    ctx.shadowColor="rgba(0,0,0,0.9)";ctx.shadowBlur=4;
+                    ctx.fillStyle="#fff";
+                    ctx.font="bold 10px Arial,sans-serif";
+                    const lastName=player.name.split(" ").slice(-1)[0].toUpperCase();
+                    ctx.fillText(lastName.length>10?lastName.slice(0,10):lastName,px,py+R+13);
+                    ctx.shadowBlur=0;
+                    // Pos badge
+                    ctx.fillStyle=tc.bg+"dd";
+                    ctx.beginPath();ctx.roundRect(px-13,py+R+17,26,13,4);ctx.fill();
+                    ctx.fillStyle="#fff";ctx.font="bold 8px Arial,sans-serif";
+                    ctx.fillText(p.label,px,py+R+27);
+                  }
+                });
+
+                // BANCA section
+                const BY=FY+FH+16;
+                ctx.fillStyle="rgba(255,255,255,0.06)";
+                ctx.beginPath();ctx.roundRect(FX,BY,FW,130,10);ctx.fill();
+                ctx.fillStyle="rgba(255,255,255,0.5)";ctx.font="bold 11px Arial,sans-serif";
+                ctx.textAlign="left";
+                ctx.fillText("BANCA",FX+12,BY+18);
+
+                const subR=20;
+                const maxSubs=Math.min(subs.length,7);
+                const subSpacing=Math.min(FW/(maxSubs+1),90);
+                const subStartX=FX+FW/2-(maxSubs-1)*subSpacing/2;
+                subs.slice(0,7).forEach((s,i)=>{
+                  const sx=subStartX+i*subSpacing;
+                  const sy=BY+60;
+                  // Circle
+                  const grad=ctx.createRadialGradient(sx-3,sy-3,1,sx,sy,subR);
+                  grad.addColorStop(0,tc.bg);grad.addColorStop(1,tc.dark);
+                  ctx.fillStyle=grad;ctx.shadowColor="rgba(0,0,0,0.3)";ctx.shadowBlur=5;
+                  ctx.beginPath();ctx.arc(sx,sy,subR,0,Math.PI*2);ctx.fill();
+                  ctx.shadowBlur=0;
+                  ctx.strokeStyle="rgba(255,255,255,0.7)";ctx.lineWidth=1.5;
+                  ctx.beginPath();ctx.arc(sx,sy,subR,0,Math.PI*2);ctx.stroke();
+                  // Overall
+                  ctx.fillStyle="#fff";ctx.textAlign="center";
+                  ctx.font=`bold 12px 'Arial Black',sans-serif`;
+                  ctx.fillText(s.overall||s.name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase(),sx,sy+5);
+                  // Name
+                  ctx.font="bold 7px Arial,sans-serif";ctx.fillStyle="rgba(255,255,255,0.8)";
+                  const sn=s.name.split(" ").slice(-1)[0].toUpperCase();
+                  ctx.fillText(sn.length>7?sn.slice(0,7):sn,sx,sy+subR+10);
+                });
+
+                // Footer
+                ctx.fillStyle="rgba(255,255,255,0.3)";
+                ctx.font="11px Arial,sans-serif";ctx.textAlign="center";
+                ctx.fillText("Federación Liga Simulada ⚽",W/2,H-14);
+
+                // Share
+                canvas.toBlob(async blob=>{
+                  const file=new File([blob],"alineacion.png",{type:"image/png"});
+                  if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
+                    try{await navigator.share({files:[file],title:`${teamData?.teamName} — ${lineup.name}`});}
+                    catch(e){if(e.name!=="AbortError"){const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="alineacion.png";a.click();}}
+                  } else {
+                    const url=URL.createObjectURL(blob);
+                    const a=document.createElement("a");a.href=url;a.download="alineacion.png";a.click();
+                  }
+                },"image/png");
+              }} style={{width:"100%",padding:"13px",background:TA.accent,color:"#fff",border:"none",borderRadius:11,fontSize:15,fontWeight:800,cursor:"pointer",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>
+                📸 GENERAR Y COMPARTIR IMAGEN
+              </button>
+              <button onClick={async()=>{
                 const starters=activeLineup.starters||{};
                 const subs=(activeLineup.subs||[]).filter(Boolean);
-                const posOrder=["POR","DFC","DFD","DFI","MCD","MC","MCO","MD","MI","ED","EI","DC"];
-                // Group starters by position
-                const starterList=pos.map(p=>({posId:p.id,label:p.label,player:starters[p.id]||null}));
-                // Build text
-                const lines=[
-                  `⚽ ${teamData?.teamName||"Mi Equipo"} — ${activeLineup.name}`,
-                  `📋 ${activeLineup.formation}${activeLineup.code?` | 🔑 ${activeLineup.code}`:""}`,
-                  "",
-                  "🔵 TITULARES",
-                  ...starterList.map(s=>s.player?`${s.label}: ${s.player.name}`:`${s.label}: —`),
-                  "",
-                  "🪑 BANCA",
-                  ...subs.map((s,i)=>`${i+1}. ${s.name} (${s.primaryPos||s.pos?.split("/")?.[0]||"—"})`),
-                  "",
-                  "— Federación Liga Simulada ⚽"
-                ];
-                const text=lines.join("\n");
-                return(
-                  <div>
-                    {/* Preview */}
-                    <div style={{background:"#1a1a2e",borderRadius:14,padding:"16px",marginBottom:14,fontFamily:"monospace",fontSize:11,color:"#e0e0e0",lineHeight:1.8,whiteSpace:"pre-wrap",border:`1px solid ${TA.accent}44`}}>
-                      {text}
-                    </div>
-                    {/* Buttons */}
-                    <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                      <button onClick={async()=>{
-                        if(navigator.share){
-                          try{await navigator.share({title:`${teamData?.teamName} — ${activeLineup.name}`,text});}
-                          catch(e){}
-                        } else {
-                          await navigator.clipboard.writeText(text);
-                          alert("✅ Copiado al portapapeles");
-                        }
-                      }} style={{width:"100%",padding:"12px",background:TA.accent,color:"#fff",border:"none",borderRadius:11,fontSize:14,fontWeight:800,cursor:"pointer",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>
-                        {navigator.share?"📤 COMPARTIR":"📋 COPIAR"}
-                      </button>
-                      <button onClick={async()=>{
-                        await navigator.clipboard.writeText(text);
-                        alert("✅ Copiado al portapapeles");
-                      }} style={{width:"100%",padding:"10px",background:C.inputBg,color:C.textMid,border:`1px solid ${C.border}`,borderRadius:11,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
-                        📋 Copiar texto
-                      </button>
-                    </div>
-                  </div>
-                );
-              })()}
+                const lines=[`⚽ ${teamData?.teamName} — ${activeLineup.name}`,`📋 ${activeLineup.formation}${activeLineup.code?` | 🔑 ${activeLineup.code}`:""}`,""," 🔵 TITULARES",...positions.map(p=>`${p.label}: ${starters[p.id]?.name||"—"}`),""," 🪑 BANCA",...subs.map((s,i)=>`${i+1}. ${s.name} (${s.primaryPos||s.pos?.split("/")?.[0]||"—"})`),""," — Federación Liga Simulada ⚽"];
+                await navigator.clipboard.writeText(lines.join("\n"));
+                alert("✅ Copiado al portapapeles");
+              }} style={{width:"100%",padding:"10px",background:C.inputBg,color:C.textMid,border:`1px solid ${C.border}`,borderRadius:11,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                📋 Copiar como texto
+              </button>
             </div>
           </div>
         </div>
