@@ -448,6 +448,7 @@ function PickFromSquad({squad,posLabel,onPick,onClose,usedIds,posFilter,isBench}
     (a.name&&b.name&&norm(a.name)===norm(b.name));
   const normalizeP=pos=>POS_ES_EN[pos?.trim()]||pos?.trim()||"";
   const playerPositions=p=>(p.pos||"").split("/").map(normalizeP).filter(Boolean);
+  const usedPlayers=(usedIds||[]).map(uid=>squad.find(p=>p.poolKey===uid||p.id===uid)).filter(Boolean);
   const available=squad.filter(p=>!usedPlayers.some(u=>matchP(p,u))&&!usedIds?.some(uid=>uid===(p.poolKey||p.id)));
   const inPosition=posFilter?available.filter(p=>playerPositions(p).includes(posFilter)||(normalizeP(p.primaryPos)===posFilter)):available;
   const list=showAll?available.filter(p=>p.name.toLowerCase().includes(filter.toLowerCase())||playerPositions(p).join("/").toLowerCase().includes(filter.toLowerCase())):inPosition.filter(p=>p.name.toLowerCase().includes(filter.toLowerCase()));
