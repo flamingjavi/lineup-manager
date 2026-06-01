@@ -1939,7 +1939,7 @@ function MainApp({user,isAdmin,onLogout}){
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(8px)"}} onClick={()=>setTransferTeam(null)}>
           <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:22,width:"100%",maxWidth:420,boxShadow:"0 24px 60px rgba(0,0,0,0.15)"}} onClick={e=>e.stopPropagation()}>
             <div style={{padding:"14px 18px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:10}}>
-              <span style={{fontSize:14,fontWeight:800,color:C.text,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>TRANSFERIR EQUIPO</span>
+              <span style={{fontSize:14,fontWeight:800,color:C.text,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>🔄 TRANSFERIR EQUIPO</span>
               <button onClick={()=>setTransferTeam(null)} style={{marginLeft:"auto",background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:"50%",width:28,height:28,color:C.textMid,cursor:"pointer",fontSize:15,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
             </div>
             <div style={{padding:"16px 18px 20px"}}>
@@ -1948,31 +1948,27 @@ function MainApp({user,isAdmin,onLogout}){
                 Dueño actual: <strong style={{color:C.text}}>{transferTeam.email||"Sin dueño"}</strong>
               </div>
               <div style={{fontSize:11,fontWeight:600,color:C.textLight,marginBottom:8,textTransform:"uppercase",fontFamily:"'DM Sans',sans-serif"}}>Asignar a usuario registrado</div>
-              <div style={{display:"flex",flexDirection:"column",gap:6,maxHeight:250,overflowY:"auto",marginBottom:12}}>
-                {allTeams.filter(t=>t.uid&&t.uid!==transferTeam.uid&&t.uid!==user.uid).map(t=>(
+              <div style={{display:"flex",flexDirection:"column",gap:6,maxHeight:260,overflowY:"auto",marginBottom:12}}>
+                {allTeams.filter(t=>t.uid&&t.uid!==transferTeam.uid).map(t=>(
                   <div key={t.id||t.uid} onClick={async()=>{
-                    if(!window.confirm(`¿Asignar ${transferTeam.teamName} a ${t.email}?\nEse usuario dejará su equipo actual sin dueño.`)) return;
+                    if(!window.confirm(`¿Asignar "${transferTeam.teamName}" a ${t.email}?`)) return;
                     const teamDocId=transferTeam.id||transferTeam.uid;
-                    // 1. Quitar dueño anterior de su equipo actual
+                    // Quitar dueño del equipo anterior del nuevo presidente
                     const prevTeamSnap=await getDocs(collection(db,"teams"));
                     const prevTeamDoc=prevTeamSnap.docs.find(d=>d.data().uid===t.uid&&d.id!==teamDocId);
                     if(prevTeamDoc) await updateDoc(doc(db,"teams",prevTeamDoc.id),{uid:"",email:""});
-                    // 2. Asignar nuevo dueño al equipo transferido
+                    // Asignar nuevo dueño
                     await updateDoc(doc(db,"teams",teamDocId),{uid:t.uid,email:t.email});
-                    // 3. Actualizar pool entries para este equipo
+                    // Actualizar pool
                     const poolRef=doc(db,"pool","players");
                     const poolSnap=await getDoc(poolRef);
                     if(poolSnap.exists()){
-                      const poolData={...poolSnap.data()};
-                      Object.keys(poolData).forEach(k=>{
-                        if(poolData[k].teamUid===transferTeam.uid||poolData[k].teamName===transferTeam.teamName){
-                          poolData[k]={...poolData[k],teamUid:t.uid,teamName:transferTeam.teamName};
-                        }
-                      });
-                      await setDoc(poolRef,poolData);
+                      const pd={...poolSnap.data()};
+                      Object.keys(pd).forEach(k=>{if(pd[k].teamName===transferTeam.teamName){pd[k]={...pd[k],teamUid:t.uid};}});
+                      await setDoc(poolRef,pd);
                     }
                     setTransferTeam(null);
-                    alert(`✅ Equipo "${transferTeam.teamName}" asignado a ${t.email}`);
+                    alert(`✅ "${transferTeam.teamName}" asignado a ${t.email}`);
                   }}
                     style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:10,background:C.inputBg,border:`1px solid ${C.border}`,cursor:"pointer"}}
                     onMouseEnter={e=>e.currentTarget.style.borderColor=C.accent}
@@ -1980,10 +1976,44 @@ function MainApp({user,isAdmin,onLogout}){
                     <Avatar name={t.teamName} size={32} colorId={t.teamColor}/>
                     <div style={{flex:1}}>
                       <div style={{fontSize:12,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{t.teamName}</div>
-                      <div style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{t.email}</div>
+                      <div style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{t.email||<em>Sin dueño</em>}</div>
                     </div>
+                    {t.uid&&<span style={{fontSize:9,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>{t.email}</span>}
                   </div>
                 ))}
+              </div>
+              {/* Assign by email manually */}
+              <div style={{borderTop:`1px solid ${C.border}`,paddingTop:12,marginBottom:12}}>
+                <div style={{fontSize:11,fontWeight:600,color:C.textLight,marginBottom:6,textTransform:"uppercase",fontFamily:"'DM Sans',sans-serif"}}>O asignar por correo</div>
+                <div style={{display:"flex",gap:8}}>
+                  <input id="transfer-email-input" type="email" placeholder="correo@ejemplo.com"
+                    style={{flex:1,padding:"8px 12px",borderRadius:9,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:12,outline:"none",fontFamily:"'DM Sans',sans-serif"}}
+                    onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.borderDark}/>
+                  <button onClick={async()=>{
+                    const emailInput=document.getElementById("transfer-email-input").value.trim().toLowerCase();
+                    if(!emailInput){alert("Ingresa un correo");return;}
+                    // Find user by email across all teams and admins
+                    const teamsSnap=await getDocs(collection(db,"teams"));
+                    const adminSnap=await getDocs(collection(db,"admins"));
+                    let targetUid=null, targetEmail=emailInput;
+                    // Check teams
+                    const teamWithEmail=teamsSnap.docs.find(d=>d.data().email?.toLowerCase()===emailInput);
+                    if(teamWithEmail){targetUid=teamWithEmail.data().uid;}
+                    // Check admins
+                    if(!targetUid){const adminDoc=adminSnap.docs.find(d=>d.data().email?.toLowerCase()===emailInput);if(adminDoc){targetUid=adminDoc.id;targetEmail=adminDoc.data().email;}}
+                    if(!targetUid){alert(`No se encontró ningún usuario con el correo "${emailInput}"`);return;}
+                    if(!window.confirm(`¿Asignar "${transferTeam.teamName}" a ${targetEmail}?`)) return;
+                    const teamDocId=transferTeam.id||transferTeam.uid;
+                    // Remove from previous team
+                    const prevDoc=teamsSnap.docs.find(d=>d.data().uid===targetUid&&d.id!==teamDocId);
+                    if(prevDoc) await updateDoc(doc(db,"teams",prevDoc.id),{uid:"",email:""});
+                    await updateDoc(doc(db,"teams",teamDocId),{uid:targetUid,email:targetEmail});
+                    setTransferTeam(null);
+                    alert(`✅ "${transferTeam.teamName}" asignado a ${targetEmail}`);
+                  }} style={{padding:"8px 14px",borderRadius:9,background:C.accent,color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                    Asignar
+                  </button>
+                </div>
               </div>
               <button onClick={async()=>{
                 if(!window.confirm(`¿Dejar "${transferTeam.teamName}" sin dueño?`)) return;
