@@ -12,16 +12,16 @@ const LIGA_DATA={"AFC Bournemouth":[{"id":"xls_4100545682297730984","name":"Pét
 
 // ─── NORMALIZE POSITIONS (English → Spanish) ─────────────────────────────────
 const POS_EN_ES={'GK':'POR','CB':'DFC','RB':'DFD','LB':'DFI','CDM':'MCD','CM':'MC','CAM':'MCO','RM':'MD','LM':'MI','RW':'ED','LW':'EI','ST':'DC','CF':'DC','RWB':'DFD','LWB':'DFI','DM':'MCD','AM':'MCO','SW':'DFC'};
-const POS_ES_EN={}; // not needed - everything in Spanish
+const POS_ES_EN={}; // not needed
 function normPos(pos){
   if(!pos) return pos;
-  return pos.split('/').map(p=>{const t=p.trim();return POS_EN_ES[t]||t;}).join('/');
+  return pos.split(/[\/\-\|]+/).map(p=>{const t=p.trim();return t?POS_EN_ES[t]||t:null;}).filter(Boolean).join('/');
 }
 function normPlayer(p){
   if(!p) return p;
   const pos=normPos(p.pos);
   const parts=pos?.split('/')||[];
-  const primary=POS_EN_ES[p.primaryPos?.trim()]||p.primaryPos?.trim()||parts[0]||'';
+  const primary=POS_EN_ES[p.primaryPos?.trim()]||normPos(p.primaryPos)||parts[0]||'';
   return{...p,pos,primaryPos:primary,secondaryPos:parts.slice(1).join('/')||null};
 }
 
@@ -449,8 +449,9 @@ function PickFromSquad({squad,posLabel,onPick,onClose,usedIds,posFilter,isBench}
     (b.poolKey&&(b.poolKey===a.id||b.poolKey===a.poolKey))||
     (a.name&&b.name&&norm(a.name)===norm(b.name));
   const toES=pos=>{if(!pos) return "";const t=pos.trim();return POS_EN_ES[t]||t;};
-  const getPlayerPos=p=>(p.pos||"").split("/").map(toES).filter(Boolean);
-  const getPrimaryPos=p=>toES(p.primaryPos||p.pos?.split("/")?.[0]||"");
+  const splitPos=pos=>(pos||"").split(/[\/\|\-]+/).map(s=>s.trim()).filter(s=>s.length>0&&s.length<6);
+  const getPlayerPos=p=>[...new Set([...splitPos(p.pos),...splitPos(p.primaryPos)].map(toES).filter(Boolean))];
+  const getPrimaryPos=p=>toES(splitPos(p.primaryPos||p.pos||"")[0]||"");
   const usedPlayers=(usedIds||[]).map(uid=>squad.find(p=>p.poolKey===uid||p.id===uid)).filter(Boolean);
   const available=squad.filter(p=>!usedPlayers.some(u=>matchP(p,u))&&!usedIds?.some(uid=>uid===(p.poolKey||p.id)));
   const inPosition=posFilter?available.filter(p=>getPlayerPos(p).includes(posFilter)||getPrimaryPos(p)===posFilter):available;
