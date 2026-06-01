@@ -446,8 +446,7 @@ function PickFromSquad({squad,posLabel,onPick,onClose,usedIds,posFilter,isBench}
     (a.poolKey&&b.poolKey&&a.poolKey===b.poolKey)||
     (a.id&&b.id&&a.id===b.id)||
     (a.poolKey&&(a.poolKey===b.id||a.poolKey===b.poolKey))||
-    (b.poolKey&&(b.poolKey===a.id||b.poolKey===a.poolKey))||
-    (a.name&&b.name&&norm(a.name)===norm(b.name));
+    (b.poolKey&&(b.poolKey===a.id||b.poolKey===a.poolKey));
   const toES=pos=>{if(!pos) return "";const t=pos.trim();return POS_EN_ES[t]||t;};
   const splitPos=pos=>(pos||"").split(/[\/\|\-]+/).map(s=>s.trim()).filter(s=>s.length>0&&s.length<6);
   const getPlayerPos=p=>[...new Set([...splitPos(p.pos),...splitPos(p.primaryPos)].map(toES).filter(Boolean))];
@@ -676,10 +675,13 @@ function AdminTeamEditor({teamData,pool,allTeamsRef}){
       if(snap.exists()){
         const d=snap.data();
         const squad=(d.squad||[]).map(normPlayer);
+        const sqIds=new Set(squad.flatMap(p=>[p.poolKey,p.id].filter(Boolean)));
+        const sqNames=new Set(squad.map(p=>(p.name||"").trim().toLowerCase()));
+        const inSq=p=>p&&(sqIds.has(p.poolKey)||sqIds.has(p.id)||sqNames.has((p.name||"").trim().toLowerCase()));
         const lineups=(d.lineups||[]).map(l=>({
           ...l,
-          starters:Object.fromEntries(Object.entries(l.starters||{}).map(([k,v])=>[k,normPlayer(v)])),
-          subs:(l.subs||[]).map(s=>normPlayer(s))
+          starters:Object.fromEntries(Object.entries(l.starters||{}).map(([k,v])=>[k,normPlayer(v)]).filter(([,v])=>!v||inSq(v))),
+          subs:(d.subs||l.subs||[]).map(s=>s?normPlayer(s):null).map(s=>inSq(s)?s:null)
         }));
         updateDoc(doc(db,"teams",teamDocId),{squad,lineups}).catch(()=>{});
         setLocalData({id:snap.id,...d,squad,lineups});
@@ -1304,11 +1306,18 @@ function MainApp({user,isAdmin,onLogout}){
           if(name) seenNames.add(name);
           return true;
         });
-        // Normalize starters and subs in all lineups
+        // Normalize starters and subs in all lineups, clean up ghost entries
+        const squadIds=new Set(squad.flatMap(p=>[p.poolKey,p.id].filter(Boolean)));
+        const squadNames=new Set(squad.map(p=>(p.name||"").trim().toLowerCase()));
+        const isInSquad=p=>p&&(squadIds.has(p.poolKey)||squadIds.has(p.id)||squadNames.has((p.name||"").trim().toLowerCase()));
         const lineups=(data.lineups||[]).map(l=>({
           ...l,
-          starters:Object.fromEntries(Object.entries(l.starters||{}).map(([k,v])=>[k,normPlayer(v)])),
-          subs:(l.subs||[]).map(s=>normPlayer(s))
+          starters:Object.fromEntries(
+            Object.entries(l.starters||{})
+              .map(([k,v])=>[k,normPlayer(v)])
+              .filter(([,v])=>!v||isInSquad(v))
+          ),
+          subs:(l.subs||[]).map(s=>s?normPlayer(s):null).map(s=>isInSquad(s)?s:null)
         }));
         // Always save back normalized data to fix any stale English positions
         updateDoc(ref,{squad,lineups}).catch(()=>{});
