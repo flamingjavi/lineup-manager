@@ -448,9 +448,12 @@ function PickFromSquad({squad,posLabel,onPick,onClose,usedIds,posFilter,isBench}
     (a.poolKey&&(a.poolKey===b.id||a.poolKey===b.poolKey))||
     (b.poolKey&&(b.poolKey===a.id||b.poolKey===a.poolKey))||
     (a.name&&b.name&&norm(a.name)===norm(b.name));
+  const toES=pos=>{if(!pos) return "";const t=pos.trim();return POS_EN_ES[t]||t;};
+  const getPlayerPos=p=>(p.pos||"").split("/").map(toES).filter(Boolean);
+  const getPrimaryPos=p=>toES(p.primaryPos||p.pos?.split("/")?.[0]||"");
   const usedPlayers=(usedIds||[]).map(uid=>squad.find(p=>p.poolKey===uid||p.id===uid)).filter(Boolean);
   const available=squad.filter(p=>!usedPlayers.some(u=>matchP(p,u))&&!usedIds?.some(uid=>uid===(p.poolKey||p.id)));
-  const inPosition=posFilter?available.filter(p=>(p.pos||"").split("/").map(s=>s.trim()).includes(posFilter)||(p.primaryPos===posFilter)):available;
+  const inPosition=posFilter?available.filter(p=>getPlayerPos(p).includes(posFilter)||getPrimaryPos(p)===posFilter):available;
   const list=showAll?available.filter(p=>p.name.toLowerCase().includes(filter.toLowerCase())):inPosition.filter(p=>p.name.toLowerCase().includes(filter.toLowerCase()));
 
   return(
@@ -483,8 +486,9 @@ function PickFromSquad({squad,posLabel,onPick,onClose,usedIds,posFilter,isBench}
           {available.length===0&&<div style={{padding:"32px",textAlign:"center",color:C.textFaint,fontSize:13,fontFamily:"'DM Sans',sans-serif"}}>No hay jugadores disponibles en reservas.</div>}
           {list.length===0&&available.length>0&&<div style={{padding:"16px",textAlign:"center",color:C.textFaint,fontSize:12,fontFamily:"'DM Sans',sans-serif"}}>No hay jugadores en esta posición.<br/><button onClick={()=>setShowAll(true)} style={{marginTop:8,padding:"6px 14px",borderRadius:8,border:`1px solid ${C.accent}`,background:C.goldLight,color:C.accent,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Ver fuera de posición</button></div>}
           {list.map(p=>{
-            const playerAllPos=p.pos?.split("/")||[];
-            const isOutOfPos=posFilter&&!playerAllPos.includes(posFilter)&&p.primaryPos!==posFilter;
+            const playerAllPos=getPlayerPos(p);
+            const primary=getPrimaryPos(p);
+            const isOutOfPos=posFilter&&!playerAllPos.includes(posFilter)&&primary!==posFilter;
             return(
               <div key={p.id} onClick={()=>onPick(p)}
                 style={{display:"flex",alignItems:"center",gap:11,padding:"10px 18px",cursor:"pointer",borderBottom:`1px solid ${C.border}`,transition:"background .1s",background:isOutOfPos?"#fffbf0":"transparent"}}
@@ -497,7 +501,7 @@ function PickFromSquad({squad,posLabel,onPick,onClose,usedIds,posFilter,isBench}
                   </div>
                   <div style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{p.country||p.nat||""}{(p.country||p.nat)&&p.age?" · ":""}{p.age?`${p.age}a`:""}{p.overall?` · ${p.overall}⭐`:""}</div>
                 </div>
-                <span style={{fontSize:10,fontWeight:700,color:isOutOfPos?"#e67e22":C.accent,background:isOutOfPos?"rgba(230,126,34,0.1)":C.goldLight,padding:"3px 8px",borderRadius:6,fontFamily:"monospace",border:`1px solid ${isOutOfPos?"#e67e22":C.border}`}}>{p.primaryPos||p.pos?.split("/")?.[0]}</span>
+                <span style={{fontSize:10,fontWeight:700,color:isOutOfPos?"#e67e22":C.accent,background:isOutOfPos?"rgba(230,126,34,0.1)":C.goldLight,padding:"3px 8px",borderRadius:6,fontFamily:"monospace",border:`1px solid ${isOutOfPos?"#e67e22":C.border}`}}>{primary}</span>
               </div>
             );
           })}
