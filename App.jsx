@@ -2279,137 +2279,129 @@ function MainApp({user,isAdmin,onLogout}){
                 const pos=positions;
                 const tc=getTeamColor(teamData?.teamColor);
 
-                // Canvas setup
-                const W=800,H=1100;
-                const SCALE=3;
+                // Canvas setup - draw at high res directly, no ctx.scale
+                const S=2; // scale factor
+                const W=800*S,H=1100*S;
                 const canvas=document.createElement("canvas");
-                canvas.width=W*SCALE;canvas.height=H*SCALE;
+                canvas.width=W;canvas.height=H;
                 const ctx=canvas.getContext("2d");
-                ctx.scale(SCALE,SCALE);
                 ctx.imageSmoothingEnabled=true;
                 ctx.imageSmoothingQuality="high";
+                const sc=n=>n*S; // scale helper
 
                 // Background
                 const bg=ctx.createLinearGradient(0,0,0,H);
                 bg.addColorStop(0,"#0f0f1e");bg.addColorStop(1,"#1a1a2e");
                 ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
 
-                // Header
+                // Header bar
                 ctx.fillStyle=tc.bg;
-                ctx.fillRect(0,0,W,90);
+                ctx.fillRect(0,0,W,sc(90));
                 ctx.fillStyle="#fff";
-                ctx.font="bold 36px 'Arial Black',sans-serif";
+                ctx.font=`bold ${sc(32)}px Arial,sans-serif`;
                 ctx.textAlign="center";
-                ctx.fillText((teamData?.teamName||"").toUpperCase(),W/2,52);
-                ctx.font="18px Arial,sans-serif";
+                ctx.fillText((teamData?.teamName||"").toUpperCase(),W/2,sc(50));
+                ctx.font=`${sc(16)}px Arial,sans-serif`;
                 ctx.fillStyle="rgba(255,255,255,0.8)";
-                ctx.fillText(`${lineup.name}  •  ${lineup.formation}${lineup.code?`  🔑 ${lineup.code}`:""}`,W/2,78);
+                ctx.fillText(`${lineup.name}  •  ${lineup.formation}${lineup.code?`  🔑 ${lineup.code}`:""}`,W/2,sc(76));
 
-                // Field background
-                const FX=30,FY=100,FW=W-60,FH=620;
-                const fieldGrad=ctx.createLinearGradient(FX,FY,FX,FY+FH);
-                fieldGrad.addColorStop(0,"#1a5c2a");fieldGrad.addColorStop(0.5,"#1e6b30");fieldGrad.addColorStop(1,"#1a5c2a");
-                ctx.fillStyle=fieldGrad;
-                ctx.beginPath();ctx.roundRect(FX,FY,FW,FH,14);ctx.fill();
+                // Field
+                const FX=sc(30),FY=sc(100),FW=W-sc(60),FH=sc(620);
+                const fg=ctx.createLinearGradient(FX,FY,FX,FY+FH);
+                fg.addColorStop(0,"#1a5c2a");fg.addColorStop(0.5,"#1e6b30");fg.addColorStop(1,"#1a5c2a");
+                ctx.fillStyle=fg;
+                ctx.beginPath();ctx.roundRect(FX,FY,FW,FH,sc(14));ctx.fill();
 
                 // Field lines
-                ctx.strokeStyle="rgba(255,255,255,0.25)";ctx.lineWidth=1.5;
-                // Border
-                ctx.strokeRect(FX+15,FY+15,FW-30,FH-30);
-                // Center line
-                ctx.beginPath();ctx.moveTo(FX+15,FY+FH/2);ctx.lineTo(FX+FW-15,FY+FH/2);ctx.stroke();
-                // Center circle
-                ctx.beginPath();ctx.arc(FX+FW/2,FY+FH/2,55,0,Math.PI*2);ctx.stroke();
-                ctx.beginPath();ctx.arc(FX+FW/2,FY+FH/2,3,0,Math.PI*2);ctx.fillStyle="rgba(255,255,255,0.3)";ctx.fill();
-                // Penalty areas
-                ctx.strokeRect(FX+15+FW*0.22,FY+15,FW*0.56,FH*0.14);
-                ctx.strokeRect(FX+15+FW*0.22,FY+FH-15-FH*0.14,FW*0.56,FH*0.14);
-                // Goal areas
-                ctx.strokeRect(FX+15+FW*0.36,FY+15,FW*0.28,FH*0.06);
-                ctx.strokeRect(FX+15+FW*0.36,FY+FH-15-FH*0.06,FW*0.28,FH*0.06);
+                ctx.strokeStyle="rgba(255,255,255,0.22)";ctx.lineWidth=sc(1.5);
+                ctx.strokeRect(FX+sc(15),FY+sc(15),FW-sc(30),FH-sc(30));
+                ctx.beginPath();ctx.moveTo(FX+sc(15),FY+FH/2);ctx.lineTo(FX+FW-sc(15),FY+FH/2);ctx.stroke();
+                ctx.beginPath();ctx.arc(FX+FW/2,FY+FH/2,sc(55),0,Math.PI*2);ctx.stroke();
+                ctx.beginPath();ctx.arc(FX+FW/2,FY+FH/2,sc(3),0,Math.PI*2);
+                ctx.fillStyle="rgba(255,255,255,0.25)";ctx.fill();
+                ctx.strokeRect(FX+sc(15)+FW*0.22,FY+sc(15),FW*0.56,FH*0.14);
+                ctx.strokeRect(FX+sc(15)+FW*0.22,FY+FH-sc(15)-FH*0.14,FW*0.56,FH*0.14);
+                ctx.strokeRect(FX+sc(15)+FW*0.36,FY+sc(15),FW*0.28,FH*0.06);
+                ctx.strokeRect(FX+sc(15)+FW*0.36,FY+FH-sc(15)-FH*0.06,FW*0.28,FH*0.06);
 
-                // Draw players
-                const R=26;
+                // Players
+                const R=sc(28);
                 pos.forEach(p=>{
                   const player=starters[p.id];
                   const px=FX+FW*(p.x/100);
                   const py=FY+FH*(p.y/100);
                   // Shadow
-                  ctx.shadowColor="rgba(0,0,0,0.4)";ctx.shadowBlur=8;
-                  // Circle
-                  const grad=ctx.createRadialGradient(px-5,py-5,2,px,py,R);
-                  grad.addColorStop(0,tc.bg);grad.addColorStop(1,tc.dark);
-                  ctx.fillStyle=grad;
+                  ctx.shadowColor="rgba(0,0,0,0.5)";ctx.shadowBlur=sc(10);
+                  // Circle gradient
+                  const cg=ctx.createRadialGradient(px-sc(6),py-sc(6),sc(2),px,py,R);
+                  cg.addColorStop(0,tc.bg);cg.addColorStop(1,tc.dark);
+                  ctx.fillStyle=cg;
                   ctx.beginPath();ctx.arc(px,py,R,0,Math.PI*2);ctx.fill();
                   ctx.shadowBlur=0;
-                  ctx.strokeStyle="rgba(255,255,255,0.9)";ctx.lineWidth=2;
+                  // Border
+                  ctx.strokeStyle="rgba(255,255,255,0.95)";ctx.lineWidth=sc(2.5);
                   ctx.beginPath();ctx.arc(px,py,R,0,Math.PI*2);ctx.stroke();
-                  // Overall or initials
-                  ctx.fillStyle="#fff";ctx.textAlign="center";
+                  // Text inside circle
+                  ctx.textAlign="center";
                   if(player&&player.overall){
-                    ctx.font="bold 17px 'Arial Black',sans-serif";
-                    ctx.fillText(player.overall,px,py+6);
+                    ctx.fillStyle="#fff";ctx.font=`bold ${sc(18)}px Arial,sans-serif`;
+                    ctx.fillText(String(player.overall),px,py+sc(6));
                   } else if(player){
-                    ctx.font="bold 13px Arial,sans-serif";
-                    ctx.fillText(player.name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase(),px,py+5);
+                    ctx.fillStyle="#fff";ctx.font=`bold ${sc(14)}px Arial,sans-serif`;
+                    ctx.fillText(player.name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase(),px,py+sc(5));
                   } else {
-                    ctx.fillStyle="rgba(255,255,255,0.3)";
-                    ctx.font="bold 13px Arial,sans-serif";
-                    ctx.fillText(p.label,px,py+5);
+                    ctx.fillStyle="rgba(255,255,255,0.35)";ctx.font=`bold ${sc(11)}px Arial,sans-serif`;
+                    ctx.fillText(p.label,px,py+sc(4));
                   }
-                  // Name below
+                  // Name label
                   if(player){
-                    ctx.shadowColor="rgba(0,0,0,0.9)";ctx.shadowBlur=4;
-                    ctx.fillStyle="#fff";
-                    ctx.font="bold 10px Arial,sans-serif";
-                    const lastName=player.name.split(" ").slice(-1)[0].toUpperCase();
-                    ctx.fillText(lastName.length>10?lastName.slice(0,10):lastName,px,py+R+13);
+                    ctx.shadowColor="rgba(0,0,0,0.95)";ctx.shadowBlur=sc(6);
+                    ctx.fillStyle="#fff";ctx.font=`bold ${sc(11)}px Arial,sans-serif`;
+                    const ln=player.name.split(" ").slice(-1)[0].toUpperCase();
+                    ctx.fillText(ln.length>10?ln.slice(0,10):ln,px,py+R+sc(14));
                     ctx.shadowBlur=0;
                     // Pos badge
-                    ctx.fillStyle=tc.bg+"dd";
-                    ctx.beginPath();ctx.roundRect(px-13,py+R+17,26,13,4);ctx.fill();
-                    ctx.fillStyle="#fff";ctx.font="bold 8px Arial,sans-serif";
-                    ctx.fillText(p.label,px,py+R+27);
+                    const bw=sc(28),bh=sc(14);
+                    ctx.fillStyle=tc.dark+"ee";
+                    ctx.beginPath();ctx.roundRect(px-bw/2,py+R+sc(17),bw,bh,sc(4));ctx.fill();
+                    ctx.fillStyle="#fff";ctx.font=`bold ${sc(9)}px Arial,sans-serif`;
+                    ctx.fillText(p.label,px,py+R+sc(27));
                   }
                 });
 
-                // BANCA section
-                const BY=FY+FH+16;
+                // Bench section
+                const BY=FY+FH+sc(16);
                 ctx.fillStyle="rgba(255,255,255,0.06)";
-                ctx.beginPath();ctx.roundRect(FX,BY,FW,130,10);ctx.fill();
-                ctx.fillStyle="rgba(255,255,255,0.5)";ctx.font="bold 11px Arial,sans-serif";
-                ctx.textAlign="left";
-                ctx.fillText("BANCA",FX+12,BY+18);
-
-                const subR=20;
+                ctx.beginPath();ctx.roundRect(FX,BY,FW,sc(130),sc(10));ctx.fill();
+                ctx.fillStyle="rgba(255,255,255,0.45)";
+                ctx.textAlign="left";ctx.font=`bold ${sc(11)}px Arial,sans-serif`;
+                ctx.fillText("BANCA",FX+sc(14),BY+sc(20));
                 const maxSubs=Math.min(subs.length,7);
-                const subSpacing=Math.min(FW/(maxSubs+1),90);
-                const subStartX=FX+FW/2-(maxSubs-1)*subSpacing/2;
+                const SR=sc(20);
+                const subSpacing=Math.min(FW/(maxSubs+1),sc(90));
+                const subStart=FX+FW/2-(maxSubs-1)*subSpacing/2;
                 subs.slice(0,7).forEach((s,i)=>{
-                  const sx=subStartX+i*subSpacing;
-                  const sy=BY+60;
-                  // Circle
-                  const grad=ctx.createRadialGradient(sx-3,sy-3,1,sx,sy,subR);
-                  grad.addColorStop(0,tc.bg);grad.addColorStop(1,tc.dark);
-                  ctx.fillStyle=grad;ctx.shadowColor="rgba(0,0,0,0.3)";ctx.shadowBlur=5;
-                  ctx.beginPath();ctx.arc(sx,sy,subR,0,Math.PI*2);ctx.fill();
+                  const sx=subStart+i*subSpacing;
+                  const sy=BY+sc(65);
+                  const sg=ctx.createRadialGradient(sx-sc(3),sy-sc(3),sc(1),sx,sy,SR);
+                  sg.addColorStop(0,tc.bg);sg.addColorStop(1,tc.dark);
+                  ctx.fillStyle=sg;ctx.shadowColor="rgba(0,0,0,0.3)";ctx.shadowBlur=sc(5);
+                  ctx.beginPath();ctx.arc(sx,sy,SR,0,Math.PI*2);ctx.fill();
                   ctx.shadowBlur=0;
-                  ctx.strokeStyle="rgba(255,255,255,0.7)";ctx.lineWidth=1.5;
-                  ctx.beginPath();ctx.arc(sx,sy,subR,0,Math.PI*2);ctx.stroke();
-                  // Overall
+                  ctx.strokeStyle="rgba(255,255,255,0.75)";ctx.lineWidth=sc(1.5);
+                  ctx.beginPath();ctx.arc(sx,sy,SR,0,Math.PI*2);ctx.stroke();
                   ctx.fillStyle="#fff";ctx.textAlign="center";
-                  ctx.font=`bold 12px 'Arial Black',sans-serif`;
-                  ctx.fillText(s.overall||s.name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase(),sx,sy+5);
-                  // Name
-                  ctx.font="bold 7px Arial,sans-serif";ctx.fillStyle="rgba(255,255,255,0.8)";
+                  ctx.font=`bold ${sc(12)}px Arial,sans-serif`;
+                  ctx.fillText(s.overall||s.name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase(),sx,sy+sc(4));
+                  ctx.font=`${sc(8)}px Arial,sans-serif`;ctx.fillStyle="rgba(255,255,255,0.75)";
                   const sn=s.name.split(" ").slice(-1)[0].toUpperCase();
-                  ctx.fillText(sn.length>7?sn.slice(0,7):sn,sx,sy+subR+10);
+                  ctx.fillText(sn.length>7?sn.slice(0,7):sn,sx,sy+SR+sc(11));
                 });
 
                 // Footer
-                ctx.fillStyle="rgba(255,255,255,0.3)";
-                ctx.font="11px Arial,sans-serif";ctx.textAlign="center";
-                ctx.fillText("Federación Liga Simulada ⚽",W/2,H-14);
+                ctx.fillStyle="rgba(255,255,255,0.25)";ctx.textAlign="center";
+                ctx.font=`${sc(11)}px Arial,sans-serif`;
+                ctx.fillText("Federación Liga Simulada ⚽",W/2,H-sc(14));
 
                 // Share
                 canvas.toBlob(async blob=>{
