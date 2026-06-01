@@ -446,10 +446,11 @@ function PickFromSquad({squad,posLabel,onPick,onClose,usedIds,posFilter,isBench}
     (a.poolKey&&(a.poolKey===b.id||a.poolKey===b.poolKey))||
     (b.poolKey&&(b.poolKey===a.id||b.poolKey===a.poolKey))||
     (a.name&&b.name&&norm(a.name)===norm(b.name));
-  const usedPlayers=(usedIds||[]).map(uid=>squad.find(p=>p.poolKey===uid||p.id===uid)).filter(Boolean);
+  const normalizeP=pos=>POS_ES_EN[pos?.trim()]||pos?.trim()||"";
+  const playerPositions=p=>(p.pos||"").split("/").map(normalizeP).filter(Boolean);
   const available=squad.filter(p=>!usedPlayers.some(u=>matchP(p,u))&&!usedIds?.some(uid=>uid===(p.poolKey||p.id)));
-  const inPosition=posFilter?available.filter(p=>(p.pos?.split("/")||[]).includes(posFilter)||(p.primaryPos===posFilter)):available;
-  const list=showAll?available.filter(p=>p.name.toLowerCase().includes(filter.toLowerCase())||p.pos?.toLowerCase().includes(filter.toLowerCase())):inPosition.filter(p=>p.name.toLowerCase().includes(filter.toLowerCase()));
+  const inPosition=posFilter?available.filter(p=>playerPositions(p).includes(posFilter)||(normalizeP(p.primaryPos)===posFilter)):available;
+  const list=showAll?available.filter(p=>p.name.toLowerCase().includes(filter.toLowerCase())||playerPositions(p).join("/").toLowerCase().includes(filter.toLowerCase())):inPosition.filter(p=>p.name.toLowerCase().includes(filter.toLowerCase()));
 
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(8px)"}} onClick={onClose}>
