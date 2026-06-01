@@ -629,7 +629,7 @@ function Bench({subs,readOnly,onClickSub,onDragStart,teamColor}){
                   <span style={{fontSize:sub.overall?11:9,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif"}}>{sub.overall||sub.name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()}</span>
                 </div>
                 <div style={{background:accent,borderRadius:4,padding:"1px 5px",textAlign:"center"}}>
-                  <span style={{fontSize:6,fontWeight:900,color:"#fff",fontFamily:"monospace"}}>{normPos((sub.primaryPos||sub.pos||"").split("/")?.[0])}</span>
+                  <span style={{fontSize:6,fontWeight:900,color:"#fff",fontFamily:"monospace"}}>{(POS_ES_EN[(sub.primaryPos||sub.pos||"").split("/")?.[0]])||(sub.primaryPos||sub.pos||"").split("/")?.[0]}</span>
                 </div>
                 <div style={{textAlign:"center",width:"100%"}}>
                   <div style={{fontSize:7.5,fontWeight:800,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"'Bebas Neue',sans-serif",padding:"0 2px"}}>{sub.name.split(" ").slice(-1)[0].toUpperCase()}</div>
