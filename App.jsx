@@ -2281,9 +2281,13 @@ function MainApp({user,isAdmin,onLogout}){
 
                 // Canvas setup
                 const W=800,H=1100;
+                const SCALE=3;
                 const canvas=document.createElement("canvas");
-                canvas.width=W;canvas.height=H;
+                canvas.width=W*SCALE;canvas.height=H*SCALE;
                 const ctx=canvas.getContext("2d");
+                ctx.scale(SCALE,SCALE);
+                ctx.imageSmoothingEnabled=true;
+                ctx.imageSmoothingQuality="high";
 
                 // Background
                 const bg=ctx.createLinearGradient(0,0,0,H);
@@ -2417,7 +2421,7 @@ function MainApp({user,isAdmin,onLogout}){
                     const url=URL.createObjectURL(blob);
                     const a=document.createElement("a");a.href=url;a.download="alineacion.png";a.click();
                   }
-                },"image/png");
+                },"image/png",1.0);
               }} style={{width:"100%",padding:"13px",background:TA.accent,color:"#fff",border:"none",borderRadius:11,fontSize:15,fontWeight:800,cursor:"pointer",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>
                 📸 GENERAR Y COMPARTIR IMAGEN
               </button>
