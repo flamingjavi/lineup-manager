@@ -2201,10 +2201,9 @@ function MainApp({user,isAdmin,onLogout}){
       {/* SQUAD LIST VIEW */}
       {!viewingTeam&&showSquadList&&(()=>{
         const POS_ORDER=["GK","CB","RB","LB","CDM","CM","CAM","RM","LM","RW","LW","ST","CF"];
-        const getPos=p=>{
-          const raw=(p.primaryPos||p.pos||"").split("/")?.[0].trim();
-          return POS_ES_EN[raw]||raw;
-        };
+        const normP=pos=>{if(!pos) return "";const p=pos.trim();return POS_ES_EN[p]||p;};
+        const getPos=p=>normP((p.primaryPos||p.pos||"").split("/")?.[0]);
+        const getAllPos=p=>(p.pos||"").split("/").map(normP).filter(Boolean);
         const sorted=[...squad].sort((a,b)=>{
           const ai=POS_ORDER.indexOf(getPos(a));
           const bi=POS_ORDER.indexOf(getPos(b));
@@ -2229,12 +2228,11 @@ function MainApp({user,isAdmin,onLogout}){
                       <span style={{fontSize:10,fontWeight:800,color:C.accent,fontFamily:"monospace",letterSpacing:1}}>{currPos}</span>
                     </div>}
                     <div style={{display:"flex",alignItems:"center",gap:12,padding:"10px 16px",borderBottom:`1px solid ${C.border}`}}>
-                      <Avatar name={p.name} size={36}/>
+                      <Avatar name={p.name} size={36} overall={p.overall} colorId={teamData?.teamColor}/>
                       <div style={{flex:1,minWidth:0}}>
                         <div style={{fontSize:13,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"'DM Sans',sans-serif"}}>{p.name}</div>
                         <div style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>
-                          {p.team||"—"}
-                          {p.secondaryPos&&<span style={{color:C.textFaint}}> · {p.secondaryPos}</span>}
+                          {p.country||"—"}
                           {p.price&&<span style={{color:"#27ae60",fontWeight:700}}> · 💰{p.price.value}{p.price.unit}</span>}
                         </div>
                       </div>
