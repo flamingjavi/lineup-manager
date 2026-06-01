@@ -676,7 +676,12 @@ function AdminTeamEditor({teamData,pool,allTeamsRef}){
       if(snap.exists()){
         const d=snap.data();
         const squad=(d.squad||[]).map(normPlayer);
-        const lineups=(d.lineups||[]).map(l=>({...l,starters:Object.fromEntries(Object.entries(l.starters||{}).map(([k,v])=>[k,normPlayer(v)])),subs:(l.subs||[]).map(s=>normPlayer(s))}));
+        const lineups=(d.lineups||[]).map(l=>({
+          ...l,
+          starters:Object.fromEntries(Object.entries(l.starters||{}).map(([k,v])=>[k,normPlayer(v)])),
+          subs:(l.subs||[]).map(s=>normPlayer(s))
+        }));
+        updateDoc(doc(db,"teams",teamDocId),{squad,lineups}).catch(()=>{});
         setLocalData({id:snap.id,...d,squad,lineups});
       }
     });
@@ -695,7 +700,7 @@ function AdminTeamEditor({teamData,pool,allTeamsRef}){
     await save({lineups:nl});
   };
 
-  const matchPlayer=(a,b)=>(a?.poolKey&&a?.poolKey===b?.poolKey)||(a?.id===b?.id);
+  const matchPlayer=(a,b)=>(a?.poolKey&&a?.poolKey===b?.poolKey)||(a?.id===b?.id)||(a?.name&&b?.name&&a.name.trim().toLowerCase()===b.name.trim().toLowerCase());
 
   const handlePick=async player=>{
     if(!pickModal) return;
@@ -1299,17 +1304,14 @@ function MainApp({user,isAdmin,onLogout}){
           if(name) seenNames.add(name);
           return true;
         });
+        // Normalize starters and subs in all lineups
         const lineups=(data.lineups||[]).map(l=>({
           ...l,
           starters:Object.fromEntries(Object.entries(l.starters||{}).map(([k,v])=>[k,normPlayer(v)])),
           subs:(l.subs||[]).map(s=>normPlayer(s))
         }));
-        // Save back if any English positions found or duplicates removed
-        const hadEnglish=(data.squad||[]).some(p=>p.pos&&Object.keys(POS_EN_ES).some(en=>p.pos.split('/').includes(en)));
-        const hadDupes=squad.length<(data.squad||[]).length;
-        if(hadEnglish||hadDupes){
-          updateDoc(ref,{squad,lineups});
-        }
+        // Always save back normalized data to fix any stale English positions
+        updateDoc(ref,{squad,lineups}).catch(()=>{});
         setTeamData({...data,squad,lineups});
       } else{
         const init={uid:user.uid,email:user.email,teamName:user.displayName||"Mi Equipo",squad:[],lineups:[{id:"a",name:"Alineación A",formation:"4-3-3",starters:{},subs:Array(7).fill(null)}],createdAt:new Date().toISOString()};
@@ -1383,7 +1385,11 @@ function MainApp({user,isAdmin,onLogout}){
     await saveTeam({lineups:nl});
   };
 
-  const matchPlayer=(a,b)=>a&&b&&((a.poolKey&&a.poolKey===b.poolKey)||(a.id===b.id));
+  const matchPlayer=(a,b)=>a&&b&&(
+    (a.poolKey&&b.poolKey&&a.poolKey===b.poolKey)||
+    (a.id&&b.id&&a.id===b.id)||
+    (a.name&&b.name&&a.name.trim().toLowerCase()===b.name.trim().toLowerCase())
+  );
 
   const handlePick=async player=>{
     if(!pickModal) return;
