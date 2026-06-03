@@ -679,14 +679,10 @@ function AdminTeamEditor({teamData,pool,allTeamsRef}){
         const d=snap.data();
         const rawSquad=d.squad||[];
         const seenNames=new Set();
-        const seenKeys=new Set();
         const squad=rawSquad.map(normPlayer).filter(p=>{
           const name=(p.name||"").trim().toLowerCase();
-          const key=p.poolKey||p.id;
-          if(seenNames.has(name)) return false;
-          if(key&&seenKeys.has(key)) return false;
-          if(name) seenNames.add(name);
-          if(key) seenKeys.add(key);
+          if(!name||seenNames.has(name)) return false;
+          seenNames.add(name);
           return true;
         });
         const sqNames=new Set(squad.map(p=>(p.name||"").trim().toLowerCase()));
@@ -1320,14 +1316,10 @@ function MainApp({user,isAdmin,onLogout}){
         const rawSquad=data.squad||[];
         // Deduplicate by name (primary) then by key
         const seenNames=new Set();
-        const seenKeys=new Set();
         const squad=rawSquad.map(normPlayer).filter(p=>{
           const name=(p.name||"").trim().toLowerCase();
-          const key=p.poolKey||p.id;
-          if(seenNames.has(name)) return false;
-          if(key&&seenKeys.has(key)) return false;
-          if(name) seenNames.add(name);
-          if(key) seenKeys.add(key);
+          if(!name||seenNames.has(name)) return false;
+          seenNames.add(name);
           return true;
         });
         // Normalize lineups, clean ghost entries
@@ -1584,6 +1576,24 @@ function MainApp({user,isAdmin,onLogout}){
                 {/* Fila 2: acciones globales */}
                 <div style={{display:"flex",gap:6}}>
                   <button onClick={()=>setShowImport(true)} style={{flex:1,padding:"5px 10px",borderRadius:8,border:"1px solid #27ae60",background:"#f0fff4",color:"#27ae60",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>📥 Importar Excel</button>
+                  <button onClick={async()=>{
+                    if(!window.confirm("¿Limpiar jugadores duplicados de todos los equipos?")) return;
+                    let fixed=0;
+                    for(const t of allTeams){
+                      const raw=t.squad||[];
+                      const seen=new Set();
+                      const clean=raw.filter(p=>{
+                        const name=(p.name||"").trim().toLowerCase();
+                        if(!name||seen.has(name)) return false;
+                        seen.add(name); return true;
+                      });
+                      if(clean.length<raw.length){
+                        await updateDoc(doc(db,"teams",t.id||t.uid),{squad:clean});
+                        fixed++;
+                      }
+                    }
+                    alert(`✅ ${fixed} equipos limpiados.`);
+                  }} style={{flex:1,padding:"5px 10px",borderRadius:8,border:`1px solid #e67e22`,background:"#fff8f0",color:"#e67e22",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>🧹 Limpiar dupl.</button>
                   <button onClick={async()=>{
                     if(!window.confirm("¿Renombrar 'Alineación A' → 'Liga' y crear 'Copa' para todos los equipos?")) return;
                     let count=0;
