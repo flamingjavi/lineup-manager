@@ -303,7 +303,7 @@ function AddPlayerModal({onAdd,onClose,currentCount,pool,teamName,editPlayer,onS
     setMErr("");
     const primaryPos=mPos[0];
     const secondaryPos=mPos.slice(1).join("/");
-    const playerData={name:mName.trim(),pos:mPos.join("/"),primaryPos,secondaryPos:secondaryPos||null,country:mCountry.trim()||null,age:mAge?parseInt(mAge):null,overall:mOverall?parseInt(mOverall):null,price:mPrice?{value:parseFloat(mPrice),unit:mPriceUnit}:null,poolKey};
+    const playerData={id:`p_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,name:mName.trim(),pos:mPos.join("/"),primaryPos,secondaryPos:secondaryPos||null,country:mCountry.trim()||null,age:mAge?parseInt(mAge):null,overall:mOverall?parseInt(mOverall):null,price:mPrice?{value:parseFloat(mPrice),unit:mPriceUnit}:null,poolKey};
     if(isEdit) onSaveEdit({...editPlayer,...playerData});
     else onAdd({id:`p_${Date.now()}`,...playerData});
   };
@@ -443,16 +443,19 @@ function PickFromSquad({squad,posLabel,onPick,onClose,usedIds,posFilter,isBench}
 
   const norm=s=>String(s||"").toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/\s+/g," ");
   const matchP=(a,b)=>
-    (a.poolKey&&b.poolKey&&a.poolKey===b.poolKey)||
-    (a.id&&b.id&&a.id===b.id)||
-    (a.poolKey&&(a.poolKey===b.id||a.poolKey===b.poolKey))||
-    (b.poolKey&&(b.poolKey===a.id||b.poolKey===a.poolKey));
+    !!(a&&b&&(
+      (a.poolKey&&b.poolKey&&a.poolKey===b.poolKey)||
+      (a.id&&b.id&&a.id!==undefined&&a.id===b.id)
+    ));
   const toES=pos=>{if(!pos) return "";const t=pos.trim();return POS_EN_ES[t]||t;};
   const splitPos=pos=>(pos||"").split(/[\/\|\-]+/).map(s=>s.trim()).filter(s=>s.length>0&&s.length<6);
   const getPlayerPos=p=>[...new Set([...splitPos(p.pos),...splitPos(p.primaryPos)].map(toES).filter(Boolean))];
   const getPrimaryPos=p=>toES(splitPos(p.primaryPos||p.pos||"")[0]||"");
-  const usedPlayers=(usedIds||[]).map(uid=>squad.find(p=>p.poolKey===uid||p.id===uid)).filter(Boolean);
-  const available=squad.filter(p=>!usedPlayers.some(u=>matchP(p,u))&&!usedIds?.some(uid=>uid===(p.poolKey||p.id)));
+  const usedPlayers=(usedIds||[]).map(uid=>squad.find(p=>p.poolKey===uid||(p.id&&p.id===uid))).filter(Boolean);
+  const available=squad.filter(p=>{
+    const pKey=p.poolKey;const pId=p.id;
+    return !usedIds?.some(uid=>(pKey&&uid===pKey)||(pId&&uid===pId));
+  });
   const inPosition=posFilter?available.filter(p=>getPlayerPos(p).includes(posFilter)||getPrimaryPos(p)===posFilter):available;
   const list=showAll?available.filter(p=>p.name.toLowerCase().includes(filter.toLowerCase())):inPosition.filter(p=>p.name.toLowerCase().includes(filter.toLowerCase()));
 
@@ -674,16 +677,31 @@ function AdminTeamEditor({teamData,pool,allTeamsRef}){
     const unsub=onSnapshot(doc(db,"teams",teamDocId),snap=>{
       if(snap.exists()){
         const d=snap.data();
-        const squad=(d.squad||[]).map(normPlayer);
-        const sqIds=new Set(squad.flatMap(p=>[p.poolKey,p.id].filter(Boolean)));
+        const rawSquad=d.squad||[];
+        const seenNames=new Set();
+        const seenKeys=new Set();
+        const squad=rawSquad.map(normPlayer).filter(p=>{
+          const name=(p.name||"").trim().toLowerCase();
+          const key=p.poolKey||p.id;
+          if(seenNames.has(name)) return false;
+          if(key&&seenKeys.has(key)) return false;
+          if(name) seenNames.add(name);
+          if(key) seenKeys.add(key);
+          return true;
+        });
         const sqNames=new Set(squad.map(p=>(p.name||"").trim().toLowerCase()));
-        const inSq=p=>p&&(sqIds.has(p.poolKey)||sqIds.has(p.id)||sqNames.has((p.name||"").trim().toLowerCase()));
+        const sqKeys=new Set(squad.flatMap(p=>[p.poolKey,p.id].filter(Boolean)));
+        const inSq=p=>p&&(sqKeys.has(p.poolKey)||sqKeys.has(p.id)||sqNames.has((p.name||"").trim().toLowerCase()));
         const lineups=(d.lineups||[]).map(l=>({
           ...l,
           starters:Object.fromEntries(Object.entries(l.starters||{}).map(([k,v])=>[k,normPlayer(v)]).filter(([,v])=>!v||inSq(v))),
-          subs:(d.subs||l.subs||[]).map(s=>s?normPlayer(s):null).map(s=>inSq(s)?s:null)
+          subs:(l.subs||[]).map(s=>s?normPlayer(s):null).map(s=>inSq(s)?s:null)
         }));
-        updateDoc(doc(db,"teams",teamDocId),{squad,lineups}).catch(()=>{});
+        const hadDupes=squad.length<rawSquad.length;
+        const hadEnglish=rawSquad.some(p=>p.pos&&Object.keys(POS_EN_ES).some(en=>p.pos.split('/').includes(en)));
+        if(hadDupes||hadEnglish){
+          updateDoc(doc(db,"teams",teamDocId),{squad,lineups}).catch(()=>{});
+        }
         setLocalData({id:snap.id,...d,squad,lineups});
       }
     });
@@ -1124,9 +1142,12 @@ function ImportButton({allTeams,pool,user,onDone}){
       Object.keys(poolData).forEach(k=>{
         if(poolData[k].teamName===teamName||poolData[k].teamUid===(firestoreTeam.uid||firestoreTeam.id)) delete poolData[k];
       });
-      // Add new pool entries
+      // Add new pool entries — use teamDocId+poolKey for uniqueness
       players.forEach(p=>{
-        if(p.poolKey) poolData[p.poolKey]={name:p.name,pos:p.pos,country:p.country||null,overall:p.overall||null,age:p.age||null,price:p.price||null,teamName,teamUid:firestoreTeam.uid||firestoreTeam.id};
+        if(p.poolKey){
+          const uniqueKey=`${teamDocId}_${p.poolKey}`;
+          poolData[uniqueKey]={name:p.name,pos:p.pos,country:p.country||null,overall:p.overall||null,age:p.age||null,price:p.price||null,teamName,teamUid:firestoreTeam.uid||firestoreTeam.id,originalKey:p.poolKey};
+        }
       });
 
       // Build patch
@@ -1292,38 +1313,42 @@ function MainApp({user,isAdmin,onLogout}){
 
   useEffect(()=>{
     const ref=doc(db,"teams",user.uid);
+    let saveScheduled=false;
     const unsub=onSnapshot(ref,snap=>{
       if(snap.exists()){
         const data=snap.data();
-        // Deduplicate and normalize positions
-        const seen=new Set();
+        const rawSquad=data.squad||[];
+        // Deduplicate by name (primary) then by key
         const seenNames=new Set();
-        const squad=(data.squad||[]).map(normPlayer).filter(p=>{
-          const key=p.poolKey||p.id;
+        const seenKeys=new Set();
+        const squad=rawSquad.map(normPlayer).filter(p=>{
           const name=(p.name||"").trim().toLowerCase();
-          if(seen.has(key)||seenNames.has(name)) return false;
-          seen.add(key);
+          const key=p.poolKey||p.id;
+          if(seenNames.has(name)) return false;
+          if(key&&seenKeys.has(key)) return false;
           if(name) seenNames.add(name);
+          if(key) seenKeys.add(key);
           return true;
         });
-        // Normalize starters and subs in all lineups, clean up ghost entries
-        const squadIds=new Set(squad.flatMap(p=>[p.poolKey,p.id].filter(Boolean)));
+        // Normalize lineups, clean ghost entries
         const squadNames=new Set(squad.map(p=>(p.name||"").trim().toLowerCase()));
-        const isInSquad=p=>p&&(squadIds.has(p.poolKey)||squadIds.has(p.id)||squadNames.has((p.name||"").trim().toLowerCase()));
+        const squadKeys=new Set(squad.flatMap(p=>[p.poolKey,p.id].filter(Boolean)));
+        const isInSquad=p=>p&&(squadKeys.has(p.poolKey)||squadKeys.has(p.id)||squadNames.has((p.name||"").trim().toLowerCase()));
         const lineups=(data.lineups||[]).map(l=>({
           ...l,
-          starters:Object.fromEntries(
-            Object.entries(l.starters||{})
-              .map(([k,v])=>[k,normPlayer(v)])
-              .filter(([,v])=>!v||isInSquad(v))
-          ),
+          starters:Object.fromEntries(Object.entries(l.starters||{}).map(([k,v])=>[k,normPlayer(v)]).filter(([,v])=>!v||isInSquad(v))),
           subs:(l.subs||[]).map(s=>s?normPlayer(s):null).map(s=>isInSquad(s)?s:null)
         }));
-        // Always save back normalized data to fix any stale English positions
-        updateDoc(ref,{squad,lineups}).catch(()=>{});
+        // Only save back if duplicates were found or English positions detected
+        const hadDupes=squad.length<rawSquad.length;
+        const hadEnglish=rawSquad.some(p=>p.pos&&Object.keys(POS_EN_ES).some(en=>p.pos.split('/').includes(en)));
+        if((hadDupes||hadEnglish)&&!saveScheduled){
+          saveScheduled=true;
+          setTimeout(()=>{updateDoc(ref,{squad,lineups}).catch(()=>{});saveScheduled=false;},500);
+        }
         setTeamData({...data,squad,lineups});
       } else{
-        const init={uid:user.uid,email:user.email,teamName:user.displayName||"Mi Equipo",squad:[],lineups:[{id:"a",name:"Alineación A",formation:"4-3-3",starters:{},subs:Array(7).fill(null)}],createdAt:new Date().toISOString()};
+        const init={uid:user.uid,email:user.email,teamName:user.displayName||"Mi Equipo",squad:[],lineups:[{id:"a",name:"Liga",formation:"4-3-3",starters:{},subs:Array(7).fill(null)},{id:"b",name:"Copa",formation:"4-3-3",starters:{},subs:Array(7).fill(null)}],createdAt:new Date().toISOString()};
         setDoc(ref,init);setTeamData(init);
       }
     });
@@ -1356,7 +1381,8 @@ function MainApp({user,isAdmin,onLogout}){
     const poolRef=doc(db,"pool","players");
     const snap=await getDoc(poolRef);
     const current=snap.exists()?snap.data():{};
-    await setDoc(poolRef,{...current,[player.poolKey]:{name:player.name,pos:player.pos,country:player.country||null,overall:player.overall||null,age:player.age||null,price:player.price||null,teamName:tName,teamUid:user.uid}});
+    const uniqueKey=`${user.uid}_${player.poolKey}`;
+    await setDoc(poolRef,{...current,[uniqueKey]:{name:player.name,pos:player.pos,country:player.country||null,overall:player.overall||null,age:player.age||null,price:player.price||null,teamName:tName,teamUid:user.uid,originalKey:player.poolKey}});
   };
 
   const removeFromPool=async(player)=>{
@@ -1365,7 +1391,10 @@ function MainApp({user,isAdmin,onLogout}){
     const snap=await getDoc(poolRef);
     if(!snap.exists()) return;
     const current={...snap.data()};
-    delete current[player.poolKey];
+    // Try both old and new key formats
+    const uniqueKey=`${user.uid}_${player.poolKey}`;
+    delete current[uniqueKey];
+    delete current[player.poolKey]; // backward compat
     await setDoc(poolRef,current);
   };
 
