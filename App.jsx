@@ -720,7 +720,8 @@ function AdminTeamEditor({teamData,pool,allTeamsRef}){
     await save({lineups:nl});
   };
 
-  const matchPlayer=(a,b)=>(a?.poolKey&&a?.poolKey===b?.poolKey)||(a?.id===b?.id)||(a?.name&&b?.name&&a.name.trim().toLowerCase()===b.name.trim().toLowerCase());
+  const matchPlayer=(a,b)=>!!(a&&b&&a.name&&b.name&&
+    a.name.trim().toLowerCase()===b.name.trim().toLowerCase());
 
   const handlePick=async player=>{
     if(!pickModal) return;
@@ -1427,11 +1428,8 @@ function MainApp({user,isAdmin,onLogout}){
     await saveTeam({lineups:nl});
   };
 
-  const matchPlayer=(a,b)=>a&&b&&(
-    (a.poolKey&&b.poolKey&&a.poolKey===b.poolKey)||
-    (a.id&&b.id&&a.id===b.id)||
-    (a.name&&b.name&&a.name.trim().toLowerCase()===b.name.trim().toLowerCase())
-  );
+  const matchPlayer=(a,b)=>!!(a&&b&&a.name&&b.name&&
+    a.name.trim().toLowerCase()===b.name.trim().toLowerCase());
 
   const handlePick=async player=>{
     if(!pickModal) return;
