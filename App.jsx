@@ -685,13 +685,17 @@ function AdminTeamEditor({teamData,pool,allTeamsRef}){
           seenNames.add(name);
           return true;
         });
-        const sqNames=new Set(squad.map(p=>(p.name||"").trim().toLowerCase()));
-        const sqKeys=new Set(squad.flatMap(p=>[p.poolKey,p.id].filter(Boolean)));
-        const inSq=p=>p&&(sqKeys.has(p.poolKey)||sqKeys.has(p.id)||sqNames.has((p.name||"").trim().toLowerCase()));
+        const fixP=p=>{
+          if(!p) return null;
+          const canonical=squad.find(s=>(s.name||"").trim().toLowerCase()===(p.name||"").trim().toLowerCase());
+          if(canonical) return{...canonical};
+          const sqNames=new Set(squad.map(s=>(s.name||"").trim().toLowerCase()));
+          return sqNames.has((p.name||"").trim().toLowerCase())?normPlayer(p):null;
+        };
         const lineups=(d.lineups||[]).map(l=>({
           ...l,
-          starters:Object.fromEntries(Object.entries(l.starters||{}).map(([k,v])=>[k,normPlayer(v)]).filter(([,v])=>!v||inSq(v))),
-          subs:(l.subs||[]).map(s=>s?normPlayer(s):null).map(s=>inSq(s)?s:null)
+          starters:Object.fromEntries(Object.entries(l.starters||{}).map(([k,v])=>[k,fixP(v)]).filter(([,v])=>v)),
+          subs:(l.subs||[]).map(s=>fixP(s))
         }));
         const hadDupes=squad.length<rawSquad.length;
         const hadEnglish=rawSquad.some(p=>p.pos&&Object.keys(POS_EN_ES).some(en=>p.pos.split('/').includes(en)));
@@ -1322,14 +1326,22 @@ function MainApp({user,isAdmin,onLogout}){
           seenNames.add(name);
           return true;
         });
-        // Normalize lineups, clean ghost entries
+        // Normalize lineups - fix each starter/sub by looking up by NAME in squad
         const squadNames=new Set(squad.map(p=>(p.name||"").trim().toLowerCase()));
         const squadKeys=new Set(squad.flatMap(p=>[p.poolKey,p.id].filter(Boolean)));
         const isInSquad=p=>p&&(squadKeys.has(p.poolKey)||squadKeys.has(p.id)||squadNames.has((p.name||"").trim().toLowerCase()));
+        const fixPlayer=p=>{
+          if(!p) return null;
+          const norm=s=>(s||"").trim().toLowerCase();
+          // Find the canonical squad player by name
+          const canonical=squad.find(s=>norm(s.name)===norm(p.name));
+          if(canonical) return{...canonical}; // use fresh data from squad
+          return isInSquad(p)?normPlayer(p):null;
+        };
         const lineups=(data.lineups||[]).map(l=>({
           ...l,
-          starters:Object.fromEntries(Object.entries(l.starters||{}).map(([k,v])=>[k,normPlayer(v)]).filter(([,v])=>!v||isInSquad(v))),
-          subs:(l.subs||[]).map(s=>s?normPlayer(s):null).map(s=>isInSquad(s)?s:null)
+          starters:Object.fromEntries(Object.entries(l.starters||{}).map(([k,v])=>[k,fixPlayer(v)]).filter(([,v])=>v)),
+          subs:(l.subs||[]).map(s=>fixPlayer(s))
         }));
         // Only save back if duplicates were found or English positions detected
         const hadDupes=squad.length<rawSquad.length;
