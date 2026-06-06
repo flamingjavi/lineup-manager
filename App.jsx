@@ -1143,12 +1143,10 @@ function ImportButton({allTeams,pool,user,onDone}){
       Object.keys(poolData).forEach(k=>{
         if(poolData[k].teamName===teamName||poolData[k].teamUid===(firestoreTeam.uid||firestoreTeam.id)) delete poolData[k];
       });
-      // Add new pool entries — use teamDocId+poolKey for uniqueness
+      // Add new pool entries — use player's unique id for guaranteed uniqueness
       players.forEach(p=>{
-        if(p.poolKey){
-          const uniqueKey=`${teamDocId}_${p.poolKey}`;
-          poolData[uniqueKey]={name:p.name,pos:p.pos,country:p.country||null,overall:p.overall||null,age:p.age||null,price:p.price||null,teamName,teamUid:firestoreTeam.uid||firestoreTeam.id,originalKey:p.poolKey};
-        }
+        const uniqueKey=p.id||`${teamDocId}_${p.poolKey}`;
+        poolData[uniqueKey]={name:p.name,pos:p.pos,country:p.country||null,overall:p.overall||null,age:p.age||null,price:p.price||null,teamName,teamUid:firestoreTeam.uid||firestoreTeam.id,originalKey:p.poolKey,playerId:p.id};
       });
 
       // Build patch
@@ -1294,6 +1292,7 @@ function MainApp({user,isAdmin,onLogout}){
   const[showTeamsList,setShowTeamsList]=useState(false);
   const[showPresidents,setShowPresidents]=useState(false);
   const[showImport,setShowImport]=useState(false);
+  const[showSelecciones,setShowSelecciones]=useState(false);
   const[activeLineupId,setActiveLineupId]=useState("a");
   const[showLineupPanel,setShowLineupPanel]=useState(false);
   const[showFormations,setShowFormations]=useState(false);
@@ -1535,6 +1534,7 @@ function MainApp({user,isAdmin,onLogout}){
         <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
           {saving&&<span style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>Guardando…</span>}
           {saved&&<span style={{fontSize:10,color:"#27ae60",fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>✓</span>}
+          {teamData.presupuesto&&<span style={{fontSize:11,fontWeight:800,color:C.accent,background:C.goldLight,padding:"3px 8px",borderRadius:8,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:0.5,border:`1px solid ${TA.accent}44`}}>💰 {teamData.presupuesto}</span>}
           <span style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{filled}/11</span>
           {btn(showLineupPanel,()=>{setShowLineupPanel(v=>!v);setShowFormations(false);setShowSettings(false);},`${activeLineup?.name} ▾`)}
           <button onClick={()=>{setShowFormations(v=>!v);setShowLineupPanel(false);setShowSettings(false);}}
@@ -1581,6 +1581,7 @@ function MainApp({user,isAdmin,onLogout}){
                   <button onClick={()=>setShowAdminManager(true)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>👑 Admins</button>
                   <button onClick={()=>setShowPresidents(true)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>👤 Presidentes</button>
                   <button onClick={()=>setShowPool(true)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>🌍 Pool</button>
+                  <button onClick={()=>setShowSelecciones(true)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid #2980b9`,background:"#ebf5fb",color:"#2980b9",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>🏳️ Selecciones</button>
                   <button onClick={()=>setShowCreateTeam(true)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${C.accent}`,background:C.goldLight,color:C.accentDark,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>+ Equipo</button>
                 </div>
                 {/* Fila 2: acciones globales */}
@@ -1764,8 +1765,20 @@ function MainApp({user,isAdmin,onLogout}){
               <div style={{fontSize:10,fontWeight:600,color:C.textLight,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8,fontFamily:"'DM Sans',sans-serif"}}>🎨 Color del equipo</div>
               <ColorPicker selected={teamData.teamColor||"blue"} onChange={color=>saveTeam({teamColor:color})}/>
             </div>
-            {/* Squad management */}
-            <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`}}>
+            {/* Budget display - visible to all, editable by admin */}
+            <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`,background:C.goldLight+"44"}}>
+              <div style={{fontSize:10,fontWeight:700,color:C.textLight,textTransform:"uppercase",letterSpacing:0.5,marginBottom:6,fontFamily:"'DM Sans',sans-serif"}}>💰 Presupuesto</div>
+              {isAdmin?(
+                <input value={teamData.presupuesto||""} onChange={e=>saveTeam({presupuesto:e.target.value})}
+                  placeholder="Ej: 500M · Créditos · Monedas…"
+                  style={{width:"100%",background:C.inputBg,border:`1px solid ${C.borderDark}`,borderRadius:9,padding:"8px 12px",color:C.text,fontSize:13,fontWeight:700,outline:"none",fontFamily:"'DM Sans',sans-serif",boxSizing:"border-box"}}
+                  onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.borderDark}/>
+              ):(
+                <div style={{fontSize:20,fontWeight:800,color:C.accent,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>
+                  {teamData.presupuesto||<span style={{fontSize:12,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",fontWeight:400}}>Sin definir</span>}
+                </div>
+              )}
+            </div>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
                 <span style={{fontSize:14}}>👥</span>
                 <div style={{fontSize:13,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>Plantilla</div>
@@ -2243,57 +2256,86 @@ function MainApp({user,isAdmin,onLogout}){
         </div>
       )}
 
-      {showPublicPool&&(
+      {showPublicPool&&(()=>{
+        const [pubSearch,setPubSearch]=React.useState("");
+        const [pubPos,setPubPos]=React.useState("");
+        const [pubSort,setPubSort]=React.useState("equipo");
+        const POS_ORDER=["POR","DFC","DFD","DFI","MCD","MC","MCO","MD","MI","ED","EI","DC"];
+        const allEntries=Object.entries(pool);
+        const getPos=p=>{const raw=(p.pos||"").split("/")?.[0];return POS_EN_ES[raw]||raw;};
+        const filtered=allEntries.filter(([,p])=>{
+          const q=pubSearch.toLowerCase();
+          const matchText=!q||(p.name||"").toLowerCase().includes(q)||(p.teamName||"").toLowerCase().includes(q)||(p.country||"").toLowerCase().includes(q);
+          const matchPos=!pubPos||getPos(p)===pubPos;
+          return matchText&&matchPos;
+        });
+        const sorted=[...filtered].sort((a,b)=>{
+          if(pubSort==="media") return(b[1].overall||0)-(a[1].overall||0);
+          if(pubSort==="pos") return POS_ORDER.indexOf(getPos(a[1]))-POS_ORDER.indexOf(getPos(b[1]));
+          return(a[1].teamName||"").localeCompare(b[1].teamName||"");
+        });
+        let lastTeam=null;
+        return(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(8px)"}} onClick={()=>setShowPublicPool(false)}>
           <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:22,width:"100%",maxWidth:480,maxHeight:"88vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 24px 60px rgba(0,0,0,0.15)"}} onClick={e=>e.stopPropagation()}>
             <div style={{padding:"14px 18px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
               <span style={{fontSize:15,fontWeight:800,color:C.text,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>🌍 POOL GLOBAL</span>
-              <span style={{fontSize:11,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{Object.keys(pool).length} jugadores</span>
+              <span style={{fontSize:11,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{filtered.length}/{allEntries.length} jugadores</span>
               <button onClick={()=>setShowPublicPool(false)} style={{marginLeft:"auto",background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:"50%",width:30,height:30,color:C.textMid,cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
             </div>
-            {/* Search bar */}
-            <div style={{padding:"10px 14px",borderBottom:`1px solid ${C.border}`,flexShrink:0}}>
-              <input autoFocus placeholder="🔍 Buscar jugador..." defaultValue=""
-                onChange={e=>{const v=e.target.value.toLowerCase();document.querySelectorAll('[data-pub-row]').forEach(el=>{const name=el.dataset.name||"";const team=el.dataset.team||"";el.style.display=(name+team).includes(v)?"":"none";});document.querySelectorAll('[data-pub-header]').forEach(el=>{const rows=el.parentElement?.querySelectorAll('[data-pub-row]');const anyVisible=rows&&Array.from(rows).some(r=>r.style.display!=="none");el.style.display=anyVisible?"":"none";});}}
-                style={{width:"100%",padding:"8px 12px",borderRadius:10,border:`1.5px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:12,outline:"none",fontFamily:"'DM Sans',sans-serif"}}
+            {/* Filters */}
+            <div style={{padding:"10px 14px",borderBottom:`1px solid ${C.border}`,flexShrink:0,display:"flex",flexDirection:"column",gap:6}}>
+              <input autoFocus placeholder="🔍 Buscar nombre, equipo, país..." value={pubSearch} onChange={e=>setPubSearch(e.target.value)}
+                style={{width:"100%",padding:"8px 12px",borderRadius:10,border:`1.5px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:12,outline:"none",fontFamily:"'DM Sans',sans-serif",boxSizing:"border-box"}}
                 onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.borderDark}/>
+              <div style={{display:"flex",gap:6}}>
+                <select value={pubPos} onChange={e=>setPubPos(e.target.value)}
+                  style={{flex:1,padding:"6px 8px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif",outline:"none"}}>
+                  <option value="">Todas las posiciones</option>
+                  {POS_ORDER.map(p=><option key={p} value={p}>{p}</option>)}
+                </select>
+                <select value={pubSort} onChange={e=>setPubSort(e.target.value)}
+                  style={{flex:1,padding:"6px 8px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif",outline:"none"}}>
+                  <option value="equipo">Ordenar por equipo</option>
+                  <option value="media">Ordenar por media ↓</option>
+                  <option value="pos">Ordenar por posición</option>
+                </select>
+                {(pubSearch||pubPos)&&<button onClick={()=>{setPubSearch("");setPubPos("");}} style={{padding:"6px 10px",borderRadius:8,border:`1px solid ${C.border}`,background:C.inputBg,color:C.textMid,fontSize:10,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",whiteSpace:"nowrap"}}>✕ Limpiar</button>}
+              </div>
             </div>
             <div style={{overflowY:"auto",flex:1,padding:"10px 14px 16px"}}>
-              {(()=>{
-                const POS_ORDER=["POR","DFC","DFD","DFI","MCD","MC","MCO","MD","MI","ED","EI","DC"];
-                const sorted=Object.entries(pool).sort((a,b)=>(a[1].teamName||"").localeCompare(b[1].teamName||"")||(POS_ORDER.indexOf(a[1].pos?.split("/")?.[0])-POS_ORDER.indexOf(b[1].pos?.split("/")?.[0])));
-                let lastTeam=null;
-                return sorted.map(([key,p])=>{
-                  const showHeader=p.teamName!==lastTeam;
-                  lastTeam=p.teamName;
-                  const tc=getTeamColor(allTeams.find(t=>t.teamName===p.teamName)?.teamColor);
-                  return(
-                    <div key={key}>
-                      {showHeader&&<div data-pub-header style={{padding:"8px 2px 3px",borderBottom:`1px solid ${C.border}`,marginBottom:3,marginTop:10}}>
-                        <span style={{fontSize:11,fontWeight:800,color:C.textMid,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>⚽ {p.teamName}</span>
-                      </div>}
-                      <div data-pub-row data-name={(p.name||"").toLowerCase()} data-team={(p.teamName||"").toLowerCase()}
-                        onClick={()=>setPoolPlayer({p,key})}
-                        style={{display:"flex",alignItems:"center",gap:8,padding:"5px 8px",borderRadius:8,background:C.inputBg,border:`1px solid ${C.border}`,marginBottom:3,cursor:"pointer"}}
-                        onMouseEnter={e=>e.currentTarget.style.borderColor=C.accent}
-                        onMouseLeave={e=>e.currentTarget.style.borderColor=C.border}>
-                        <div style={{width:24,height:24,borderRadius:"50%",background:`linear-gradient(135deg,${tc.dark},${tc.bg})`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                          <span style={{fontSize:8,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif"}}>{p.overall||p.name?.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()}</span>
-                        </div>
-                        <div style={{flex:1,minWidth:0}}>
-                          <div style={{fontSize:11,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"'DM Sans',sans-serif"}}>{p.name} <span style={{fontWeight:400,color:C.textLight}}>· {p.teamName}</span></div>
-                          {p.overall&&<div style={{fontSize:9,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{p.overall}⭐{p.country?` · ${p.country}`:""}</div>}
-                        </div>
-                        <span style={{fontSize:8,fontWeight:700,color:C.accent,background:C.goldLight,padding:"2px 6px",borderRadius:5,fontFamily:"monospace",border:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{p.pos?.split("/")?.[0]}</span>
+              {sorted.length===0&&<div style={{textAlign:"center",color:C.textFaint,fontSize:12,marginTop:20,fontFamily:"'DM Sans',sans-serif"}}>No se encontraron jugadores</div>}
+              {sorted.map(([key,p])=>{
+                const showHeader=pubSort==="equipo"&&p.teamName!==lastTeam;
+                if(pubSort==="equipo") lastTeam=p.teamName;
+                const tc=getTeamColor(allTeams.find(t=>t.teamName===p.teamName)?.teamColor);
+                const pos=getPos(p);
+                return(
+                  <div key={key}>
+                    {showHeader&&<div style={{padding:"8px 2px 3px",borderBottom:`1px solid ${C.border}`,marginBottom:3,marginTop:10}}>
+                      <span style={{fontSize:11,fontWeight:800,color:C.textMid,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>⚽ {p.teamName}</span>
+                    </div>}
+                    <div onClick={()=>setPoolPlayer({p,key})}
+                      style={{display:"flex",alignItems:"center",gap:8,padding:"5px 8px",borderRadius:8,background:C.inputBg,border:`1px solid ${C.border}`,marginBottom:3,cursor:"pointer"}}
+                      onMouseEnter={e=>e.currentTarget.style.borderColor=C.accent}
+                      onMouseLeave={e=>e.currentTarget.style.borderColor=C.border}>
+                      <div style={{width:28,height:28,borderRadius:"50%",background:`linear-gradient(135deg,${tc.dark},${tc.bg})`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                        <span style={{fontSize:9,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif"}}>{p.overall||p.name?.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()}</span>
                       </div>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:11,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:"'DM Sans',sans-serif"}}>{p.name} <span style={{fontWeight:400,color:C.textLight}}>· {p.teamName}</span></div>
+                        <div style={{fontSize:9,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{[p.country,p.age?`${p.age}a`:null,p.overall?`${p.overall}⭐`:null].filter(Boolean).join(" · ")}</div>
+                      </div>
+                      <span style={{fontSize:8,fontWeight:700,color:C.accent,background:C.goldLight,padding:"2px 6px",borderRadius:5,fontFamily:"monospace",border:`1px solid ${C.border}`,whiteSpace:"nowrap",flexShrink:0}}>{pos}</span>
                     </div>
-                  );
-                });
-              })()}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* POOL PLAYER DETAIL */}
       {poolPlayer&&(
@@ -2494,6 +2536,497 @@ function MainApp({user,isAdmin,onLogout}){
           </div>
         </div>
       )}
+
+      {/* SELECCIONES NACIONALES MODAL */}
+      {showSelecciones&&(()=>{
+        const[selPais,setSelPais]=React.useState("");
+        const[selList,setSelList]=React.useState([]);
+        const[selFormation,setSelFormation]=React.useState("4-3-3");
+        const[selStarters,setSelStarters]=React.useState({});
+        const[selSubs,setSelSubs]=React.useState(Array(7).fill(null));
+        const[selImg,setSelImg]=React.useState("");
+        const[selImgEdit,setSelImgEdit]=React.useState(false);
+        const[selPickModal,setSelPickModal]=React.useState(null);
+        const[selSearch,setSelSearch]=React.useState("");
+        const[saving,setSaving]=React.useState(false);
+        const[addMode,setAddMode]=React.useState(false);
+        const[newP,setNewP]=React.useState({name:"",pos:"",overall:""});
+        const[allSels,setAllSels]=React.useState([]);
+
+        // Load all selecciones list on open
+        React.useEffect(()=>{
+          getDocs(collection(db,"selecciones")).then(snap=>{
+            setAllSels(snap.docs.map(d=>({id:d.id,...d.data()})));
+          });
+        },[]);
+
+        // Load selected seleccion
+        React.useEffect(()=>{
+          if(!selPais) return;
+          const ref=doc(db,"selecciones",selPais);
+          getDoc(ref).then(snap=>{
+            if(snap.exists()){
+              const d=snap.data();
+              setSelFormation(d.formation||"4-3-3");
+              setSelStarters(d.starters||{});
+              setSelSubs(d.subs||Array(7).fill(null));
+              setSelImg(d.image||"");
+              setSelList(d.squad||[]);
+            } else {
+              setSelFormation("4-3-3");setSelStarters({});setSelSubs(Array(7).fill(null));setSelImg("");setSelList([]);
+            }
+          });
+        },[selPais]);
+
+        const save=async(patch={})=>{
+          if(!selPais) return;
+          setSaving(true);
+          const ref=doc(db,"selecciones",selPais);
+          await setDoc(ref,{country:selPais,formation:selFormation,starters:selStarters,subs:selSubs,image:selImg,squad:selList,...patch},{merge:true});
+          setSaving(false);
+        };
+
+        const addPlayer=async()=>{
+          if(!newP.name.trim()) return;
+          const p={name:newP.name.trim(),pos:newP.pos||"",overall:newP.overall?parseInt(newP.overall):null,id:`sel_${Date.now()}_${Math.random().toString(36).slice(2,5)}`};
+          const sq=[...selList,p];
+          setSelList(sq);
+          setNewP({name:"",pos:"",overall:""});
+          await save({squad:sq});
+        };
+
+        const removePlayer=async(id)=>{
+          const sq=selList.filter(p=>p.id!==id);
+          setSelList(sq);
+          await save({squad:sq});
+        };
+
+        const createSeleccion=async()=>{
+          if(!selSearch.trim()) return;
+          const id=selSearch.trim().toUpperCase().replace(/\s+/g,"_");
+          await setDoc(doc(db,"selecciones",id),{country:selSearch.trim().toUpperCase(),formation:"4-3-3",starters:{},subs:Array(7).fill(null),image:"",squad:[]});
+          setAllSels(prev=>[...prev,{id,country:selSearch.trim().toUpperCase()}]);
+          setSelPais(id);setSelSearch("");
+        };
+
+        const selPositions=FORMATIONS[selFormation]||[];
+        const selUsedNames=[...Object.values(selStarters).filter(Boolean).map(p=>p.name),...selSubs.filter(Boolean).map(p=>p.name)];
+        const selAvail=selList.filter(p=>!selUsedNames.includes(p.name));
+        const norm=s=>(s||"").trim().toLowerCase();
+
+        return(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:2000,display:"flex",alignItems:"stretch",justifyContent:"center",backdropFilter:"blur(8px)"}} onClick={()=>setShowSelecciones(false)}>
+          <div style={{background:C.card,width:"100%",maxWidth:520,display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 0 60px rgba(0,0,0,0.3)"}} onClick={e=>e.stopPropagation()}>
+
+            {/* Header */}
+            <div style={{padding:"12px 16px",background:"#1a3a5c",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+              <span style={{fontSize:14,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>🏳️ SELECCIONES NACIONALES</span>
+              {saving&&<span style={{fontSize:10,color:"#f39c12",fontFamily:"'DM Sans',sans-serif"}}>Guardando…</span>}
+              <button onClick={()=>setShowSelecciones(false)} style={{marginLeft:"auto",background:"rgba(255,255,255,0.15)",border:"none",borderRadius:"50%",width:28,height:28,color:"#fff",cursor:"pointer",fontSize:15,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+            </div>
+
+            {/* Country selector */}
+            <div style={{padding:"10px 14px",borderBottom:`1px solid ${C.border}`,flexShrink:0,display:"flex",gap:6,alignItems:"center"}}>
+              <select value={selPais} onChange={e=>setSelPais(e.target.value)}
+                style={{flex:1,padding:"7px 10px",borderRadius:9,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:12,fontFamily:"'DM Sans',sans-serif",outline:"none"}}>
+                <option value="">— Selecciona una selección —</option>
+                {allSels.sort((a,b)=>(a.country||"").localeCompare(b.country||"")).map(s=><option key={s.id} value={s.id}>{s.country} ({(s.squad||[]).length} conv.)</option>)}
+              </select>
+              {selPais&&(
+                <select value={selFormation} onChange={e=>{setSelFormation(e.target.value);save({formation:e.target.value});}}
+                  style={{width:90,padding:"7px 6px",borderRadius:9,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"monospace",outline:"none"}}>
+                  {Object.keys(FORMATIONS).map(f=><option key={f} value={f}>{f}</option>)}
+                </select>
+              )}
+            </div>
+
+            {/* Create new */}
+            <div style={{padding:"8px 14px",borderBottom:`1px solid ${C.border}`,flexShrink:0,display:"flex",gap:6}}>
+              <input value={selSearch} onChange={e=>setSelSearch(e.target.value)} placeholder="Crear nueva selección (ej: ESPAÑA)…"
+                style={{flex:1,padding:"6px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif",outline:"none"}}
+                onKeyDown={e=>e.key==="Enter"&&createSeleccion()}/>
+              <button onClick={createSeleccion} style={{padding:"6px 12px",borderRadius:8,background:"#1a3a5c",color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>+ Crear</button>
+            </div>
+
+            {!selPais&&(
+              <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",color:C.textFaint,fontFamily:"'DM Sans',sans-serif",fontSize:13,flexDirection:"column",gap:8}}>
+                <span style={{fontSize:32}}>🏳️</span>
+                <span>Selecciona o crea una selección</span>
+              </div>
+            )}
+
+            {selPais&&(
+              <div style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column"}}>
+
+                {/* Image + info */}
+                <div style={{padding:"8px 14px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+                  {selImg&&<img src={selImg} alt="" style={{width:38,height:38,objectFit:"contain",borderRadius:6,border:`1px solid ${C.border}`}} onError={e=>e.target.style.display="none"}/>}
+                  {selImgEdit?(
+                    <input autoFocus value={selImg} onChange={e=>setSelImg(e.target.value)} placeholder="URL bandera / escudo…"
+                      style={{flex:1,padding:"6px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif",outline:"none"}}
+                      onBlur={()=>{setSelImgEdit(false);save({image:selImg});}}
+                      onKeyDown={e=>{if(e.key==="Enter"){setSelImgEdit(false);save({image:selImg});}}}/>
+                  ):(
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:12,fontWeight:700,color:C.text,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:0.5}}>{allSels.find(s=>s.id===selPais)?.country}</div>
+                      <div style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{selList.length} convocados · {Object.values(selStarters).filter(Boolean).length}/11</div>
+                    </div>
+                  )}
+                  <button onClick={()=>setSelImgEdit(v=>!v)} style={{padding:"5px 9px",borderRadius:7,border:`1px solid ${C.border}`,background:C.inputBg,color:C.textMid,fontSize:10,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                    {selImgEdit?"✓":"🖼"}
+                  </button>
+                </div>
+
+                {/* Field */}
+                <div style={{background:"linear-gradient(180deg,#1a6b2a,#1e7a30,#1a6b2a)",position:"relative",height:300,flexShrink:0}}>
+                  <div style={{position:"absolute",inset:8,border:"1.5px solid rgba(255,255,255,0.2)",borderRadius:4,pointerEvents:"none"}}/>
+                  <div style={{position:"absolute",left:"50%",top:8,bottom:8,width:1,background:"rgba(255,255,255,0.15)",transform:"translateX(-50%)",pointerEvents:"none"}}/>
+                  <div style={{position:"absolute",left:"50%",top:"50%",transform:"translate(-50%,-50%)",width:60,height:60,border:"1.5px solid rgba(255,255,255,0.15)",borderRadius:"50%",pointerEvents:"none"}}/>
+                  {selPositions.map(pos=>{
+                    const player=selStarters[pos.id]||null;
+                    return(
+                      <div key={pos.id} onClick={()=>setSelPickModal({posId:pos.id,posLabel:pos.label,type:"starter"})}
+                        style={{position:"absolute",left:`${pos.x}%`,top:`${pos.y}%`,transform:"translate(-50%,-50%)",display:"flex",flexDirection:"column",alignItems:"center",gap:2,cursor:"pointer",zIndex:2}}>
+                        <div style={{width:34,height:34,borderRadius:"50%",background:player?"linear-gradient(135deg,#1a3a5c,#2980b9)":"rgba(255,255,255,0.15)",border:"2px solid rgba(255,255,255,0.85)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 6px rgba(0,0,0,0.4)"}}>
+                          <span style={{fontSize:player?.overall?11:9,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif"}}>{player?.overall||pos.label}</span>
+                        </div>
+                        {player&&<>
+                          <div style={{fontSize:7,fontWeight:800,color:"#fff",textShadow:"0 1px 3px rgba(0,0,0,0.9)",whiteSpace:"nowrap",maxWidth:46,overflow:"hidden",textOverflow:"ellipsis",fontFamily:"'Bebas Neue',sans-serif"}}>
+                            {player.name.split(" ").slice(-1)[0].toUpperCase()}
+                          </div>
+                          <div style={{fontSize:6,background:"rgba(26,58,92,0.85)",color:"#fff",padding:"1px 3px",borderRadius:3,fontFamily:"monospace",fontWeight:700}}>{pos.label}</div>
+                        </>}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Bench */}
+                <div style={{padding:"8px 10px",borderBottom:`1px solid ${C.border}`,background:"rgba(26,58,92,0.04)",flexShrink:0}}>
+                  <div style={{fontSize:9,color:C.textLight,fontWeight:700,marginBottom:5,fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.5}}>Banca</div>
+                  <div style={{display:"flex",gap:5}}>
+                    {Array(7).fill(0).map((_,i)=>{
+                      const sub=selSubs[i]||null;
+                      return(
+                        <div key={i} onClick={()=>setSelPickModal({type:"sub",subIdx:i})}
+                          style={{width:36,height:36,borderRadius:"50%",background:sub?"linear-gradient(135deg,#1a3a5c,#2980b9)":"rgba(26,58,92,0.08)",border:`2px solid ${sub?"#2980b9":C.border}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
+                          <span style={{fontSize:sub?.overall?10:13,fontWeight:800,color:sub?"#fff":C.textFaint,fontFamily:"'Bebas Neue',sans-serif"}}>{sub?.overall||"+"}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Convocatoria */}
+                <div style={{padding:"10px 14px",flex:1}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                    <span style={{fontSize:10,fontWeight:700,color:C.textLight,fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.5}}>Convocatoria ({selList.length})</span>
+                    <button onClick={()=>setAddMode(v=>!v)} style={{marginLeft:"auto",padding:"4px 10px",borderRadius:7,background:addMode?"#1a3a5c":"#ebf5fb",color:addMode?"#fff":"#2980b9",border:"1px solid #2980b9",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                      {addMode?"× Cancelar":"+ Agregar jugador"}
+                    </button>
+                  </div>
+
+                  {addMode&&(
+                    <div style={{display:"flex",gap:5,marginBottom:8,flexWrap:"wrap"}}>
+                      <input value={newP.name} onChange={e=>setNewP(p=>({...p,name:e.target.value}))} placeholder="Nombre *"
+                        style={{flex:2,minWidth:100,padding:"6px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif",outline:"none"}}
+                        onKeyDown={e=>e.key==="Enter"&&addPlayer()}/>
+                      <input value={newP.pos} onChange={e=>setNewP(p=>({...p,pos:e.target.value}))} placeholder="Pos (POR…)"
+                        style={{width:70,padding:"6px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"monospace",outline:"none"}}/>
+                      <input value={newP.overall} onChange={e=>setNewP(p=>({...p,overall:e.target.value}))} placeholder="Media"
+                        style={{width:52,padding:"6px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"monospace",outline:"none"}}/>
+                      <button onClick={addPlayer} style={{padding:"6px 12px",borderRadius:7,background:"#1a3a5c",color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Añadir</button>
+                    </div>
+                  )}
+
+                  <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                    {selList.map(p=>{
+                      const inUse=selUsedNames.includes(p.name);
+                      return(
+                        <div key={p.id} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 8px",borderRadius:8,background:inUse?"rgba(41,128,185,0.08)":C.inputBg,border:`1px solid ${inUse?"#aed6f1":C.border}`}}>
+                          <span style={{fontSize:9,fontWeight:700,color:"#2980b9",background:"#ebf5fb",padding:"2px 5px",borderRadius:4,fontFamily:"monospace",minWidth:28,textAlign:"center"}}>{p.pos||"?"}</span>
+                          <span style={{flex:1,fontSize:11,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{p.name}</span>
+                          {p.overall&&<span style={{fontSize:11,fontWeight:800,color:"#2980b9",fontFamily:"monospace"}}>{p.overall}</span>}
+                          {inUse&&<span style={{fontSize:8,color:"#2980b9",fontFamily:"'DM Sans',sans-serif"}}>✓ 11</span>}
+                          <button onClick={()=>removePlayer(p.id)} style={{background:"none",border:"none",color:C.textFaint,cursor:"pointer",fontSize:13,padding:"0 2px",lineHeight:1}}>×</button>
+                        </div>
+                      );
+                    })}
+                    {selList.length===0&&<div style={{textAlign:"center",color:C.textFaint,fontSize:11,fontFamily:"'DM Sans',sans-serif",padding:"12px 0"}}>No hay convocados — agrega jugadores arriba</div>}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Picker */}
+          {selPickModal&&(
+            <div style={{position:"fixed",inset:0,zIndex:3000,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setSelPickModal(null)}>
+              <div style={{background:C.card,width:"100%",maxWidth:520,maxHeight:"55vh",borderRadius:"14px 14px 0 0",overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:"0 -8px 30px rgba(0,0,0,0.2)"}} onClick={e=>e.stopPropagation()}>
+                <div style={{padding:"10px 14px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                  <span style={{fontSize:12,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{selPickModal.type==="starter"?`Poner en ${selPickModal.posLabel}`:"Elegir suplente"}</span>
+                  <button onClick={()=>setSelPickModal(null)} style={{marginLeft:"auto",background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:"50%",width:24,height:24,color:C.textMid,cursor:"pointer",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+                </div>
+                <div style={{overflowY:"auto",flex:1,padding:"6px 10px 12px",display:"flex",flexDirection:"column",gap:4}}>
+                  <div onClick={()=>{
+                    if(selPickModal.type==="starter"){const s={...selStarters};delete s[selPickModal.posId];setSelStarters(s);save({starters:s});}
+                    else{const sb=[...selSubs];sb[selPickModal.subIdx]=null;setSelSubs(sb);save({subs:sb});}
+                    setSelPickModal(null);
+                  }} style={{padding:"6px 10px",borderRadius:7,background:"#fff5f5",border:"1px solid #ffcccc",cursor:"pointer",fontSize:11,color:"#c0392b",fontFamily:"'DM Sans',sans-serif",fontWeight:700}}>
+                    × Quitar
+                  </div>
+                  {selAvail.map(p=>(
+                    <div key={p.id} onClick={()=>{
+                      const player={...p};
+                      if(selPickModal.type==="starter"){
+                        const s={...selStarters,[selPickModal.posId]:player};
+                        setSelStarters(s);save({starters:s});
+                      } else {
+                        const sb=[...selSubs];sb[selPickModal.subIdx]=player;
+                        setSelSubs(sb);save({subs:sb});
+                      }
+                      setSelPickModal(null);
+                    }}
+                      style={{display:"flex",alignItems:"center",gap:10,padding:"7px 10px",borderRadius:8,background:C.inputBg,border:`1px solid ${C.border}`,cursor:"pointer"}}
+                      onMouseEnter={e=>e.currentTarget.style.borderColor="#2980b9"}
+                      onMouseLeave={e=>e.currentTarget.style.borderColor=C.border}>
+                      <span style={{fontSize:9,fontWeight:700,color:"#2980b9",background:"#ebf5fb",padding:"2px 5px",borderRadius:4,fontFamily:"monospace",flexShrink:0,minWidth:24,textAlign:"center"}}>{p.pos||"?"}</span>
+                      <span style={{flex:1,fontSize:12,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{p.name}</span>
+                      {p.overall&&<span style={{fontSize:12,fontWeight:800,color:"#2980b9",fontFamily:"monospace"}}>{p.overall}</span>}
+                    </div>
+                  ))}
+                  {selAvail.length===0&&<div style={{color:C.textFaint,fontSize:11,textAlign:"center",padding:"12px",fontFamily:"'DM Sans',sans-serif"}}>Agrega jugadores a la convocatoria primero</div>}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+        );
+      })()}
+        const[selPais,setSelPais]=React.useState("");
+        const[selData,setSelData]=React.useState({});
+        const[selFormation,setSelFormation]=React.useState("4-3-3");
+        const[selStarters,setSelStarters]=React.useState({});
+        const[selSubs,setSelSubs]=React.useState(Array(7).fill(null));
+        const[selImg,setSelImg]=React.useState("");
+        const[selImgEdit,setSelImgEdit]=React.useState(false);
+        const[selPickModal,setSelPickModal]=React.useState(null);
+        const[saving,setSaving]=React.useState(false);
+
+        // Get all countries from pool
+        const countries=[...new Set(Object.values(pool).map(p=>p.country).filter(Boolean))].sort();
+        // Players of selected country from pool
+        const countryPlayers=selPais?Object.values(pool).filter(p=>p.country===selPais).map(p=>({
+          name:p.name,pos:normPos(p.pos||""),primaryPos:POS_EN_ES[p.pos?.split("/")?.[0]]||p.pos?.split("/")?.[0]||"",
+          overall:p.overall,age:p.age,country:p.country,teamName:p.teamName,
+          poolKey:Object.keys(pool).find(k=>pool[k].name===p.name&&pool[k].country===p.country)
+        })):[];
+        const selPositions=FORMATIONS[selFormation]||[];
+
+        // Load saved lineup from Firestore when country changes
+        React.useEffect(()=>{
+          if(!selPais) return;
+          const ref=doc(db,"selecciones",selPais.replace(/[^a-zA-Z0-9]/g,"_"));
+          getDoc(ref).then(snap=>{
+            if(snap.exists()){
+              const d=snap.data();
+              setSelFormation(d.formation||"4-3-3");
+              setSelStarters(d.starters||{});
+              setSelSubs(d.subs||Array(7).fill(null));
+              setSelImg(d.image||"");
+            } else {
+              setSelFormation("4-3-3");setSelStarters({});setSelSubs(Array(7).fill(null));setSelImg("");
+            }
+          });
+        },[selPais]);
+
+        const saveSeleccion=async(st,sb,fm,img)=>{
+          if(!selPais) return;
+          setSaving(true);
+          const ref=doc(db,"selecciones",selPais.replace(/[^a-zA-Z0-9]/g,"_"));
+          await setDoc(ref,{country:selPais,formation:fm??selFormation,starters:st??selStarters,subs:sb??selSubs,image:img??selImg});
+          setSaving(false);
+        };
+
+        const selUsed=[...Object.values(selStarters).filter(Boolean).map(p=>p.name),...selSubs.filter(Boolean).map(p=>p.name)];
+        const selAvail=countryPlayers.filter(p=>!selUsed.includes(p.name));
+
+        return(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:2000,display:"flex",alignItems:"stretch",justifyContent:"center",backdropFilter:"blur(8px)"}} onClick={()=>setShowSelecciones(false)}>
+          <div style={{background:C.card,width:"100%",maxWidth:520,display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 0 60px rgba(0,0,0,0.3)"}} onClick={e=>e.stopPropagation()}>
+            {/* Header */}
+            <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:8,flexShrink:0,background:"#1a3a5c",color:"#fff"}}>
+              <span style={{fontSize:14,fontWeight:800,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>🏳️ SELECCIONES NACIONALES</span>
+              <span style={{fontSize:10,color:"rgba(255,255,255,0.6)",fontFamily:"'DM Sans',sans-serif"}}>{countries.length} países</span>
+              {saving&&<span style={{fontSize:10,color:"#f39c12",fontFamily:"'DM Sans',sans-serif",marginLeft:4}}>Guardando…</span>}
+              <button onClick={()=>setShowSelecciones(false)} style={{marginLeft:"auto",background:"rgba(255,255,255,0.15)",border:"none",borderRadius:"50%",width:28,height:28,color:"#fff",cursor:"pointer",fontSize:15,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+            </div>
+
+            {/* Country selector */}
+            <div style={{padding:"10px 14px",borderBottom:`1px solid ${C.border}`,flexShrink:0,display:"flex",gap:8,alignItems:"center"}}>
+              <select value={selPais} onChange={e=>setSelPais(e.target.value)}
+                style={{flex:1,padding:"7px 10px",borderRadius:9,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:12,fontFamily:"'DM Sans',sans-serif",outline:"none"}}>
+                <option value="">— Selecciona un país —</option>
+                {countries.map(c=><option key={c} value={c}>{c} ({Object.values(pool).filter(p=>p.country===c).length} jug.)</option>)}
+              </select>
+              {selPais&&(
+                <select value={selFormation} onChange={e=>{setSelFormation(e.target.value);saveSeleccion(selStarters,selSubs,e.target.value,selImg);}}
+                  style={{padding:"7px 8px",borderRadius:9,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"monospace",outline:"none"}}>
+                  {Object.keys(FORMATIONS).map(f=><option key={f} value={f}>{f}</option>)}
+                </select>
+              )}
+            </div>
+
+            {!selPais&&(
+              <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",color:C.textFaint,fontFamily:"'DM Sans',sans-serif",fontSize:13}}>
+                Selecciona un país para gestionar su selección
+              </div>
+            )}
+
+            {selPais&&(
+              <div style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column",gap:0}}>
+                {/* Image section */}
+                <div style={{padding:"10px 14px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:10}}>
+                  {selImg&&<img src={selImg} alt={selPais} style={{width:40,height:40,objectFit:"contain",borderRadius:6,border:`1px solid ${C.border}`}} onError={e=>e.target.style.display="none"}/>}
+                  {!selImgEdit?(
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:11,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{selImg?"Imagen cargada":"Sin imagen"}</div>
+                      <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>{countryPlayers.length} jugadores disponibles</div>
+                    </div>
+                  ):(
+                    <input autoFocus value={selImg} onChange={e=>setSelImg(e.target.value)} placeholder="URL de imagen (bandera/escudo)…"
+                      style={{flex:1,padding:"6px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif",outline:"none"}}
+                      onBlur={()=>{setSelImgEdit(false);saveSeleccion(null,null,null,selImg);}}
+                      onKeyDown={e=>{if(e.key==="Enter"){setSelImgEdit(false);saveSeleccion(null,null,null,selImg);}}}/>
+                  )}
+                  <button onClick={()=>setSelImgEdit(v=>!v)}
+                    style={{padding:"5px 10px",borderRadius:7,border:`1px solid ${C.border}`,background:C.inputBg,color:C.textMid,fontSize:10,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                    {selImgEdit?"✓":"🖼 Imagen"}
+                  </button>
+                </div>
+
+                {/* Field */}
+                <div style={{background:"linear-gradient(180deg,#1a6b2a,#1e7a30,#1a6b2a)",position:"relative",minHeight:320,padding:"12px 8px",flexShrink:0}}>
+                  {/* Lines */}
+                  <div style={{position:"absolute",inset:8,border:"1.5px solid rgba(255,255,255,0.2)",borderRadius:4,pointerEvents:"none"}}/>
+                  <div style={{position:"absolute",left:"50%",top:8,bottom:8,width:1,background:"rgba(255,255,255,0.15)",transform:"translateX(-50%)",pointerEvents:"none"}}/>
+                  <div style={{position:"absolute",left:"50%",top:"50%",transform:"translate(-50%,-50%)",width:70,height:70,border:"1.5px solid rgba(255,255,255,0.15)",borderRadius:"50%",pointerEvents:"none"}}/>
+                  {selPositions.map(pos=>{
+                    const player=selStarters[pos.id]||null;
+                    return(
+                      <div key={pos.id} onClick={()=>setSelPickModal({posId:pos.id,posLabel:pos.label,type:"starter"})}
+                        style={{position:"absolute",left:`${pos.x}%`,top:`${pos.y}%`,transform:"translate(-50%,-50%)",display:"flex",flexDirection:"column",alignItems:"center",gap:2,cursor:"pointer",zIndex:2,minWidth:50}}>
+                        <div style={{width:36,height:36,borderRadius:"50%",background:player?"linear-gradient(135deg,#1a3a5c,#2980b9)":"rgba(255,255,255,0.15)",border:"2px solid rgba(255,255,255,0.9)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 8px rgba(0,0,0,0.3)"}}>
+                          {player?(
+                            <span style={{fontSize:player.overall?12:9,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif"}}>{player.overall||player.name?.split(" ").map(w=>w[0]).join("").slice(0,2)}</span>
+                          ):(
+                            <span style={{fontSize:10,color:"rgba(255,255,255,0.7)",fontWeight:700,fontFamily:"monospace"}}>{pos.label}</span>
+                          )}
+                        </div>
+                        {player&&<>
+                          <div style={{fontSize:8,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",textShadow:"0 1px 3px rgba(0,0,0,0.9)",whiteSpace:"nowrap",maxWidth:50,overflow:"hidden",textOverflow:"ellipsis"}}>
+                            {player.name.split(" ").slice(-1)[0].toUpperCase()}
+                          </div>
+                          <div style={{fontSize:7,background:"#1a3a5c",color:"#fff",padding:"1px 4px",borderRadius:3,fontFamily:"monospace",fontWeight:700}}>{pos.label}</div>
+                        </>}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Bench */}
+                <div style={{padding:"8px 10px",borderBottom:`1px solid ${C.border}`,background:"rgba(26,58,92,0.05)"}}>
+                  <div style={{fontSize:9,color:C.textLight,fontWeight:700,marginBottom:5,fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.5}}>Banca</div>
+                  <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                    {Array(7).fill(0).map((_,i)=>{
+                      const sub=selSubs[i]||null;
+                      return(
+                        <div key={i} onClick={()=>setSelPickModal({type:"sub",subIdx:i,posLabel:"Suplente"})}
+                          style={{width:38,height:38,borderRadius:"50%",background:sub?"linear-gradient(135deg,#1a3a5c,#2980b9)":"rgba(26,58,92,0.1)",border:`2px solid ${sub?"rgba(41,128,185,0.8)":C.border}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexDirection:"column",gap:1,position:"relative"}}>
+                          {sub?(
+                            <span style={{fontSize:10,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif"}}>{sub.overall||"?"}</span>
+                          ):(
+                            <span style={{fontSize:14,color:C.textFaint}}>+</span>
+                          )}
+                          {sub&&<div style={{position:"absolute",bottom:-10,left:"50%",transform:"translateX(-50%)",fontSize:6,color:C.textLight,whiteSpace:"nowrap",fontFamily:"'DM Sans',sans-serif",fontWeight:700}}>
+                            {sub.name.split(" ").slice(-1)[0].slice(0,7).toUpperCase()}
+                          </div>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Available players */}
+                <div style={{padding:"8px 10px 14px",flex:1}}>
+                  <div style={{fontSize:9,color:C.textLight,fontWeight:700,marginBottom:5,fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.5}}>Disponibles ({selAvail.length})</div>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+                    {selAvail.slice(0,40).map(p=>(
+                      <div key={p.name} style={{display:"flex",alignItems:"center",gap:4,padding:"3px 7px",borderRadius:20,background:"#ebf5fb",border:"1px solid #aed6f1",cursor:"default"}}>
+                        <span style={{fontSize:8,fontWeight:700,color:"#2980b9",fontFamily:"monospace"}}>{p.primaryPos||p.pos?.split("/")?.[0]}</span>
+                        <span style={{fontSize:9,color:"#1a3a5c",fontFamily:"'DM Sans',sans-serif",fontWeight:600}}>{p.name.split(" ").slice(-1)[0]}</span>
+                        {p.overall&&<span style={{fontSize:8,color:"#2980b9",fontFamily:"monospace"}}>{p.overall}</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Picker modal */}
+          {selPickModal&&selPais&&(
+            <div style={{position:"fixed",inset:0,zIndex:3000,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setSelPickModal(null)}>
+              <div style={{background:C.card,width:"100%",maxWidth:520,maxHeight:"60vh",borderRadius:"16px 16px 0 0",overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:"0 -8px 30px rgba(0,0,0,0.2)"}} onClick={e=>e.stopPropagation()}>
+                <div style={{padding:"10px 14px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                  <span style={{fontSize:12,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>
+                    {selPickModal.type==="starter"?`Asignar ${selPickModal.posLabel}`:"Elegir suplente"}
+                  </span>
+                  <button onClick={()=>setSelPickModal(null)} style={{marginLeft:"auto",background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:"50%",width:24,height:24,color:C.textMid,cursor:"pointer",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+                </div>
+                <div style={{overflowY:"auto",flex:1,padding:"6px 10px 12px",display:"flex",flexDirection:"column",gap:4}}>
+                  {/* Clear option */}
+                  <div onClick={()=>{
+                    if(selPickModal.type==="starter"){const s={...selStarters};delete s[selPickModal.posId];setSelStarters(s);saveSeleccion(s,null,null,null);}
+                    else{const sb=[...selSubs];sb[selPickModal.subIdx]=null;setSelSubs(sb);saveSeleccion(null,sb,null,null);}
+                    setSelPickModal(null);
+                  }} style={{padding:"7px 10px",borderRadius:8,background:"#fff5f5",border:"1px solid #ffcccc",cursor:"pointer",fontSize:11,color:"#c0392b",fontFamily:"'DM Sans',sans-serif",fontWeight:700}}>
+                    × Quitar jugador
+                  </div>
+                  {countryPlayers.map(p=>{
+                    const inUse=selUsed.includes(p.name);
+                    if(inUse) return null;
+                    return(
+                      <div key={p.name} onClick={()=>{
+                        const player={name:p.name,pos:p.pos,primaryPos:p.primaryPos,overall:p.overall,age:p.age,teamName:p.teamName,poolKey:p.poolKey};
+                        if(selPickModal.type==="starter"){
+                          const s={...selStarters,[selPickModal.posId]:player};
+                          setSelStarters(s);saveSeleccion(s,null,null,null);
+                        } else {
+                          const sb=[...selSubs];sb[selPickModal.subIdx]=player;
+                          setSelSubs(sb);saveSeleccion(null,sb,null,null);
+                        }
+                        setSelPickModal(null);
+                      }}
+                        style={{display:"flex",alignItems:"center",gap:10,padding:"7px 10px",borderRadius:8,background:C.inputBg,border:`1px solid ${C.border}`,cursor:"pointer"}}
+                        onMouseEnter={e=>e.currentTarget.style.borderColor="#2980b9"}
+                        onMouseLeave={e=>e.currentTarget.style.borderColor=C.border}>
+                        <span style={{fontSize:9,fontWeight:700,color:"#2980b9",background:"#ebf5fb",padding:"2px 5px",borderRadius:5,fontFamily:"monospace",flexShrink:0}}>{p.primaryPos||p.pos?.split("/")?.[0]}</span>
+                        <div style={{flex:1}}>
+                          <div style={{fontSize:12,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{p.name}</div>
+                          <div style={{fontSize:9,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{p.teamName}{p.age?` · ${p.age}a`:""}</div>
+                        </div>
+                        {p.overall&&<span style={{fontSize:12,fontWeight:800,color:"#2980b9",fontFamily:"monospace"}}>{p.overall}</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+        );
+      })()}
 
       {/* SUB MENU MODAL */}
       {pickModal?.type==="subMenu"&&(
