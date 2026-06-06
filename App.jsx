@@ -1779,6 +1779,8 @@ function MainApp({user,isAdmin,onLogout}){
                 </div>
               )}
             </div>
+            {/* Squad management */}
+            <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`}}>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
                 <span style={{fontSize:14}}>👥</span>
                 <div style={{fontSize:13,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>Plantilla</div>
