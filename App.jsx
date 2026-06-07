@@ -1285,9 +1285,9 @@ function MaintenanceToggle(){
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 function PublicPoolModal({pool,allTeams,onClose,setPoolPlayer}){
-  const[q,setQ]=React.useState("");
-  const[posF,setPosF]=React.useState("");
-  const[sort,setSort]=React.useState("equipo");
+  const[q,setQ]=useState("");
+  const[posF,setPosF]=useState("");
+  const[sort,setSort]=useState("equipo");
   const POS_ORD=["POR","DFC","DFD","DFI","MCD","MC","MCO","MD","MI","ED","EI","DC"];
   const getP=p=>{const r=(p.pos||"").split("/")?.[0];return POS_EN_ES[r]||r;};
   const entries=Object.entries(pool||{});
@@ -1348,27 +1348,27 @@ function PublicPoolModal({pool,allTeams,onClose,setPoolPlayer}){
 }
 
 function SeleccionesModal({onClose}){
-  const[selPais,setSelPais]=React.useState("");
-  const[selList,setSelList]=React.useState([]);
-  const[selFormation,setSelFormation]=React.useState("4-3-3");
-  const[selStarters,setSelStarters]=React.useState({});
-  const[selSubs,setSelSubs]=React.useState(Array(7).fill(null));
-  const[selImg,setSelImg]=React.useState("");
-  const[selImgEdit,setSelImgEdit]=React.useState(false);
-  const[selPickModal,setSelPickModal]=React.useState(null);
-  const[saving,setSaving]=React.useState(false);
-  const[addMode,setAddMode]=React.useState(false);
-  const[newP,setNewP]=React.useState({name:"",pos:"",overall:""});
-  const[allSels,setAllSels]=React.useState([]);
-  const[selSearch,setSelSearch]=React.useState("");
+  const[selPais,setSelPais]=useState("");
+  const[selList,setSelList]=useState([]);
+  const[selFormation,setSelFormation]=useState("4-3-3");
+  const[selStarters,setSelStarters]=useState({});
+  const[selSubs,setSelSubs]=useState(Array(7).fill(null));
+  const[selImg,setSelImg]=useState("");
+  const[selImgEdit,setSelImgEdit]=useState(false);
+  const[selPickModal,setSelPickModal]=useState(null);
+  const[saving,setSaving]=useState(false);
+  const[addMode,setAddMode]=useState(false);
+  const[newP,setNewP]=useState({name:"",pos:"",overall:""});
+  const[allSels,setAllSels]=useState([]);
+  const[selSearch,setSelSearch]=useState("");
 
-  React.useEffect(()=>{
+  useEffect(()=>{
     getDocs(collection(db,"selecciones")).then(snap=>{
       setAllSels(snap.docs.map(d=>({id:d.id,...d.data()})));
     }).catch(()=>{});
   },[]);
 
-  React.useEffect(()=>{
+  useEffect(()=>{
     if(!selPais) return;
     getDoc(doc(db,"selecciones",selPais)).then(snap=>{
       if(snap.exists()){const d=snap.data();setSelFormation(d.formation||"4-3-3");setSelStarters(d.starters||{});setSelSubs(d.subs||Array(7).fill(null));setSelImg(d.image||"");setSelList(d.squad||[]);}
