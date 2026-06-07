@@ -1347,6 +1347,70 @@ function PublicPoolModal({pool,allTeams,onClose,setPoolPlayer}){
   );
 }
 
+// ─── NATIONAL TEAM PICKER (inline combo para admin) ──────────────────────────
+function NationalTeamPicker({teamId,current,allSels}){
+  const[open,setOpen]=useState(false);
+  const[q,setQ]=useState("");
+  const ref=useRef(null);
+
+  // close on outside click
+  useEffect(()=>{
+    if(!open) return;
+    const handler=e=>{if(ref.current&&!ref.current.contains(e.target)) setOpen(false);};
+    document.addEventListener("mousedown",handler);
+    return()=>document.removeEventListener("mousedown",handler);
+  },[open]);
+
+  const assign=async(id)=>{
+    await updateDoc(doc(db,"teams",teamId),{nationalTeam:id});
+    setOpen(false);setQ("");
+  };
+
+  const createAndAssign=async()=>{
+    const name=q.trim().toUpperCase().replace(/\s+/g,"_");
+    if(!name) return;
+    await setDoc(doc(db,"selecciones",name),{country:q.trim().toUpperCase(),formation:"4-3-3",starters:{},subs:Array(7).fill(null),image:"",squad:[]});
+    await assign(name);
+  };
+
+  const label=current?(allSels.find(s=>s.id===current)?.country||current):"🏳️";
+  const filtered=allSels.filter(s=>(s.country||"").toLowerCase().includes(q.toLowerCase())).sort((a,b)=>(a.country||"").localeCompare(b.country||""));
+
+  return(
+    <div ref={ref} style={{position:"relative",flexShrink:0}} onClick={e=>e.stopPropagation()}>
+      <button onClick={()=>{setOpen(v=>!v);setQ("");}}
+        style={{padding:"2px 7px",borderRadius:5,border:`1px solid ${current?"#2980b9":C.borderDark}`,background:current?"#ebf5fb":C.inputBg,color:current?"#2980b9":C.textFaint,fontSize:9,fontFamily:"monospace",cursor:"pointer",fontWeight:700,maxWidth:80,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+        {label}
+      </button>
+      {open&&(
+        <div style={{position:"absolute",top:"100%",right:0,zIndex:9999,background:C.card,border:`1px solid ${C.borderDark}`,borderRadius:10,boxShadow:"0 8px 32px rgba(0,0,0,0.18)",minWidth:180,padding:6,marginTop:3}}>
+          <input autoFocus value={q} onChange={e=>setQ(e.target.value)} placeholder="Buscar o crear…" onKeyDown={e=>e.key==="Enter"&&(filtered.length===1?assign(filtered[0].id):createAndAssign())}
+            style={{width:"100%",padding:"5px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif",outline:"none",boxSizing:"border-box",marginBottom:4}}/>
+          <div style={{maxHeight:160,overflowY:"auto",display:"flex",flexDirection:"column",gap:2}}>
+            {current&&<div onClick={()=>assign("")}
+              style={{padding:"5px 8px",borderRadius:6,background:"#fff5f5",color:"#c0392b",fontSize:10,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontWeight:700}}>
+              ✕ Quitar selección
+            </div>}
+            {filtered.map(s=>(
+              <div key={s.id} onClick={()=>assign(s.id)}
+                style={{padding:"5px 8px",borderRadius:6,background:s.id===current?"#ebf5fb":C.inputBg,border:`1px solid ${s.id===current?"#2980b9":C.border}`,color:C.text,fontSize:10,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontWeight:s.id===current?700:400}}>
+                🏳️ {s.country} <span style={{color:C.textFaint}}>({(s.squad||[]).length}j)</span>
+              </div>
+            ))}
+            {q.trim()&&!filtered.some(s=>s.country.toUpperCase()===q.trim().toUpperCase())&&(
+              <div onClick={createAndAssign}
+                style={{padding:"5px 8px",borderRadius:6,background:"#f0fff4",border:"1px solid #27ae60",color:"#27ae60",fontSize:10,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontWeight:700}}>
+                + Crear "{q.trim().toUpperCase()}" y asignar
+              </div>
+            )}
+            {filtered.length===0&&!q.trim()&&<div style={{color:C.textFaint,fontSize:10,padding:"6px 8px",fontFamily:"'DM Sans',sans-serif"}}>No hay selecciones aún</div>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SeleccionesModal({onClose,lockedCountry,isAdmin,allSels:allSelsProp}){
   const[selPais,setSelPais]=useState(lockedCountry||"");
   const[selList,setSelList]=useState([]);
@@ -1618,9 +1682,10 @@ function MainApp({user,isAdmin,onLogout}){
   },[]);
 
   useEffect(()=>{
-    getDocs(collection(db,"selecciones")).then(snap=>{
+    const unsub=onSnapshot(collection(db,"selecciones"),snap=>{
       setAllSels(snap.docs.map(d=>({id:d.id,...d.data()})));
-    }).catch(()=>{});
+    });
+    return unsub;
   },[]);
 
   const saveTeam=async patch=>{setSaving(true);await updateDoc(doc(db,"teams",user.uid),patch);setSaving(false);setSaved(true);setTimeout(()=>setSaved(false),2000);};
@@ -1889,15 +1954,11 @@ function MainApp({user,isAdmin,onLogout}){
                         <span style={{fontSize:9,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>{(t.squad||[]).length}j</span>
                         {isTeamAdmin&&<span style={{fontSize:8,fontWeight:800,color:C.accent,background:C.goldLight,padding:"1px 5px",borderRadius:8,fontFamily:"'DM Sans',sans-serif",border:`1px solid ${C.accent}`,flexShrink:0}}>ADMIN</span>}
                         {/* Selección nacional asignada */}
-                        <select
-                          value={t.nationalTeam||""}
-                          onChange={async e=>{const val=e.target.value;await updateDoc(doc(db,"teams",t.uid||t.id),{nationalTeam:val});}}
-                          onClick={ev=>ev.stopPropagation()}
-                          style={{padding:"2px 4px",borderRadius:5,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:9,fontFamily:"monospace",outline:"none",maxWidth:72,flexShrink:0}}
-                          title="Asignar selección nacional">
-                          <option value="">🏳️</option>
-                          {allSels.sort((a,b)=>(a.country||"").localeCompare(b.country||"")).map(s=><option key={s.id} value={s.id}>{s.country}</option>)}
-                        </select>
+                        <NationalTeamPicker
+                          teamId={t.uid||t.id}
+                          current={t.nationalTeam||""}
+                          allSels={allSels}
+                        />
                         {!isMe?(
                           <>
                             <button onClick={()=>setViewingTeam(isSelected?null:t)}
