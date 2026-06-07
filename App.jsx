@@ -1564,13 +1564,52 @@ function SeleccionesModal({onClose,lockedCountry,isAdmin,allSels:allSelsProp}){
           <div style={{overflowY:"auto",flex:1,padding:"6px 10px 12px",display:"flex",flexDirection:"column",gap:4}}>
             <div onClick={()=>{if(selPickModal.type==="starter"){const s={...selStarters};delete s[selPickModal.posId];setSelStarters(s);save({starters:s});}else{const sb=[...selSubs];sb[selPickModal.subIdx]=null;setSelSubs(sb);save({subs:sb});}setSelPickModal(null);}}
               style={{padding:"6px 10px",borderRadius:7,background:"#fff5f5",border:"1px solid #ffcccc",cursor:"pointer",fontSize:11,color:"#c0392b",fontFamily:"'DM Sans',sans-serif",fontWeight:700}}>× Quitar</div>
-            {avail.map(p=>(<div key={p.id} onClick={()=>{const pl={...p};if(selPickModal.type==="starter"){const s={...selStarters,[selPickModal.posId]:pl};setSelStarters(s);save({starters:s});}else{const sb=[...selSubs];sb[selPickModal.subIdx]=pl;setSelSubs(sb);save({subs:sb});}setSelPickModal(null);}}
-              style={{display:"flex",alignItems:"center",gap:10,padding:"7px 10px",borderRadius:8,background:C.inputBg,border:`1px solid ${C.border}`,cursor:"pointer"}} onMouseEnter={e=>e.currentTarget.style.borderColor="#2980b9"} onMouseLeave={e=>e.currentTarget.style.borderColor=C.border}>
-              <span style={{fontSize:9,fontWeight:700,color:"#2980b9",background:"#ebf5fb",padding:"2px 5px",borderRadius:4,fontFamily:"monospace",flexShrink:0,minWidth:24,textAlign:"center"}}>{p.pos||"?"}</span>
-              <span style={{flex:1,fontSize:12,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{p.name}</span>
-              {p.overall&&<span style={{fontSize:12,fontWeight:800,color:"#2980b9",fontFamily:"monospace"}}>{p.overall}</span>}
-            </div>))}
-            {avail.length===0&&<div style={{color:C.textFaint,fontSize:11,textAlign:"center",padding:"12px",fontFamily:"'DM Sans',sans-serif"}}>Agrega jugadores primero</div>}
+            {filteredList.map(p=>{
+              // detect where this player is already placed
+              const inStarterPos=Object.entries(selStarters).find(([k,v])=>v&&v.name===p.name)?.[0];
+              const inSubIdx=selSubs.findIndex(s=>s&&s.name===p.name);
+              const inUse=inStarterPos!==undefined||inSubIdx!==-1;
+              return(<div key={p.id} onClick={()=>{
+                const pl={...p};
+                if(selPickModal.type==="starter"){
+                  const s={...selStarters};
+                  // if player already in another starter spot → swap
+                  if(inStarterPos&&inStarterPos!==selPickModal.posId){
+                    const displaced=s[selPickModal.posId]||null;
+                    s[inStarterPos]=displaced; // put displaced player where picked-from was
+                  } else if(inSubIdx!==-1){
+                    // player was in bench → free that bench slot
+                    const sb=[...selSubs]; sb[inSubIdx]=null; setSelSubs(sb);
+                    const newS={...s,[selPickModal.posId]:pl};
+                    setSelStarters(newS);save({starters:newS,subs:sb});setSelPickModal(null);return;
+                  }
+                  s[selPickModal.posId]=pl;
+                  setSelStarters(s);save({starters:s});
+                } else {
+                  const sb=[...selSubs];
+                  // if player already in bench → swap slots
+                  if(inSubIdx!==-1&&inSubIdx!==selPickModal.subIdx){
+                    const displaced=sb[selPickModal.subIdx]||null;
+                    sb[inSubIdx]=displaced;
+                  } else if(inStarterPos!==undefined){
+                    // player was starter → remove from field
+                    const s={...selStarters}; delete s[inStarterPos];
+                    sb[selPickModal.subIdx]=pl;
+                    setSelStarters(s);setSelSubs(sb);save({starters:s,subs:sb});setSelPickModal(null);return;
+                  }
+                  sb[selPickModal.subIdx]=pl;
+                  setSelSubs(sb);save({subs:sb});
+                }
+                setSelPickModal(null);
+              }}
+                style={{display:"flex",alignItems:"center",gap:10,padding:"7px 10px",borderRadius:8,background:inUse?"rgba(41,128,185,0.07)":C.inputBg,border:`1px solid ${inUse?"#2980b9":C.border}`,cursor:"pointer"}} onMouseEnter={e=>e.currentTarget.style.borderColor="#2980b9"} onMouseLeave={e=>e.currentTarget.style.borderColor=inUse?"#2980b9":C.border}>
+                <span style={{fontSize:9,fontWeight:700,color:"#2980b9",background:"#ebf5fb",padding:"2px 5px",borderRadius:4,fontFamily:"monospace",flexShrink:0,minWidth:24,textAlign:"center"}}>{p.pos||"?"}</span>
+                <span style={{flex:1,fontSize:12,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{p.name}</span>
+                {inUse&&<span style={{fontSize:9,color:"#2980b9",fontFamily:"'DM Sans',sans-serif",flexShrink:0}}>{inStarterPos?"✓ campo":"✓ banca"}</span>}
+                {p.overall&&<span style={{fontSize:12,fontWeight:800,color:"#2980b9",fontFamily:"monospace"}}>{p.overall}</span>}
+              </div>);
+            })}
+            {filteredList.length===0&&<div style={{color:C.textFaint,fontSize:11,textAlign:"center",padding:"12px",fontFamily:"'DM Sans',sans-serif"}}>Agrega jugadores primero</div>}
           </div>
         </div>
       </div>}
