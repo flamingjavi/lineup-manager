@@ -1347,8 +1347,8 @@ function PublicPoolModal({pool,allTeams,onClose,setPoolPlayer}){
   );
 }
 
-function SeleccionesModal({onClose}){
-  const[selPais,setSelPais]=useState("");
+function SeleccionesModal({onClose,lockedCountry,isAdmin,allSels:allSelsProp}){
+  const[selPais,setSelPais]=useState(lockedCountry||"");
   const[selList,setSelList]=useState([]);
   const[selFormation,setSelFormation]=useState("4-3-3");
   const[selStarters,setSelStarters]=useState({});
@@ -1359,14 +1359,17 @@ function SeleccionesModal({onClose}){
   const[saving,setSaving]=useState(false);
   const[addMode,setAddMode]=useState(false);
   const[newP,setNewP]=useState({name:"",pos:"",overall:""});
-  const[allSels,setAllSels]=useState([]);
+  const[allSelsFb,setAllSelsFb]=useState([]);
+  const allSels=allSelsProp||allSelsFb;
   const[selSearch,setSelSearch]=useState("");
+  const[playerSearch,setPlayerSearch]=useState("");
 
   useEffect(()=>{
+    if(allSelsProp) return; // already provided
     getDocs(collection(db,"selecciones")).then(snap=>{
-      setAllSels(snap.docs.map(d=>({id:d.id,...d.data()})));
+      setAllSelsFb(snap.docs.map(d=>({id:d.id,...d.data()})));
     }).catch(()=>{});
-  },[]);
+  },[allSelsProp]);
 
   useEffect(()=>{
     if(!selPais) return;
@@ -1392,35 +1395,52 @@ function SeleccionesModal({onClose}){
     if(!selSearch.trim()) return;
     const id=selSearch.trim().toUpperCase().replace(/\s+/g,"_");
     try{await setDoc(doc(db,"selecciones",id),{country:selSearch.trim().toUpperCase(),formation:"4-3-3",starters:{},subs:Array(7).fill(null),image:"",squad:[]});}catch(e){}
-    setAllSels(prev=>[...prev,{id,country:selSearch.trim().toUpperCase(),squad:[]}]);setSelPais(id);setSelSearch("");
+    setAllSelsFb(prev=>[...prev,{id,country:selSearch.trim().toUpperCase(),squad:[]}]);setSelPais(id);setSelSearch("");
   };
   const selPos=FORMATIONS[selFormation]||[];
   const usedN=[...Object.values(selStarters).filter(Boolean).map(p=>p.name),...selSubs.filter(Boolean).map(p=>p.name)];
   const avail=selList.filter(p=>!usedN.includes(p.name));
+  const filteredList=playerSearch.trim()?selList.filter(p=>(p.name||"").toLowerCase().includes(playerSearch.toLowerCase())||(p.pos||"").toLowerCase().includes(playerSearch.toLowerCase())):selList;
 
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:2000,display:"flex",alignItems:"stretch",justifyContent:"center",backdropFilter:"blur(8px)"}} onClick={onClose}>
       <div style={{background:C.card,width:"100%",maxWidth:520,display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 0 60px rgba(0,0,0,0.3)"}} onClick={e=>e.stopPropagation()}>
         <div style={{padding:"12px 16px",background:"#1a3a5c",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
-          <span style={{fontSize:14,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>🏳️ SELECCIONES NACIONALES</span>
+          <span style={{fontSize:14,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>{lockedCountry?"🏳️ MI SELECCIÓN":"🏳️ SELECCIONES NACIONALES"}</span>
           {saving&&<span style={{fontSize:10,color:"#f39c12",fontFamily:"'DM Sans',sans-serif"}}>Guardando…</span>}
           <button onClick={onClose} style={{marginLeft:"auto",background:"rgba(255,255,255,0.15)",border:"none",borderRadius:"50%",width:28,height:28,color:"#fff",cursor:"pointer",fontSize:15,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
         </div>
-        <div style={{padding:"10px 14px",borderBottom:`1px solid ${C.border}`,flexShrink:0,display:"flex",gap:6,alignItems:"center"}}>
-          <select value={selPais} onChange={e=>setSelPais(e.target.value)} style={{flex:1,padding:"7px 10px",borderRadius:9,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:12,fontFamily:"'DM Sans',sans-serif",outline:"none"}}>
-            <option value="">— Selecciona una selección —</option>
-            {[...allSels].sort((a,b)=>(a.country||"").localeCompare(b.country||"")).map(s=><option key={s.id} value={s.id}>{s.country} ({(s.squad||[]).length})</option>)}
-          </select>
-          {selPais&&<select value={selFormation} onChange={e=>{setSelFormation(e.target.value);save({formation:e.target.value});}} style={{width:90,padding:"7px 6px",borderRadius:9,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"monospace",outline:"none"}}>
-            {Object.keys(FORMATIONS).map(f=><option key={f} value={f}>{f}</option>)}
-          </select>}
-        </div>
-        <div style={{padding:"8px 14px",borderBottom:`1px solid ${C.border}`,flexShrink:0,display:"flex",gap:6}}>
-          <input value={selSearch} onChange={e=>setSelSearch(e.target.value)} placeholder="Nueva selección (ej: ESPAÑA)…" onKeyDown={e=>e.key==="Enter"&&createSel()}
-            style={{flex:1,padding:"6px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif",outline:"none"}}/>
-          <button onClick={createSel} style={{padding:"6px 12px",borderRadius:8,background:"#1a3a5c",color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>+ Crear</button>
-        </div>
-        {!selPais?<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:8,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",fontSize:13}}><span style={{fontSize:32}}>🏳️</span><span>Selecciona o crea una selección</span></div>:(
+        {/* Selector de selección — solo admin sin lockedCountry */}
+        {!lockedCountry&&(
+          <div style={{padding:"10px 14px",borderBottom:`1px solid ${C.border}`,flexShrink:0,display:"flex",gap:6,alignItems:"center"}}>
+            <select value={selPais} onChange={e=>setSelPais(e.target.value)} style={{flex:1,padding:"7px 10px",borderRadius:9,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:12,fontFamily:"'DM Sans',sans-serif",outline:"none"}}>
+              <option value="">— Selecciona una selección —</option>
+              {[...allSels].sort((a,b)=>(a.country||"").localeCompare(b.country||"")).map(s=><option key={s.id} value={s.id}>{s.country} ({(s.squad||[]).length})</option>)}
+            </select>
+            {selPais&&<select value={selFormation} onChange={e=>{setSelFormation(e.target.value);save({formation:e.target.value});}} style={{width:90,padding:"7px 6px",borderRadius:9,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"monospace",outline:"none"}}>
+              {Object.keys(FORMATIONS).map(f=><option key={f} value={f}>{f}</option>)}
+            </select>}
+          </div>
+        )}
+        {/* Formación inline cuando el país está fijado */}
+        {lockedCountry&&selPais&&(
+          <div style={{padding:"8px 14px",borderBottom:`1px solid ${C.border}`,flexShrink:0,display:"flex",gap:6,alignItems:"center"}}>
+            <span style={{fontSize:11,color:C.textLight,fontFamily:"'DM Sans',sans-serif",flex:1}}>Formación</span>
+            <select value={selFormation} onChange={e=>{setSelFormation(e.target.value);save({formation:e.target.value});}} style={{width:110,padding:"6px 8px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"monospace",outline:"none"}}>
+              {Object.keys(FORMATIONS).map(f=><option key={f} value={f}>{f}</option>)}
+            </select>
+          </div>
+        )}
+        {/* Crear selección — solo admin */}
+        {!lockedCountry&&(
+          <div style={{padding:"8px 14px",borderBottom:`1px solid ${C.border}`,flexShrink:0,display:"flex",gap:6}}>
+            <input value={selSearch} onChange={e=>setSelSearch(e.target.value)} placeholder="Nueva selección (ej: ESPAÑA)…" onKeyDown={e=>e.key==="Enter"&&createSel()}
+              style={{flex:1,padding:"6px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif",outline:"none"}}/>
+            <button onClick={createSel} style={{padding:"6px 12px",borderRadius:8,background:"#1a3a5c",color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>+ Crear</button>
+          </div>
+        )}
+        {!selPais&&!lockedCountry?<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:8,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",fontSize:13}}><span style={{fontSize:32}}>🏳️</span><span>Selecciona o crea una selección</span></div>:
+        !selPais&&lockedCountry?<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:8,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",fontSize:13}}><span style={{fontSize:32}}>⏳</span><span>El admin aún no asignó tu selección.</span></div>:(
           <div style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column"}}>
             <div style={{padding:"8px 14px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
               {selImg&&<img src={selImg} alt="" style={{width:36,height:36,objectFit:"contain",borderRadius:6,border:`1px solid ${C.border}`}} onError={e=>e.target.style.display="none"}/>}
@@ -1456,14 +1476,16 @@ function SeleccionesModal({onClose}){
                 <button onClick={addPlayer} style={{padding:"6px 12px",borderRadius:7,background:"#1a3a5c",color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Añadir</button>
               </div>}
               <div style={{display:"flex",flexDirection:"column",gap:3}}>
-                {selList.map(p=>{const inU=usedN.includes(p.name);return(<div key={p.id} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 8px",borderRadius:8,background:inU?"rgba(41,128,185,0.08)":C.inputBg,border:`1px solid ${inU?"#aed6f1":C.border}`}}>
+                {selList.length>5&&<input value={playerSearch} onChange={e=>setPlayerSearch(e.target.value)} placeholder="🔍 Buscar…" style={{marginBottom:5,width:"100%",padding:"5px 9px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif",outline:"none",boxSizing:"border-box"}}/>}
+                {filteredList.map(p=>{const inU=usedN.includes(p.name);return(<div key={p.id} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 8px",borderRadius:8,background:inU?"rgba(41,128,185,0.08)":C.inputBg,border:`1px solid ${inU?"#aed6f1":C.border}`}}>
                   <span style={{fontSize:9,fontWeight:700,color:"#2980b9",background:"#ebf5fb",padding:"2px 5px",borderRadius:4,fontFamily:"monospace",minWidth:24,textAlign:"center"}}>{p.pos||"?"}</span>
                   <span style={{flex:1,fontSize:11,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{p.name}</span>
                   {p.overall&&<span style={{fontSize:11,fontWeight:800,color:"#2980b9",fontFamily:"monospace"}}>{p.overall}</span>}
                   {inU&&<span style={{fontSize:8,color:"#2980b9"}}>✓</span>}
                   <button onClick={()=>removePlayer(p.id)} style={{background:"none",border:"none",color:C.textFaint,cursor:"pointer",fontSize:13,padding:"0 2px"}}>×</button>
                 </div>);})}
-                {selList.length===0&&<div style={{textAlign:"center",color:C.textFaint,fontSize:11,fontFamily:"'DM Sans',sans-serif",padding:"12px 0"}}>Agrega jugadores arriba</div>}
+                {filteredList.length===0&&selList.length===0&&<div style={{textAlign:"center",color:C.textFaint,fontSize:11,fontFamily:"'DM Sans',sans-serif",padding:"12px 0"}}>Agrega jugadores arriba</div>}
+                {filteredList.length===0&&selList.length>0&&<div style={{textAlign:"center",color:C.textFaint,fontSize:11,fontFamily:"'DM Sans',sans-serif",padding:"12px 0"}}>Sin coincidencias</div>}
               </div>
             </div>
           </div>
@@ -1508,6 +1530,8 @@ function MainApp({user,isAdmin,onLogout}){
   const[showPresidents,setShowPresidents]=useState(false);
   const[showImport,setShowImport]=useState(false);
   const[showSelecciones,setShowSelecciones]=useState(false);
+  const[showMiSeleccion,setShowMiSeleccion]=useState(false);
+  const[allSels,setAllSels]=useState([]);
   const[activeLineupId,setActiveLineupId]=useState("a");
   const[showLineupPanel,setShowLineupPanel]=useState(false);
   const[showFormations,setShowFormations]=useState(false);
@@ -1591,6 +1615,12 @@ function MainApp({user,isAdmin,onLogout}){
       else setPool({});
     });
     return unsub;
+  },[]);
+
+  useEffect(()=>{
+    getDocs(collection(db,"selecciones")).then(snap=>{
+      setAllSels(snap.docs.map(d=>({id:d.id,...d.data()})));
+    }).catch(()=>{});
   },[]);
 
   const saveTeam=async patch=>{setSaving(true);await updateDoc(doc(db,"teams",user.uid),patch);setSaving(false);setSaved(true);setTimeout(()=>setSaved(false),2000);};
@@ -1766,6 +1796,10 @@ function MainApp({user,isAdmin,onLogout}){
             style={{padding:"5px 9px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
             🌍
           </button>
+          {teamData?.nationalTeam&&<button onClick={()=>setShowMiSeleccion(true)}
+            style={{padding:"5px 9px",borderRadius:8,border:"1px solid #2980b9",background:"#ebf5fb",color:"#2980b9",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+            🏳️
+          </button>}
           <button onClick={onLogout} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${C.border}`,background:C.inputBg,color:C.textMid,fontSize:10,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Salir</button>
         </div>
       </div>
@@ -1854,6 +1888,16 @@ function MainApp({user,isAdmin,onLogout}){
                         <span style={{fontSize:12,fontWeight:700,color:C.text,flex:1,fontFamily:"'DM Sans',sans-serif",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.teamName}</span>
                         <span style={{fontSize:9,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>{(t.squad||[]).length}j</span>
                         {isTeamAdmin&&<span style={{fontSize:8,fontWeight:800,color:C.accent,background:C.goldLight,padding:"1px 5px",borderRadius:8,fontFamily:"'DM Sans',sans-serif",border:`1px solid ${C.accent}`,flexShrink:0}}>ADMIN</span>}
+                        {/* Selección nacional asignada */}
+                        <select
+                          value={t.nationalTeam||""}
+                          onChange={async e=>{const val=e.target.value;await updateDoc(doc(db,"teams",t.uid||t.id),{nationalTeam:val});}}
+                          onClick={ev=>ev.stopPropagation()}
+                          style={{padding:"2px 4px",borderRadius:5,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:9,fontFamily:"monospace",outline:"none",maxWidth:72,flexShrink:0}}
+                          title="Asignar selección nacional">
+                          <option value="">🏳️</option>
+                          {allSels.sort((a,b)=>(a.country||"").localeCompare(b.country||"")).map(s=><option key={s.id} value={s.id}>{s.country}</option>)}
+                        </select>
                         {!isMe?(
                           <>
                             <button onClick={()=>setViewingTeam(isSelected?null:t)}
@@ -2675,7 +2719,8 @@ function MainApp({user,isAdmin,onLogout}){
       )}
 
       {/* SELECCIONES NACIONALES MODAL */}
-      {showSelecciones&&<SeleccionesModal onClose={()=>setShowSelecciones(false)}/>}
+      {showSelecciones&&<SeleccionesModal isAdmin={true} allSels={allSels} onClose={()=>setShowSelecciones(false)}/>}
+      {showMiSeleccion&&<SeleccionesModal lockedCountry={teamData?.nationalTeam} allSels={allSels} onClose={()=>setShowMiSeleccion(false)}/>}
 
       {/* SUB MENU MODAL */}
       {pickModal?.type==="subMenu"&&(
