@@ -1596,6 +1596,7 @@ function MainApp({user,isAdmin,onLogout}){
   const[showSelecciones,setShowSelecciones]=useState(false);
   const[showMiSeleccion,setShowMiSeleccion]=useState(false);
   const[allSels,setAllSels]=useState([]);
+  const[selNacional,setSelNacional]=useState(null); // {formation, starters, subs, country}
   const[activeLineupId,setActiveLineupId]=useState("a");
   const[showLineupPanel,setShowLineupPanel]=useState(false);
   const[showFormations,setShowFormations]=useState(false);
@@ -1688,6 +1689,17 @@ function MainApp({user,isAdmin,onLogout}){
     return unsub;
   },[]);
 
+  // Cargar alineación de la selección nacional en tiempo real
+  useEffect(()=>{
+    const nat=teamData?.nationalTeam;
+    if(!nat){setSelNacional(null);return;}
+    const unsub=onSnapshot(doc(db,"selecciones",nat),snap=>{
+      if(snap.exists()) setSelNacional({id:snap.id,...snap.data()});
+      else setSelNacional({id:nat,country:nat,formation:"4-3-3",starters:{},subs:Array(7).fill(null),squad:[]});
+    });
+    return unsub;
+  },[teamData?.nationalTeam]);
+
   const saveTeam=async patch=>{setSaving(true);await updateDoc(doc(db,"teams",user.uid),patch);setSaving(false);setSaved(true);setTimeout(()=>setSaved(false),2000);};
 
   const addToPool=async(player,tName)=>{
@@ -1721,7 +1733,10 @@ function MainApp({user,isAdmin,onLogout}){
 
   const lineups=teamData.lineups||[];
   const squad=teamData.squad||[];
-  const activeLineup=lineups.find(l=>l.id===activeLineupId)||lineups[0]||{formation:"4-3-3",starters:{},subs:Array(7).fill(null)};
+  const isSel=activeLineupId==="sel_nacional";
+  const activeLineup=isSel
+    ? (selNacional?{id:"sel_nacional",name:selNacional.country||"Selección",formation:selNacional.formation||"4-3-3",starters:selNacional.starters||{},subs:selNacional.subs||Array(7).fill(null),locked:true}:{formation:"4-3-3",starters:{},subs:Array(7).fill(null),locked:true})
+    : lineups.find(l=>l.id===activeLineupId)||lineups[0]||{formation:"4-3-3",starters:{},subs:Array(7).fill(null)};
   const positions=FORMATIONS[activeLineup?.formation]||FORMATIONS["4-3-3"];
   const filled=Object.values(activeLineup?.starters||{}).filter(Boolean).length;
 
@@ -1847,8 +1862,8 @@ function MainApp({user,isAdmin,onLogout}){
           {teamData.presupuesto&&<span style={{fontSize:11,fontWeight:800,color:C.accent,background:C.goldLight,padding:"3px 8px",borderRadius:8,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:0.5,border:`1px solid ${TA.accent}44`}}>💰 {teamData.presupuesto}</span>}
           <span style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{filled}/11</span>
           {btn(showLineupPanel,()=>{setShowLineupPanel(v=>!v);setShowFormations(false);setShowSettings(false);},`${activeLineup?.name} ▾`)}
-          <button onClick={()=>{setShowFormations(v=>!v);setShowLineupPanel(false);setShowSettings(false);}}
-            style={{padding:"5px 10px",borderRadius:8,border:`1.5px solid ${showFormations?TA.accent:C.borderDark}`,background:showFormations?TA.accent:C.inputBg,color:showFormations?"#fff":C.textMid,fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:0.5}}>
+          <button onClick={()=>{if(!isSel){setShowFormations(v=>!v);setShowLineupPanel(false);setShowSettings(false);}}}
+            style={{padding:"5px 10px",borderRadius:8,border:`1.5px solid ${showFormations?TA.accent:C.borderDark}`,background:showFormations?TA.accent:isSel?"#f5f5f5":C.inputBg,color:showFormations?"#fff":isSel?C.textFaint:C.textMid,fontSize:12,fontWeight:800,cursor:isSel?"default":"pointer",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:0.5}}>
             {activeLineup?.formation}
           </button>
           <button onClick={()=>{setShowSettings(v=>!v);setShowLineupPanel(false);setShowFormations(false);}}
@@ -2008,6 +2023,15 @@ function MainApp({user,isAdmin,onLogout}){
                 </div>
               ))}
             </div>
+            {/* Tab selección nacional */}
+            {teamData?.nationalTeam&&(
+              <div style={{marginBottom:6}}>
+                <button onClick={()=>{setActiveLineupId("sel_nacional");setShowLineupPanel(false);}}
+                  style={{width:"100%",padding:"8px 13px",borderRadius:9,border:`1.5px solid ${activeLineupId==="sel_nacional"?"#1a3a5c":C.borderDark}`,background:activeLineupId==="sel_nacional"?"#1a3a5c":C.inputBg,color:activeLineupId==="sel_nacional"?"#fff":C.textMid,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textAlign:"left",display:"flex",alignItems:"center",gap:6}}>
+                  🏳️ {selNacional?.country||teamData.nationalTeam} <span style={{fontSize:10,fontWeight:400,marginLeft:4,opacity:0.7}}>Solo lectura</span>
+                </button>
+              </div>
+            )}
             <div style={{fontSize:10,color:C.textLight,marginBottom:9,fontFamily:"'DM Sans',sans-serif"}}>Todas usan los mismos {squad.length} jugadores de la plantilla.</div>
             <div style={{display:"flex",gap:8}}>
               <input value={newLineupName} onChange={e=>setNewLineupName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addLineup()} placeholder="Nueva alineación…"
