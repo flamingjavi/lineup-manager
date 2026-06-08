@@ -1526,7 +1526,12 @@ function SeleccionesModal({onClose,lockedCountry,isAdmin,allSels:allSelsProp}){
             </div>
             <div style={{padding:"8px 10px",borderBottom:`1px solid ${C.border}`,background:"rgba(26,58,92,0.04)",flexShrink:0}}>
               <div style={{fontSize:9,color:C.textLight,fontWeight:700,marginBottom:5,fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.5}}>Banca</div>
-              <div style={{display:"flex",gap:5}}>{Array(7).fill(0).map((_,i)=>{const sub=selSubs[i]||null;return(<div key={i} onClick={()=>setSelPickModal({type:"sub",subIdx:i})} style={{width:34,height:34,borderRadius:"50%",background:sub?"linear-gradient(135deg,#1a3a5c,#2980b9)":"rgba(26,58,92,0.08)",border:`2px solid ${sub?"#2980b9":C.border}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}><span style={{fontSize:sub?.overall?10:12,fontWeight:800,color:sub?"#fff":C.textFaint,fontFamily:"'Bebas Neue',sans-serif"}}>{sub?.overall||"+"}</span></div>);})}</div>
+              <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>{Array(7).fill(0).map((_,i)=>{const sub=selSubs[i]||null;return(<div key={i} onClick={()=>setSelPickModal({type:"sub",subIdx:i})} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2,cursor:"pointer",width:38}}>
+                <div style={{width:34,height:34,borderRadius:"50%",background:sub?"linear-gradient(135deg,#1a3a5c,#2980b9)":"rgba(26,58,92,0.08)",border:`2px solid ${sub?"#2980b9":C.border}`,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  <span style={{fontSize:sub?.overall?10:12,fontWeight:800,color:sub?"#fff":C.textFaint,fontFamily:"'Bebas Neue',sans-serif"}}>{sub?.overall||"+"}</span>
+                </div>
+                {sub&&<span style={{fontSize:8,fontWeight:700,color:C.textMid,fontFamily:"'DM Sans',sans-serif",textAlign:"center",lineHeight:1.1,maxWidth:38,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{sub.name?.split(" ").slice(-1)[0]}</span>}
+              </div>);})}</div>
             </div>
             <div style={{padding:"10px 14px",flex:1}}>
               <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
