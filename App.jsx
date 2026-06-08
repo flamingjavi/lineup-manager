@@ -708,7 +708,25 @@ function AdminTeamEditor({teamData,pool,allTeamsRef}){
     return unsub;
   },[teamDocId]);
 
-  const save=async patch=>{setSaving(true);await updateDoc(doc(db,"teams",teamDocId),patch);setSaving(false);};
+  const save=async patch=>{
+    setSaving(true);
+    await updateDoc(doc(db,"teams",teamDocId),patch);
+    // Si cambió el teamName → actualizar todos los jugadores del pool de este equipo
+    if(patch.teamName){
+      try{
+        const pSnap=await getDoc(doc(db,"pool","players"));
+        if(pSnap.exists()){
+          const pd={...pSnap.data()};
+          let changed=false;
+          Object.keys(pd).forEach(k=>{
+            if(pd[k].teamUid===teamDocId){pd[k]={...pd[k],teamName:patch.teamName};changed=true;}
+          });
+          if(changed) await setDoc(doc(db,"pool","players"),pd);
+        }
+      }catch(e){}
+    }
+    setSaving(false);
+  };
   const allLineups=localData.lineups||[{id:"a",name:"Alineación A",formation:"4-3-3",starters:{},subs:Array(7).fill(null)}];
   const lineup=allLineups.find(l=>l.id===activeAdminLineupId)||allLineups[0]||{formation:"4-3-3",starters:{},subs:Array(7).fill(null)};
   const squad=localData.squad||[];
@@ -1756,7 +1774,24 @@ function MainApp({user,isAdmin,onLogout}){
     return unsub;
   },[teamData?.nationalTeam]);
 
-  const saveTeam=async patch=>{setSaving(true);await updateDoc(doc(db,"teams",user.uid),patch);setSaving(false);setSaved(true);setTimeout(()=>setSaved(false),2000);};
+  const saveTeam=async patch=>{
+    setSaving(true);
+    await updateDoc(doc(db,"teams",user.uid),patch);
+    if(patch.teamName){
+      try{
+        const pSnap=await getDoc(doc(db,"pool","players"));
+        if(pSnap.exists()){
+          const pd={...pSnap.data()};
+          let changed=false;
+          Object.keys(pd).forEach(k=>{
+            if(pd[k].teamUid===user.uid){pd[k]={...pd[k],teamName:patch.teamName};changed=true;}
+          });
+          if(changed) await setDoc(doc(db,"pool","players"),pd);
+        }
+      }catch(e){}
+    }
+    setSaving(false);setSaved(true);setTimeout(()=>setSaved(false),2000);
+  };
 
   const addToPool=async(player,tName)=>{
     if(!player.poolKey) return;
