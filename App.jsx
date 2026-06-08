@@ -1419,6 +1419,7 @@ function SeleccionesModal({onClose,lockedCountry,isAdmin,allSels:allSelsProp}){
   const[selSubs,setSelSubs]=useState(Array(7).fill(null));
   const[selImg,setSelImg]=useState("");
   const[selImgEdit,setSelImgEdit]=useState(false);
+  const[selCode,setSelCode]=useState("");
   const[selPickModal,setSelPickModal]=useState(null);
   const[saving,setSaving]=useState(false);
   const[addMode,setAddMode]=useState(false);
@@ -1438,7 +1439,7 @@ function SeleccionesModal({onClose,lockedCountry,isAdmin,allSels:allSelsProp}){
   useEffect(()=>{
     if(!selPais) return;
     getDoc(doc(db,"selecciones",selPais)).then(snap=>{
-      if(snap.exists()){const d=snap.data();setSelFormation(d.formation||"4-3-3");setSelStarters(d.starters||{});setSelSubs(d.subs||Array(7).fill(null));setSelImg(d.image||"");setSelList(d.squad||[]);}
+      if(snap.exists()){const d=snap.data();setSelFormation(d.formation||"4-3-3");setSelStarters(d.starters||{});setSelSubs(d.subs||Array(7).fill(null));setSelImg(d.image||"");setSelCode(d.code||"");setSelList(d.squad||[]);}
       else{setSelFormation("4-3-3");setSelStarters({});setSelSubs(Array(7).fill(null));setSelImg("");setSelList([]);}
     }).catch(()=>{});
   },[selPais]);
@@ -1446,7 +1447,7 @@ function SeleccionesModal({onClose,lockedCountry,isAdmin,allSels:allSelsProp}){
   const save=async(patch={})=>{
     if(!selPais) return;
     setSaving(true);
-    try{await setDoc(doc(db,"selecciones",selPais),{country:selPais,formation:selFormation,starters:selStarters,subs:selSubs,image:selImg,squad:selList,...patch},{merge:true});}catch(e){}
+    try{await setDoc(doc(db,"selecciones",selPais),{country:selPais,formation:selFormation,starters:selStarters,subs:selSubs,image:selImg,code:selCode,squad:selList,...patch},{merge:true});}catch(e){}
     setSaving(false);
   };
   const addPlayer=async()=>{
@@ -1511,6 +1512,17 @@ function SeleccionesModal({onClose,lockedCountry,isAdmin,allSels:allSelsProp}){
               {selImgEdit?<input autoFocus value={selImg} onChange={e=>setSelImg(e.target.value)} placeholder="URL imagen…" style={{flex:1,padding:"6px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif",outline:"none"}} onBlur={()=>{setSelImgEdit(false);save({image:selImg});}} onKeyDown={e=>e.key==="Enter"&&(setSelImgEdit(false),save({image:selImg}))}/>:
               <div style={{flex:1}}><div style={{fontSize:12,fontWeight:700,color:C.text,fontFamily:"'Bebas Neue',sans-serif"}}>{allSels.find(s=>s.id===selPais)?.country||selPais}</div><div style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{selList.length} convocados · {Object.values(selStarters).filter(Boolean).length}/11</div></div>}
               <button onClick={()=>setSelImgEdit(v=>!v)} style={{padding:"5px 9px",borderRadius:7,border:`1px solid ${C.border}`,background:C.inputBg,color:C.textMid,fontSize:10,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>{selImgEdit?"✓":"🖼"}</button>
+            </div>
+            {/* Código FC26 */}
+            <div style={{padding:"6px 14px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+              <span style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",whiteSpace:"nowrap"}}>Código FC26:</span>
+              <input value={selCode} maxLength={30} placeholder="Ej: 8A3F-9K2D"
+                onChange={e=>setSelCode(e.target.value.slice(0,30))}
+                onBlur={()=>save({code:selCode})}
+                onKeyDown={e=>e.key==="Enter"&&save({code:selCode})}
+                style={{flex:1,padding:"4px 9px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,outline:"none",fontFamily:"monospace",maxWidth:180}}
+                onFocus={e=>e.target.style.borderColor="#1a3a5c"} />
+              {selCode&&<span style={{fontSize:9,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>{selCode.length}/30</span>}
             </div>
             <div style={{background:"linear-gradient(180deg,#1a6b2a,#1e7a30,#1a6b2a)",position:"relative",height:270,flexShrink:0}}>
               <div style={{position:"absolute",inset:8,border:"1.5px solid rgba(255,255,255,0.2)",borderRadius:4,pointerEvents:"none"}}/>
