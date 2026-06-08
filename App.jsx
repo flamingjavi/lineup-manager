@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { auth, db } from "./firebase";
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile } from "firebase/auth";
-import { doc, getDoc, setDoc, updateDoc, onSnapshot, collection, getDocs, deleteDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc, onSnapshot, collection, getDocs, deleteDoc, addDoc, serverTimestamp } from "firebase/firestore";
 
 // Expose db for admin import scripts
 if (typeof window !== 'undefined') window.__app_db = db;
@@ -1652,6 +1652,330 @@ function SeleccionesModal({onClose,lockedCountry,isAdmin,allSels:allSelsProp}){
   );
 }
 
+// ─── TRANSFER CENTER ─────────────────────────────────────────────────────────
+function TransferCenter({onClose,user,isAdmin,teamData,allTeams,pool}){
+  const[tab,setTab]=useState("inbox"); // inbox | outbox | new | admin
+  const[transfers,setTransfers]=useState([]);
+  const[newT,setNewT]=useState({toUid:"",offeredPlayers:[],requestedPlayers:[],offeredMoney:0,requestedMoney:0,note:""});
+  const[step,setStep]=useState(1);
+  const[sending,setSending]=useState(false);
+  const[pickerMode,setPickerMode]=useState(null); // "offered"|"requested"
+  const[playerSearch,setPlayerSearch]=useState("");
+
+  // load transfers realtime
+  useEffect(()=>{
+    const unsub=onSnapshot(collection(db,"transfers"),snap=>{
+      setTransfers(snap.docs.map(d=>({id:d.id,...d.data()})));
+    });
+    return unsub;
+  },[]);
+
+  const mySquad=teamData?.squad||[];
+  const toTeam=allTeams.find(t=>(t.uid||t.id)===newT.toUid);
+  const toSquad=Object.values(pool).filter(p=>p.teamUid===newT.toUid);
+
+  // filtered
+  const inbox=transfers.filter(t=>t.toUid===user.uid&&t.status==="pending_acceptance");
+  const outbox=transfers.filter(t=>t.fromUid===user.uid&&["pending_acceptance","pending_admin"].includes(t.status));
+  const adminQueue=transfers.filter(t=>t.status==="pending_admin");
+  const badge=inbox.length+(isAdmin?adminQueue.length:0);
+
+  const sendTransfer=async()=>{
+    if(!newT.toUid) return;
+    setSending(true);
+    await addDoc(collection(db,"transfers"),{
+      fromUid:user.uid,
+      fromName:teamData.teamName,
+      toUid:newT.toUid,
+      toName:toTeam?.teamName||"",
+      offeredPlayers:newT.offeredPlayers,
+      requestedPlayers:newT.requestedPlayers,
+      offeredMoney:Number(newT.offeredMoney)||0,
+      requestedMoney:Number(newT.requestedMoney)||0,
+      note:newT.note,
+      status:"pending_acceptance",
+      createdAt:serverTimestamp(),
+    });
+    setSending(false);
+    setNewT({toUid:"",offeredPlayers:[],requestedPlayers:[],offeredMoney:0,requestedMoney:0,note:""});
+    setStep(1);
+    setTab("outbox");
+  };
+
+  const accept=async(tr)=>{
+    await updateDoc(doc(db,"transfers",tr.id),{status:"pending_admin",acceptedAt:serverTimestamp()});
+  };
+
+  const reject=async(tr)=>{
+    await updateDoc(doc(db,"transfers",tr.id),{status:"rejected",rejectedAt:serverTimestamp(),rejectedBy:"recipient"});
+  };
+
+  const adminApprove=async(tr)=>{
+    // execute the transfer
+    try{
+      const pSnap=await getDoc(doc(db,"pool","players"));
+      const pd=pSnap.exists()?{...pSnap.data()}:{};
+
+      // move offered players from→to
+      for(const p of tr.offeredPlayers){
+        const key=Object.keys(pd).find(k=>pd[k].teamUid===tr.fromUid&&pd[k].name===p.name);
+        if(key){pd[key]={...pd[key],teamUid:tr.toUid,teamName:tr.toName};}
+        // update squad
+        const fromSnap=await getDoc(doc(db,"teams",tr.fromUid));
+        if(fromSnap.exists()){
+          const sq=(fromSnap.data().squad||[]).filter(s=>s.name!==p.name);
+          await updateDoc(doc(db,"teams",tr.fromUid),{squad:sq});
+        }
+        const toSnap=await getDoc(doc(db,"teams",tr.toUid));
+        if(toSnap.exists()){
+          const sq=[...(toSnap.data().squad||[]),{...p,poolKey:Object.keys(pd).find(k=>pd[k].name===p.name&&pd[k].teamUid===tr.toUid)||p.poolKey}];
+          await updateDoc(doc(db,"teams",tr.toUid),{squad:sq});
+        }
+      }
+      // move requested players to→from
+      for(const p of tr.requestedPlayers){
+        const key=Object.keys(pd).find(k=>pd[k].teamUid===tr.toUid&&pd[k].name===p.name);
+        if(key){pd[key]={...pd[key],teamUid:tr.fromUid,teamName:tr.fromName};}
+        const toSnap=await getDoc(doc(db,"teams",tr.toUid));
+        if(toSnap.exists()){
+          const sq=(toSnap.data().squad||[]).filter(s=>s.name!==p.name);
+          await updateDoc(doc(db,"teams",tr.toUid),{squad:sq});
+        }
+        const fromSnap=await getDoc(doc(db,"teams",tr.fromUid));
+        if(fromSnap.exists()){
+          const sq=[...(fromSnap.data().squad||[]),p];
+          await updateDoc(doc(db,"teams",tr.fromUid),{squad:sq});
+        }
+      }
+      // handle money
+      if(tr.offeredMoney>0){
+        const fromSnap=await getDoc(doc(db,"teams",tr.fromUid));
+        const toSnap=await getDoc(doc(db,"teams",tr.toUid));
+        if(fromSnap.exists()) await updateDoc(doc(db,"teams",tr.fromUid),{presupuesto:String(Math.max(0,(Number(fromSnap.data().presupuesto)||0)-tr.offeredMoney))});
+        if(toSnap.exists()) await updateDoc(doc(db,"teams",tr.toUid),{presupuesto:String((Number(toSnap.data().presupuesto)||0)+tr.offeredMoney)});
+      }
+      if(tr.requestedMoney>0){
+        const fromSnap=await getDoc(doc(db,"teams",tr.fromUid));
+        const toSnap=await getDoc(doc(db,"teams",tr.toUid));
+        if(toSnap.exists()) await updateDoc(doc(db,"teams",tr.toUid),{presupuesto:String(Math.max(0,(Number(toSnap.data().presupuesto)||0)-tr.requestedMoney))});
+        if(fromSnap.exists()) await updateDoc(doc(db,"teams",tr.fromUid),{presupuesto:String((Number(fromSnap.data().presupuesto)||0)+tr.requestedMoney)});
+      }
+      await setDoc(doc(db,"pool","players"),pd);
+      await updateDoc(doc(db,"transfers",tr.id),{status:"completed",completedAt:serverTimestamp()});
+    }catch(e){alert("Error al aprobar: "+e.message);}
+  };
+
+  const adminReject=async(tr)=>{
+    await updateDoc(doc(db,"transfers",tr.id),{status:"rejected",rejectedAt:serverTimestamp(),rejectedBy:"admin"});
+  };
+
+  const statusLabel={pending_acceptance:"⏳ Esperando respuesta",pending_admin:"🔐 Esperando admin",completed:"✅ Completada",rejected:"❌ Rechazada"};
+  const statusColor={pending_acceptance:"#f39c12",pending_admin:"#2980b9",completed:"#27ae60",rejected:"#e74c3c"};
+
+  const TCard=({tr,mode})=>{
+    const isFrom=tr.fromUid===user.uid;
+    const other=isFrom?tr.toName:tr.fromName;
+    return(
+      <div style={{background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 13px",marginBottom:8}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+          <span style={{fontSize:11,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif",flex:1}}>{isFrom?"→":"←"} {other}</span>
+          <span style={{fontSize:9,fontWeight:700,color:statusColor[tr.status],background:statusColor[tr.status]+"22",padding:"2px 7px",borderRadius:20,fontFamily:"'DM Sans',sans-serif"}}>{statusLabel[tr.status]}</span>
+        </div>
+        <div style={{display:"flex",gap:16,marginBottom:6,flexWrap:"wrap"}}>
+          {tr.offeredPlayers?.length>0&&<div style={{fontSize:10,color:C.textMid,fontFamily:"'DM Sans',sans-serif"}}><span style={{color:C.textFaint}}>Ofrece: </span>{tr.offeredPlayers.map(p=>p.name).join(", ")}</div>}
+          {tr.offeredMoney>0&&<div style={{fontSize:10,color:"#27ae60",fontFamily:"'DM Sans',sans-serif",fontWeight:700}}>+${tr.offeredMoney.toLocaleString()}</div>}
+          {(tr.requestedPlayers?.length>0||tr.requestedMoney>0)&&<div style={{fontSize:10,color:C.textMid,fontFamily:"'DM Sans',sans-serif"}}>
+            <span style={{color:C.textFaint}}>Pide: </span>
+            {tr.requestedPlayers?.map(p=>p.name).join(", ")}
+            {tr.requestedMoney>0&&` + $${tr.requestedMoney.toLocaleString()}`}
+          </div>}
+        </div>
+        {tr.note&&<div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",fontStyle:"italic",marginBottom:6}}>"{tr.note}"</div>}
+        {mode==="inbox"&&tr.status==="pending_acceptance"&&(
+          <div style={{display:"flex",gap:6}}>
+            <button onClick={()=>accept(tr)} style={{flex:1,padding:"6px",borderRadius:7,background:"#27ae60",color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>✓ Aceptar</button>
+            <button onClick={()=>reject(tr)} style={{flex:1,padding:"6px",borderRadius:7,background:"#e74c3c",color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>✕ Rechazar</button>
+          </div>
+        )}
+        {mode==="admin"&&tr.status==="pending_admin"&&(
+          <div style={{display:"flex",gap:6}}>
+            <button onClick={()=>adminApprove(tr)} style={{flex:1,padding:"6px",borderRadius:7,background:"#1a3a5c",color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>✓ Aprobar y ejecutar</button>
+            <button onClick={()=>adminReject(tr)} style={{flex:1,padding:"6px",borderRadius:7,background:"#e74c3c",color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>✕ Rechazar</button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // picker for players
+  const PickerModal=({mode,onClose})=>{
+    const src=mode==="offered"?mySquad:toSquad;
+    const selected=mode==="offered"?newT.offeredPlayers:newT.requestedPlayers;
+    const filtered=playerSearch?src.filter(p=>(p.name||"").toLowerCase().includes(playerSearch.toLowerCase())):src;
+    const toggle=p=>{
+      const key=mode==="offered"?"offeredPlayers":"requestedPlayers";
+      const cur=newT[key];
+      if(cur.find(x=>x.name===p.name)) setNewT(n=>({...n,[key]:cur.filter(x=>x.name!==p.name)}));
+      else setNewT(n=>({...n,[key]:[...cur,p]}));
+    };
+    return(
+      <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:3100,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={onClose}>
+        <div style={{background:C.card,borderRadius:14,width:"90%",maxWidth:360,maxHeight:"70vh",display:"flex",flexDirection:"column",overflow:"hidden"}} onClick={e=>e.stopPropagation()}>
+          <div style={{padding:"10px 14px",background:"#1a3a5c",display:"flex",alignItems:"center"}}>
+            <span style={{color:"#fff",fontWeight:800,fontSize:13,fontFamily:"'DM Sans',sans-serif",flex:1}}>{mode==="offered"?"Jugadores que ofrecés":"Jugadores que pedís"}</span>
+            <button onClick={onClose} style={{background:"none",border:"none",color:"#fff",fontSize:18,cursor:"pointer"}}>×</button>
+          </div>
+          <div style={{padding:"8px 12px",borderBottom:`1px solid ${C.border}`}}>
+            <input value={playerSearch} onChange={e=>setPlayerSearch(e.target.value)} placeholder="Buscar…" style={{width:"100%",padding:"5px 9px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,outline:"none",boxSizing:"border-box",fontFamily:"'DM Sans',sans-serif"}}/>
+          </div>
+          <div style={{overflowY:"auto",padding:"8px 10px",display:"flex",flexDirection:"column",gap:4}}>
+            {filtered.map((p,i)=>{const sel=selected.find(x=>x.name===p.name);return(
+              <div key={i} onClick={()=>toggle(p)} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",borderRadius:8,background:sel?"#ebf5fb":C.inputBg,border:`1px solid ${sel?"#2980b9":C.border}`,cursor:"pointer"}}>
+                <span style={{fontSize:9,fontWeight:700,color:"#2980b9",background:"#ebf5fb",padding:"2px 5px",borderRadius:4,fontFamily:"monospace",minWidth:24,textAlign:"center"}}>{p.pos||p.primaryPos||"?"}</span>
+                <span style={{flex:1,fontSize:11,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{p.name}</span>
+                {p.overall&&<span style={{fontSize:11,fontWeight:800,color:"#2980b9",fontFamily:"monospace"}}>{p.overall}</span>}
+                {sel&&<span style={{fontSize:12,color:"#2980b9"}}>✓</span>}
+              </div>
+            );})}
+            {filtered.length===0&&<div style={{color:C.textFaint,fontSize:11,textAlign:"center",padding:12,fontFamily:"'DM Sans',sans-serif"}}>Sin jugadores</div>}
+          </div>
+          <div style={{padding:"8px 12px",borderTop:`1px solid ${C.border}`}}>
+            <button onClick={onClose} style={{width:"100%",padding:"7px",borderRadius:8,background:"#1a3a5c",color:"#fff",border:"none",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Confirmar selección</button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const tabBtn=(id,label,cnt)=>(
+    <button onClick={()=>setTab(id)} style={{padding:"6px 12px",borderRadius:8,border:`1.5px solid ${tab===id?"#1a3a5c":C.borderDark}`,background:tab===id?"#1a3a5c":C.inputBg,color:tab===id?"#fff":C.textMid,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",position:"relative"}}>
+      {label}{cnt>0&&<span style={{position:"absolute",top:-5,right:-5,background:"#e74c3c",color:"#fff",borderRadius:"50%",width:16,height:16,fontSize:9,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800}}>{cnt}</span>}
+    </button>
+  );
+
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:2000,display:"flex",alignItems:"stretch",justifyContent:"center",backdropFilter:"blur(8px)"}} onClick={onClose}>
+      <div style={{background:C.card,width:"100%",maxWidth:520,display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 0 60px rgba(0,0,0,0.3)"}} onClick={e=>e.stopPropagation()}>
+        {/* Header */}
+        <div style={{padding:"12px 16px",background:"#1a3a5c",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+          <span style={{fontSize:14,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>🔄 MERCADO DE TRANSFERENCIAS</span>
+          <button onClick={onClose} style={{marginLeft:"auto",background:"rgba(255,255,255,0.15)",border:"none",borderRadius:"50%",width:28,height:28,color:"#fff",cursor:"pointer",fontSize:15,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+        </div>
+        {/* Tabs */}
+        <div style={{padding:"10px 14px",borderBottom:`1px solid ${C.border}`,display:"flex",gap:6,flexWrap:"wrap",flexShrink:0}}>
+          {tabBtn("inbox","📥 Recibidas",inbox.length)}
+          {tabBtn("outbox","📤 Enviadas",0)}
+          {tabBtn("new","➕ Nueva",0)}
+          {isAdmin&&tabBtn("admin","🔐 Admin",adminQueue.length)}
+        </div>
+        {/* Content */}
+        <div style={{flex:1,overflowY:"auto",padding:"12px 14px"}}>
+
+          {/* INBOX */}
+          {tab==="inbox"&&(
+            inbox.length===0
+              ?<div style={{textAlign:"center",color:C.textFaint,fontSize:12,padding:"24px 0",fontFamily:"'DM Sans',sans-serif"}}>No tenés transferencias pendientes</div>
+              :inbox.map(tr=><TCard key={tr.id} tr={tr} mode="inbox"/>)
+          )}
+
+          {/* OUTBOX */}
+          {tab==="outbox"&&(
+            outbox.length===0
+              ?<div style={{textAlign:"center",color:C.textFaint,fontSize:12,padding:"24px 0",fontFamily:"'DM Sans',sans-serif"}}>No tenés propuestas enviadas</div>
+              :outbox.map(tr=><TCard key={tr.id} tr={tr} mode="outbox"/>)
+          )}
+
+          {/* ADMIN */}
+          {tab==="admin"&&isAdmin&&(
+            adminQueue.length===0
+              ?<div style={{textAlign:"center",color:C.textFaint,fontSize:12,padding:"24px 0",fontFamily:"'DM Sans',sans-serif"}}>No hay transferencias para aprobar</div>
+              :adminQueue.map(tr=><TCard key={tr.id} tr={tr} mode="admin"/>)
+          )}
+
+          {/* NEW TRANSFER */}
+          {tab==="new"&&(
+            <div style={{display:"flex",flexDirection:"column",gap:12}}>
+              {/* Step 1 — elegir equipo destino */}
+              <div>
+                <div style={{fontSize:11,fontWeight:700,color:C.textLight,fontFamily:"'DM Sans',sans-serif",marginBottom:6,textTransform:"uppercase",letterSpacing:0.5}}>1. Equipo destinatario</div>
+                <select value={newT.toUid} onChange={e=>setNewT(n=>({...n,toUid:e.target.value,requestedPlayers:[],offeredPlayers:[]}))}
+                  style={{width:"100%",padding:"8px 10px",borderRadius:9,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:12,fontFamily:"'DM Sans',sans-serif",outline:"none"}}>
+                  <option value="">— Seleccionar equipo —</option>
+                  {allTeams.filter(t=>(t.uid||t.id)!==user.uid).sort((a,b)=>(a.teamName||"").localeCompare(b.teamName||"")).map(t=>(
+                    <option key={t.uid||t.id} value={t.uid||t.id}>{t.teamName}</option>
+                  ))}
+                </select>
+              </div>
+
+              {newT.toUid&&(<>
+                {/* Step 2 — jugadores ofrecidos */}
+                <div>
+                  <div style={{fontSize:11,fontWeight:700,color:C.textLight,fontFamily:"'DM Sans',sans-serif",marginBottom:6,textTransform:"uppercase",letterSpacing:0.5}}>2. Lo que ofrecés</div>
+                  <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:6}}>
+                    {newT.offeredPlayers.map(p=>(
+                      <span key={p.name} style={{padding:"3px 8px",borderRadius:20,background:"#ebf5fb",border:"1px solid #2980b9",color:"#2980b9",fontSize:10,fontFamily:"'DM Sans',sans-serif",fontWeight:700,display:"flex",alignItems:"center",gap:4}}>
+                        {p.name}<button onClick={()=>setNewT(n=>({...n,offeredPlayers:n.offeredPlayers.filter(x=>x.name!==p.name)}))} style={{background:"none",border:"none",color:"#2980b9",cursor:"pointer",fontSize:12,padding:0}}>×</button>
+                      </span>
+                    ))}
+                    <button onClick={()=>{setPickerMode("offered");setPlayerSearch("");}} style={{padding:"3px 10px",borderRadius:20,border:"1px dashed #2980b9",background:"transparent",color:"#2980b9",fontSize:10,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>+ Jugador</button>
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{fontSize:11,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>+ Dinero:</span>
+                    <input type="number" min={0} value={newT.offeredMoney||""} onChange={e=>setNewT(n=>({...n,offeredMoney:e.target.value}))}
+                      placeholder="0" style={{width:100,padding:"5px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"monospace",outline:"none"}}/>
+                    <span style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Presupuesto: {Number(teamData?.presupuesto||0).toLocaleString()}</span>
+                  </div>
+                </div>
+
+                {/* Step 3 — lo que pedís */}
+                <div>
+                  <div style={{fontSize:11,fontWeight:700,color:C.textLight,fontFamily:"'DM Sans',sans-serif",marginBottom:6,textTransform:"uppercase",letterSpacing:0.5}}>3. Lo que pedís a cambio</div>
+                  <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:6}}>
+                    {newT.requestedPlayers.map(p=>(
+                      <span key={p.name} style={{padding:"3px 8px",borderRadius:20,background:"#fdf2e9",border:"1px solid #e67e22",color:"#e67e22",fontSize:10,fontFamily:"'DM Sans',sans-serif",fontWeight:700,display:"flex",alignItems:"center",gap:4}}>
+                        {p.name}<button onClick={()=>setNewT(n=>({...n,requestedPlayers:n.requestedPlayers.filter(x=>x.name!==p.name)}))} style={{background:"none",border:"none",color:"#e67e22",cursor:"pointer",fontSize:12,padding:0}}>×</button>
+                      </span>
+                    ))}
+                    <button onClick={()=>{setPickerMode("requested");setPlayerSearch("");}} style={{padding:"3px 10px",borderRadius:20,border:"1px dashed #e67e22",background:"transparent",color:"#e67e22",fontSize:10,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>+ Jugador</button>
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{fontSize:11,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>+ Dinero:</span>
+                    <input type="number" min={0} value={newT.requestedMoney||""} onChange={e=>setNewT(n=>({...n,requestedMoney:e.target.value}))}
+                      placeholder="0" style={{width:100,padding:"5px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"monospace",outline:"none"}}/>
+                  </div>
+                </div>
+
+                {/* Nota */}
+                <div>
+                  <div style={{fontSize:11,fontWeight:700,color:C.textLight,fontFamily:"'DM Sans',sans-serif",marginBottom:6,textTransform:"uppercase",letterSpacing:0.5}}>4. Nota (opcional)</div>
+                  <input value={newT.note} onChange={e=>setNewT(n=>({...n,note:e.target.value}))} placeholder="Ej: Oferta válida hasta el viernes…"
+                    style={{width:"100%",padding:"7px 10px",borderRadius:9,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif",outline:"none",boxSizing:"border-box"}}/>
+                </div>
+
+                {/* Resumen */}
+                <div style={{background:"#f8f9fa",border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 13px"}}>
+                  <div style={{fontSize:10,fontWeight:700,color:C.textLight,fontFamily:"'DM Sans',sans-serif",marginBottom:6,textTransform:"uppercase",letterSpacing:0.5}}>Resumen de la propuesta</div>
+                  <div style={{fontSize:11,color:C.text,fontFamily:"'DM Sans',sans-serif",lineHeight:1.6}}>
+                    <strong>{teamData?.teamName}</strong> ofrece{newT.offeredPlayers.length>0?` a ${newT.offeredPlayers.map(p=>p.name).join(", ")}`:""}
+                    {newT.offeredMoney>0?` + $${Number(newT.offeredMoney).toLocaleString()}`:" (solo dinero o sin oferta)"} a cambio de{newT.requestedPlayers.length>0?` ${newT.requestedPlayers.map(p=>p.name).join(", ")}`:""}
+                    {newT.requestedMoney>0?` + $${Number(newT.requestedMoney).toLocaleString()}`:""} de <strong>{toTeam?.teamName}</strong>.
+                  </div>
+                </div>
+
+                <button onClick={sendTransfer} disabled={sending||(!newT.offeredPlayers.length&&!newT.offeredMoney&&!newT.requestedPlayers.length&&!newT.requestedMoney)}
+                  style={{width:"100%",padding:"10px",borderRadius:10,background:"#1a3a5c",color:"#fff",border:"none",fontSize:13,fontWeight:800,cursor:"pointer",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1,opacity:sending?0.6:1}}>
+                  {sending?"Enviando…":"📤 Enviar propuesta"}
+                </button>
+              </>)}
+            </div>
+          )}
+        </div>
+      </div>
+      {pickerMode&&<PickerModal mode={pickerMode} onClose={()=>setPickerMode(null)}/>}
+    </div>
+  );
+}
+
 function MainApp({user,isAdmin,onLogout}){
   const[teamData,setTeamData]=useState(null);
   const[allTeams,setAllTeams]=useState([]);
@@ -1670,7 +1994,9 @@ function MainApp({user,isAdmin,onLogout}){
   const[showSelecciones,setShowSelecciones]=useState(false);
   const[showMiSeleccion,setShowMiSeleccion]=useState(false);
   const[allSels,setAllSels]=useState([]);
-  const[selNacional,setSelNacional]=useState(null); // {formation, starters, subs, country}
+  const[selNacional,setSelNacional]=useState(null);
+  const[showTransfers,setShowTransfers]=useState(false);
+  const[transferBadge,setTransferBadge]=useState(0); // {formation, starters, subs, country}
   const[activeLineupId,setActiveLineupId]=useState("a");
   const[showLineupPanel,setShowLineupPanel]=useState(false);
   const[showFormations,setShowFormations]=useState(false);
@@ -1773,6 +2099,17 @@ function MainApp({user,isAdmin,onLogout}){
     });
     return unsub;
   },[teamData?.nationalTeam]);
+
+  // Badge transferencias
+  useEffect(()=>{
+    const unsub=onSnapshot(collection(db,"transfers"),snap=>{
+      const all=snap.docs.map(d=>({id:d.id,...d.data()}));
+      const inbox=all.filter(t=>t.toUid===user.uid&&t.status==="pending_acceptance").length;
+      const adminQ=isAdmin?all.filter(t=>t.status==="pending_admin").length:0;
+      setTransferBadge(inbox+adminQ);
+    });
+    return unsub;
+  },[user.uid,isAdmin]);
 
   const saveTeam=async patch=>{
     setSaving(true);
@@ -1971,6 +2308,14 @@ function MainApp({user,isAdmin,onLogout}){
             style={{padding:"5px 9px",borderRadius:8,border:"1px solid #2980b9",background:"#ebf5fb",color:"#2980b9",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
             🏳️
           </button>}
+          {/* Transferencias */}
+          <div style={{position:"relative"}}>
+            <button onClick={()=>setShowTransfers(true)}
+              style={{padding:"5px 9px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+              🔄
+            </button>
+            {transferBadge>0&&<span style={{position:"absolute",top:-5,right:-5,background:"#e74c3c",color:"#fff",borderRadius:"50%",width:16,height:16,fontSize:9,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,pointerEvents:"none"}}>{transferBadge}</span>}
+          </div>
           <button onClick={onLogout} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${C.border}`,background:C.inputBg,color:C.textMid,fontSize:10,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Salir</button>
         </div>
       </div>
@@ -2897,6 +3242,7 @@ function MainApp({user,isAdmin,onLogout}){
       {/* SELECCIONES NACIONALES MODAL */}
       {showSelecciones&&<SeleccionesModal isAdmin={true} allSels={allSels} onClose={()=>setShowSelecciones(false)}/>}
       {showMiSeleccion&&<SeleccionesModal lockedCountry={teamData?.nationalTeam} allSels={allSels} onClose={()=>setShowMiSeleccion(false)}/>}
+      {showTransfers&&<TransferCenter onClose={()=>setShowTransfers(false)} user={user} isAdmin={isAdmin} teamData={teamData} allTeams={allTeams} pool={pool}/>}
 
       {/* SUB MENU MODAL */}
       {pickModal?.type==="subMenu"&&(
