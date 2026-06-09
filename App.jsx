@@ -1303,6 +1303,8 @@ function MaintenanceToggle(){
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 function PublicPoolModal({pool,allTeams,onClose,setPoolPlayer}){
+  const[tab,setTab]=useState("pool"); // pool | clubs
+  const[selectedClub,setSelectedClub]=useState(null);
   const[q,setQ]=useState("");
   const[posF,setPosF]=useState("");
   const[sort,setSort]=useState("equipo");
@@ -1319,10 +1321,87 @@ function PublicPoolModal({pool,allTeams,onClose,setPoolPlayer}){
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(8px)"}} onClick={onClose}>
       <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:22,width:"100%",maxWidth:480,maxHeight:"88vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 24px 60px rgba(0,0,0,0.15)"}} onClick={e=>e.stopPropagation()}>
         <div style={{padding:"14px 18px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
-          <span style={{fontSize:15,fontWeight:800,color:C.text,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>🌍 POOL GLOBAL</span>
-          <span style={{fontSize:11,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{filtered.length}/{entries.length}</span>
-          <button onClick={onClose} style={{marginLeft:"auto",background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:"50%",width:30,height:30,color:C.textMid,cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+          <span style={{fontSize:15,fontWeight:800,color:C.text,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>{tab==="pool"?"🌍 POOL GLOBAL":"🏟️ CLUBES"}</span>
+          {tab==="pool"&&<span style={{fontSize:11,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{filtered.length}/{entries.length}</span>}
+          <div style={{marginLeft:"auto",display:"flex",gap:5,alignItems:"center"}}>
+            <button onClick={()=>{setTab("pool");setSelectedClub(null);}} style={{padding:"4px 10px",borderRadius:7,border:`1.5px solid ${tab==="pool"?C.accent:C.borderDark}`,background:tab==="pool"?C.accent:C.inputBg,color:tab==="pool"?"#fff":C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>🌍 Pool</button>
+            <button onClick={()=>{setTab("clubs");setSelectedClub(null);}} style={{padding:"4px 10px",borderRadius:7,border:`1.5px solid ${tab==="clubs"?C.accent:C.borderDark}`,background:tab==="clubs"?C.accent:C.inputBg,color:tab==="clubs"?"#fff":C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>🏟️ Clubes</button>
+            <button onClick={onClose} style={{background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:"50%",width:30,height:30,color:C.textMid,cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+          </div>
         </div>
+        {/* CLUBES TAB */}
+        {tab==="clubs"&&(
+          selectedClub?(
+            // Ficha del club
+            <div style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column"}}>
+              <div style={{padding:"10px 14px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                <button onClick={()=>setSelectedClub(null)} style={{background:"none",border:"none",color:C.textMid,cursor:"pointer",fontSize:18,padding:"0 4px 0 0"}}>←</button>
+                <div style={{width:32,height:32,borderRadius:"50%",background:`linear-gradient(135deg,${getTeamColor(selectedClub.teamColor).dark},${getTeamColor(selectedClub.teamColor).bg})`,flexShrink:0}}/>
+                <div>
+                  <div style={{fontSize:14,fontWeight:800,color:C.text,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>{selectedClub.teamName}</div>
+                  <div style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{(selectedClub.squad||[]).length} jugadores</div>
+                </div>
+              </div>
+              {/* DT */}
+              {selectedClub.dt?.name&&(
+                <div style={{padding:"10px 14px",borderBottom:`1px solid ${C.border}`,background:C.goldLight+"33",display:"flex",alignItems:"center",gap:10}}>
+                  <span style={{fontSize:20}}>🧑‍💼</span>
+                  <div>
+                    <div style={{fontSize:12,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{selectedClub.dt.name}</div>
+                    <div style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif",display:"flex",gap:8}}>
+                      {selectedClub.dt.nationality&&<span>{selectedClub.dt.nationality}</span>}
+                      {selectedClub.dt.style&&<span>· {selectedClub.dt.style}</span>}
+                    </div>
+                  </div>
+                </div>
+              )}
+              {/* Plantilla */}
+              <div style={{padding:"10px 14px",flex:1}}>
+                {["GK","CB","RB","LB","CDM","CM","CAM","RM","LM","RW","LW","ST","CF"].map(pos=>{
+                  const players=(selectedClub.squad||[]).filter(p=>(p.primaryPos||p.pos?.split("/")?.[0])===pos);
+                  if(!players.length) return null;
+                  return(
+                    <div key={pos} style={{marginBottom:8}}>
+                      <div style={{fontSize:9,fontWeight:800,color:C.textFaint,fontFamily:"monospace",letterSpacing:1,marginBottom:3,textTransform:"uppercase"}}>{pos}</div>
+                      {players.sort((a,b)=>(b.overall||0)-(a.overall||0)).map((p,i)=>(
+                        <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 8px",borderRadius:8,background:C.inputBg,border:`1px solid ${C.border}`,marginBottom:3}}>
+                          <span style={{fontSize:11,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif",flex:1}}>{p.name}</span>
+                          {p.overall&&<span style={{fontSize:12,fontWeight:800,color:C.accent,fontFamily:"monospace"}}>{p.overall}</span>}
+                          {p.country&&<span style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>{p.country}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ):(
+            // Lista de clubes
+            <div style={{flex:1,overflowY:"auto",padding:"10px 14px"}}>
+              {[...allTeams].sort((a,b)=>(a.teamName||"").localeCompare(b.teamName||"")).map(t=>{
+                const tc=getTeamColor(t.teamColor);
+                return(
+                  <div key={t.uid||t.id} onClick={()=>setSelectedClub(t)}
+                    style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:10,background:C.inputBg,border:`1px solid ${C.border}`,marginBottom:6,cursor:"pointer"}}
+                    onMouseEnter={e=>e.currentTarget.style.borderColor=C.accent} onMouseLeave={e=>e.currentTarget.style.borderColor=C.border}>
+                    <div style={{width:36,height:36,borderRadius:"50%",background:`linear-gradient(135deg,${tc.dark},${tc.bg})`,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                      <span style={{fontSize:11,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif"}}>{(t.teamName||"?").slice(0,2).toUpperCase()}</span>
+                    </div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:13,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.teamName}</div>
+                      <div style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif",display:"flex",gap:8}}>
+                        <span>{(t.squad||[]).length} jugadores</span>
+                        {t.dt?.name&&<span>· DT: {t.dt.name}</span>}
+                      </div>
+                    </div>
+                    <span style={{fontSize:16,color:C.textFaint}}>›</span>
+                  </div>
+                );
+              })}
+            </div>
+          )
+        )}
+        {tab==="pool"&&<>
         <div style={{padding:"10px 14px",borderBottom:`1px solid ${C.border}`,flexShrink:0,display:"flex",flexDirection:"column",gap:6}}>
           <input autoFocus placeholder="🔍 Nombre, equipo, país…" value={q} onChange={e=>setQ(e.target.value)}
             style={{width:"100%",padding:"8px 12px",borderRadius:10,border:`1.5px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:12,outline:"none",fontFamily:"'DM Sans',sans-serif",boxSizing:"border-box"}}/>
@@ -1360,6 +1439,7 @@ function PublicPoolModal({pool,allTeams,onClose,setPoolPlayer}){
             </div>);
           })}
         </div>
+      </>}
       </div>
     </div>
   );
@@ -2566,6 +2646,33 @@ function MainApp({user,isAdmin,onLogout}){
             <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`}}>
               <div style={{fontSize:10,fontWeight:600,color:C.textLight,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8,fontFamily:"'DM Sans',sans-serif"}}>🎨 Color del equipo</div>
               <ColorPicker selected={teamData.teamColor||"blue"} onChange={color=>saveTeam({teamColor:color})}/>
+            </div>
+            {/* Director Técnico */}
+            <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`}}>
+              <div style={{fontSize:10,fontWeight:600,color:C.textLight,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8,fontFamily:"'DM Sans',sans-serif"}}>🧑‍💼 Director Técnico</div>
+              <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                <input value={teamData.dt?.name||""} onChange={e=>saveTeam({dt:{...(teamData.dt||{}),name:e.target.value}})}
+                  placeholder="Nombre del DT…"
+                  style={{width:"100%",background:C.inputBg,border:`1px solid ${C.borderDark}`,borderRadius:9,padding:"7px 12px",color:C.text,fontSize:13,fontWeight:700,outline:"none",fontFamily:"'DM Sans',sans-serif",boxSizing:"border-box"}}
+                  onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.borderDark}/>
+                <div style={{display:"flex",gap:6}}>
+                  <input value={teamData.dt?.nationality||""} onChange={e=>saveTeam({dt:{...(teamData.dt||{}),nationality:e.target.value}})}
+                    placeholder="Nacionalidad"
+                    style={{flex:1,background:C.inputBg,border:`1px solid ${C.borderDark}`,borderRadius:9,padding:"7px 10px",color:C.text,fontSize:12,outline:"none",fontFamily:"'DM Sans',sans-serif"}}
+                    onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.borderDark}/>
+                  <select value={teamData.dt?.style||""} onChange={e=>saveTeam({dt:{...(teamData.dt||{}),style:e.target.value}})}
+                    style={{flex:1,background:C.inputBg,border:`1px solid ${C.borderDark}`,borderRadius:9,padding:"7px 10px",color:teamData.dt?.style?C.text:C.textFaint,fontSize:12,outline:"none",fontFamily:"'DM Sans',sans-serif"}}>
+                    <option value="">Estilo de juego</option>
+                    <option value="Ofensivo">Ofensivo</option>
+                    <option value="Defensivo">Defensivo</option>
+                    <option value="Posesión">Posesión</option>
+                    <option value="Contraataque">Contraataque</option>
+                    <option value="Presión alta">Presión alta</option>
+                    <option value="Directo">Directo</option>
+                    <option value="Equilibrado">Equilibrado</option>
+                  </select>
+                </div>
+              </div>
             </div>
             {/* Budget display - visible to all, editable by admin */}
             <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`,background:C.goldLight+"44"}}>
