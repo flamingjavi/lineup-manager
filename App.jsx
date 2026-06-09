@@ -1996,7 +1996,8 @@ function MainApp({user,isAdmin,onLogout}){
   const[allSels,setAllSels]=useState([]);
   const[selNacional,setSelNacional]=useState(null);
   const[showTransfers,setShowTransfers]=useState(false);
-  const[transferBadge,setTransferBadge]=useState(0); // {formation, starters, subs, country}
+  const[transferBadge,setTransferBadge]=useState(0);
+  const[showHamburger,setShowHamburger]=useState(false); // {formation, starters, subs, country}
   const[activeLineupId,setActiveLineupId]=useState("a");
   const[showLineupPanel,setShowLineupPanel]=useState(false);
   const[showFormations,setShowFormations]=useState(false);
@@ -2289,34 +2290,43 @@ function MainApp({user,isAdmin,onLogout}){
           {saved&&<span style={{fontSize:10,color:"#27ae60",fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>✓</span>}
           {teamData.presupuesto&&<span style={{fontSize:11,fontWeight:800,color:C.accent,background:C.goldLight,padding:"3px 8px",borderRadius:8,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:0.5,border:`1px solid ${TA.accent}44`}}>💰 {teamData.presupuesto}</span>}
           <span style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{filled}/11</span>
-          {btn(showLineupPanel,()=>{setShowLineupPanel(v=>!v);setShowFormations(false);setShowSettings(false);},`${activeLineup?.name} ▾`)}
-          <button onClick={()=>{if(!isSel){setShowFormations(v=>!v);setShowLineupPanel(false);setShowSettings(false);}}}
+          {btn(showLineupPanel,()=>{setShowLineupPanel(v=>!v);setShowFormations(false);setShowSettings(false);setShowHamburger(false);},`${activeLineup?.name} ▾`)}
+          <button onClick={()=>{if(!isSel){setShowFormations(v=>!v);setShowLineupPanel(false);setShowSettings(false);setShowHamburger(false);}}}
             style={{padding:"5px 10px",borderRadius:8,border:`1.5px solid ${showFormations?TA.accent:C.borderDark}`,background:showFormations?TA.accent:isSel?"#f5f5f5":C.inputBg,color:showFormations?"#fff":isSel?C.textFaint:C.textMid,fontSize:12,fontWeight:800,cursor:isSel?"default":"pointer",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:0.5}}>
             {activeLineup?.formation}
           </button>
-          <button onClick={()=>{setShowSettings(v=>!v);setShowLineupPanel(false);setShowFormations(false);}}
-            style={{width:30,height:30,borderRadius:8,border:`1.5px solid ${showSettings?TA.accent:C.borderDark}`,background:showSettings?TA.accent:C.inputBg,cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center"}}>⚙️</button>
-          <button onClick={()=>setShowSquadList(v=>!v)}
-            style={{padding:"5px 9px",borderRadius:8,border:`1.5px solid ${showSquadList?TA.accent:C.borderDark}`,background:showSquadList?TA.accent:C.inputBg,color:showSquadList?"#fff":C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
-            📋
-          </button>
-          <button onClick={()=>setShowPublicPool(true)}
-            style={{padding:"5px 9px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
-            🌍
-          </button>
-          {teamData?.nationalTeam&&<button onClick={()=>setShowMiSeleccion(true)}
-            style={{padding:"5px 9px",borderRadius:8,border:"1px solid #2980b9",background:"#ebf5fb",color:"#2980b9",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
-            🏳️
-          </button>}
-          {/* Transferencias */}
+          {/* ☰ Hamburger */}
           <div style={{position:"relative"}}>
-            <button onClick={()=>setShowTransfers(true)}
-              style={{padding:"5px 9px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
-              🔄
+            <button onClick={()=>{setShowHamburger(v=>!v);setShowLineupPanel(false);setShowFormations(false);setShowSettings(false);}}
+              style={{width:32,height:32,borderRadius:8,border:`1.5px solid ${showHamburger?TA.accent:C.borderDark}`,background:showHamburger?TA.accent:C.inputBg,cursor:"pointer",fontSize:15,display:"flex",alignItems:"center",justifyContent:"center",color:showHamburger?"#fff":C.textMid,flexShrink:0}}>
+              ☰
             </button>
-            {transferBadge>0&&<span style={{position:"absolute",top:-5,right:-5,background:"#e74c3c",color:"#fff",borderRadius:"50%",width:16,height:16,fontSize:9,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,pointerEvents:"none"}}>{transferBadge}</span>}
+            {transferBadge>0&&!showHamburger&&<span style={{position:"absolute",top:-5,right:-5,background:"#e74c3c",color:"#fff",borderRadius:"50%",width:16,height:16,fontSize:9,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,pointerEvents:"none"}}>{transferBadge}</span>}
+            {showHamburger&&(
+              <div style={{position:"absolute",top:"calc(100% + 6px)",right:0,zIndex:500,background:C.card,border:`1px solid ${C.border}`,borderRadius:12,boxShadow:"0 8px 32px rgba(0,0,0,0.15)",minWidth:180,padding:"6px",display:"flex",flexDirection:"column",gap:2}}>
+                <div onClick={()=>{setShowSettings(v=>!v);setShowHamburger(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,background:showSettings?TA.accentLight:"transparent",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:C.text}}>
+                  ⚙️ <span>Ajustes</span>
+                </div>
+                <div onClick={()=>{setShowSquadList(v=>!v);setShowHamburger(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,background:showSquadList?TA.accentLight:"transparent",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:C.text}}>
+                  📋 <span>Plantilla</span>
+                </div>
+                <div onClick={()=>{setShowPublicPool(true);setShowHamburger(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:C.text}}>
+                  🌍 <span>Pool público</span>
+                </div>
+                {teamData?.nationalTeam&&<div onClick={()=>{setShowMiSeleccion(true);setShowHamburger(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:"#2980b9"}}>
+                  🏳️ <span>Mi Selección</span>
+                </div>}
+                <div onClick={()=>{setShowTransfers(true);setShowHamburger(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:C.text,position:"relative"}}>
+                  🔄 <span>Transferencias</span>
+                  {transferBadge>0&&<span style={{marginLeft:"auto",background:"#e74c3c",color:"#fff",borderRadius:20,padding:"1px 7px",fontSize:9,fontWeight:800}}>{transferBadge}</span>}
+                </div>
+                <div style={{borderTop:`1px solid ${C.border}`,margin:"4px 0"}}/>
+                <div onClick={onLogout} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:"#e74c3c"}}>
+                  🚪 <span>Salir</span>
+                </div>
+              </div>
+            )}
           </div>
-          <button onClick={onLogout} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${C.border}`,background:C.inputBg,color:C.textMid,fontSize:10,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Salir</button>
         </div>
       </div>
 
