@@ -1357,13 +1357,26 @@ function PublicPoolModal({pool,allTeams,onClose,setPoolPlayer}){
               )}
               {/* Plantilla */}
               <div style={{padding:"10px 14px",flex:1}}>
-                {["GK","CB","RB","LB","CDM","CM","CAM","RM","LM","RW","LW","ST","CF"].map(pos=>{
-                  const players=(selectedClub.squad||[]).filter(p=>(p.primaryPos||p.pos?.split("/")?.[0])===pos);
-                  if(!players.length) return null;
-                  return(
+                {(()=>{
+                  // Use pool to get full player data for this club
+                  const clubUid=selectedClub.uid||selectedClub.id;
+                  const poolPlayers=Object.values(pool||{}).filter(p=>p.teamUid===clubUid);
+                  // Merge squad + pool — prefer pool data (more complete)
+                  const squad=selectedClub.squad||[];
+                  const allPlayers=[...poolPlayers,...squad.filter(p=>!poolPlayers.some(pp=>pp.name===p.name))];
+                  if(allPlayers.length===0) return <div style={{color:C.textFaint,fontSize:12,textAlign:"center",padding:16,fontFamily:"'DM Sans',sans-serif"}}>Sin jugadores en la plantilla</div>;
+                  const POS_ORDER=["GK","CB","RB","LB","CDM","CM","CAM","RM","LM","RW","LW","ST","CF"];
+                  const byPos={};
+                  allPlayers.forEach(p=>{
+                    const pos=(p.primaryPos||p.pos?.split("/")?.[0]||"?").toUpperCase();
+                    if(!byPos[pos]) byPos[pos]=[];
+                    if(!byPos[pos].some(x=>x.name===p.name)) byPos[pos].push(p);
+                  });
+                  const sorted=[...POS_ORDER.filter(p=>byPos[p]),...Object.keys(byPos).filter(p=>!POS_ORDER.includes(p))];
+                  return sorted.map(pos=>(
                     <div key={pos} style={{marginBottom:8}}>
-                      <div style={{fontSize:9,fontWeight:800,color:C.textFaint,fontFamily:"monospace",letterSpacing:1,marginBottom:3,textTransform:"uppercase"}}>{pos}</div>
-                      {players.sort((a,b)=>(b.overall||0)-(a.overall||0)).map((p,i)=>(
+                      <div style={{fontSize:9,fontWeight:800,color:C.textFaint,fontFamily:"monospace",letterSpacing:1,marginBottom:3}}>{pos}</div>
+                      {byPos[pos].sort((a,b)=>(b.overall||0)-(a.overall||0)).map((p,i)=>(
                         <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 8px",borderRadius:8,background:C.inputBg,border:`1px solid ${C.border}`,marginBottom:3}}>
                           <span style={{fontSize:11,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif",flex:1}}>{p.name}</span>
                           {p.overall&&<span style={{fontSize:12,fontWeight:800,color:C.accent,fontFamily:"monospace"}}>{p.overall}</span>}
@@ -1371,8 +1384,8 @@ function PublicPoolModal({pool,allTeams,onClose,setPoolPlayer}){
                         </div>
                       ))}
                     </div>
-                  );
-                })}
+                  ));
+                })()}
               </div>
             </div>
           ):(
