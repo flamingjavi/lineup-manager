@@ -1997,7 +1997,8 @@ function MainApp({user,isAdmin,onLogout}){
   const[selNacional,setSelNacional]=useState(null);
   const[showTransfers,setShowTransfers]=useState(false);
   const[transferBadge,setTransferBadge]=useState(0);
-  const[showHamburger,setShowHamburger]=useState(false); // {formation, starters, subs, country}
+  const[showHamburger,setShowHamburger]=useState(false);
+  const[showAdminMenu,setShowAdminMenu]=useState(false); // {formation, starters, subs, country}
   const[activeLineupId,setActiveLineupId]=useState("a");
   const[showLineupPanel,setShowLineupPanel]=useState(false);
   const[showFormations,setShowFormations]=useState(false);
@@ -2345,60 +2346,71 @@ function MainApp({user,isAdmin,onLogout}){
             <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 14px",boxShadow:`0 2px 12px rgba(196,154,42,0.06)`}}>
               {/* Header */}
               <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                {/* Fila 1: título + botones principales */}
-                <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                {/* Fila 1: título + menú admin */}
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
                   <button onClick={()=>setShowTeamsList(v=>!v)}
                     style={{flex:1,display:"flex",alignItems:"center",gap:6,background:"none",border:"none",cursor:"pointer",padding:0}}>
                     <span style={{fontSize:10,fontWeight:700,color:C.textLight,textTransform:"uppercase",letterSpacing:0.5,fontFamily:"'DM Sans',sans-serif"}}>
                       Equipos ({allTeams.length}) {showTeamsList?"▲":"▼"}
                     </span>
                   </button>
-                  <button onClick={()=>setShowAdminManager(true)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>👑 Admins</button>
-                  <button onClick={()=>setShowPresidents(true)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>👤 Presidentes</button>
-                  <button onClick={()=>setShowPool(true)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>🌍 Pool</button>
-                  <button onClick={()=>setShowSelecciones(true)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid #2980b9`,background:"#ebf5fb",color:"#2980b9",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>🏳️ Selecciones</button>
-                  <button onClick={()=>setShowCreateTeam(true)} style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${C.accent}`,background:C.goldLight,color:C.accentDark,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>+ Equipo</button>
-                </div>
-                {/* Fila 2: acciones globales */}
-                <div style={{display:"flex",gap:6}}>
-                  <button onClick={()=>setShowImport(true)} style={{flex:1,padding:"5px 10px",borderRadius:8,border:"1px solid #27ae60",background:"#f0fff4",color:"#27ae60",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>📥 Importar Excel</button>
-                  <button onClick={async()=>{
-                    if(!window.confirm("¿Limpiar jugadores duplicados de todos los equipos?")) return;
-                    let fixed=0;
-                    for(const t of allTeams){
-                      const raw=t.squad||[];
-                      const seen=new Set();
-                      const clean=raw.filter(p=>{
-                        const name=(p.name||"").trim().toLowerCase();
-                        if(!name||seen.has(name)) return false;
-                        seen.add(name); return true;
-                      });
-                      if(clean.length<raw.length){
-                        await updateDoc(doc(db,"teams",t.id||t.uid),{squad:clean});
-                        fixed++;
-                      }
-                    }
-                    alert(`✅ ${fixed} equipos limpiados.`);
-                  }} style={{flex:1,padding:"5px 10px",borderRadius:8,border:`1px solid #e67e22`,background:"#fff8f0",color:"#e67e22",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>🧹 Limpiar dupl.</button>
-                  <button onClick={async()=>{
-                    if(!window.confirm("¿Renombrar 'Alineación A' → 'Liga' y crear 'Copa' para todos los equipos?")) return;
-                    let count=0;
-                    for(const t of allTeams){
-                      const ref=doc(db,"teams",t.id||t.uid);
-                      let lineups=[...(t.lineups||[])];
-                      let changed=false;
-                      lineups=lineups.map(l=>{
-                        if(l.name==="Alineación A"||l.name==="Alineacion A"){changed=true;return{...l,name:"Liga"};}
-                        return l;
-                      });
-                      if(!lineups.some(l=>l.name==="Copa")){
-                        lineups.push({id:`copa_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,name:"Copa",formation:"4-3-3",starters:{},subs:Array(7).fill(null),code:""});
-                        changed=true;
-                      }
-                      if(changed){await updateDoc(ref,{lineups});count++;}
-                    }
-                    alert(`✅ ${count} equipos actualizados.`);
-                  }} style={{flex:1,padding:"5px 10px",borderRadius:8,border:`1px solid #9b59b6`,background:"#f5f0ff",color:"#9b59b6",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>⚽ Liga/Copa</button>
+                  {/* Hamburger admin */}
+                  <div style={{position:"relative"}}>
+                    <button onClick={()=>setShowAdminMenu(v=>!v)}
+                      style={{width:32,height:32,borderRadius:8,border:`1.5px solid ${showAdminMenu?TA.accent:C.borderDark}`,background:showAdminMenu?TA.accent:C.inputBg,cursor:"pointer",fontSize:15,display:"flex",alignItems:"center",justifyContent:"center",color:showAdminMenu?"#fff":C.textMid}}>
+                      ☰
+                    </button>
+                    {showAdminMenu&&(
+                      <div style={{position:"absolute",top:"calc(100% + 6px)",right:0,zIndex:500,background:C.card,border:`1px solid ${C.border}`,borderRadius:12,boxShadow:"0 8px 32px rgba(0,0,0,0.15)",minWidth:190,padding:"6px",display:"flex",flexDirection:"column",gap:2}}>
+                        <div onClick={()=>{setShowAdminManager(true);setShowAdminMenu(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:C.text}}>
+                          👑 <span>Admins</span>
+                        </div>
+                        <div onClick={()=>{setShowPresidents(true);setShowAdminMenu(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:C.text}}>
+                          👤 <span>Presidentes</span>
+                        </div>
+                        <div onClick={()=>{setShowPool(true);setShowAdminMenu(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:C.text}}>
+                          🌍 <span>Pool</span>
+                        </div>
+                        <div onClick={()=>{setShowSelecciones(true);setShowAdminMenu(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:"#2980b9"}}>
+                          🏳️ <span>Selecciones</span>
+                        </div>
+                        <div onClick={()=>{setShowCreateTeam(true);setShowAdminMenu(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:C.accentDark}}>
+                          ➕ <span>Nuevo equipo</span>
+                        </div>
+                        <div style={{borderTop:`1px solid ${C.border}`,margin:"4px 0"}}/>
+                        <div onClick={()=>{setShowImport(true);setShowAdminMenu(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:"#27ae60"}}>
+                          📥 <span>Importar Excel</span>
+                        </div>
+                        <div onClick={async()=>{
+                          setShowAdminMenu(false);
+                          if(!window.confirm("¿Limpiar jugadores duplicados de todos los equipos?")) return;
+                          let fixed=0;
+                          for(const t of allTeams){
+                            const raw=t.squad||[];const seen=new Set();
+                            const clean=raw.filter(p=>{const name=(p.name||"").trim().toLowerCase();if(!name||seen.has(name)) return false;seen.add(name);return true;});
+                            if(clean.length<raw.length){await updateDoc(doc(db,"teams",t.id||t.uid),{squad:clean});fixed++;}
+                          }
+                          alert(`✅ ${fixed} equipos limpiados.`);
+                        }} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:"#e67e22"}}>
+                          🧹 <span>Limpiar duplicados</span>
+                        </div>
+                        <div onClick={async()=>{
+                          setShowAdminMenu(false);
+                          if(!window.confirm("¿Renombrar 'Alineación A' → 'Liga' y crear 'Copa' para todos los equipos?")) return;
+                          let count=0;
+                          for(const t of allTeams){
+                            const ref=doc(db,"teams",t.id||t.uid);let lineups=[...(t.lineups||[])];let changed=false;
+                            lineups=lineups.map(l=>{if(l.name==="Alineación A"||l.name==="Alineacion A"){changed=true;return{...l,name:"Liga"};}return l;});
+                            if(!lineups.some(l=>l.name==="Copa")){lineups.push({id:`copa_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,name:"Copa",formation:"4-3-3",starters:{},subs:Array(7).fill(null),code:""});changed=true;}
+                            if(changed){await updateDoc(ref,{lineups});count++;}
+                          }
+                          alert(`✅ ${count} equipos actualizados.`);
+                        }} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:"#9b59b6"}}>
+                          ⚽ <span>Liga/Copa todos</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
               {/* Collapsible teams list */}
