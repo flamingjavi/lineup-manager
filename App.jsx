@@ -2299,13 +2299,25 @@ function MundialModal({onClose,user,isAdmin,allSels,pool}){
 
   const processImage=async(file,type)=>{
     setUploading(true);
-    setAiMsg("Analizando captura…");
+    setAiMsg("Procesando imagen…");
     try{
+      // Compress image before sending to API
       const b64=await new Promise((res,rej)=>{
-        const r=new FileReader();
-        r.onload=()=>res(r.result.split(",")[1]);
-        r.onerror=rej;
-        r.readAsDataURL(file);
+        const img=new Image();
+        const url=URL.createObjectURL(file);
+        img.onload=()=>{
+          const canvas=document.createElement("canvas");
+          const MAX=1024;
+          let w=img.width,h=img.height;
+          if(w>MAX||h>MAX){const r=Math.min(MAX/w,MAX/h);w=Math.round(w*r);h=Math.round(h*r);}
+          canvas.width=w;canvas.height=h;
+          canvas.getContext("2d").drawImage(img,0,0,w,h);
+          URL.revokeObjectURL(url);
+          const data=canvas.toDataURL("image/jpeg",0.85).split(",")[1];
+          res(data);
+        };
+        img.onerror=rej;
+        img.src=url;
       });
 
       const prompt=type==="grupos"
@@ -2324,13 +2336,14 @@ Responde SOLO con JSON válido, sin markdown:
         headers:{"Content-Type":"application/json"},
         body:JSON.stringify({
           contents:[{parts:[
-            {inline_data:{mime_type:file.type||"image/jpeg",data:b64}},
+            {inline_data:{mime_type:"image/jpeg",data:b64}},
             {text:prompt}
           ]}],
           generationConfig:{temperature:0,maxOutputTokens:2000}
         })
       });
       const data=await resp.json();
+      if(data.error){throw new Error(data.error.message||"Error de API");}
       const text=data.candidates?.[0]?.content?.parts?.[0]?.text||"{}";
       const clean=text.replace(/```json|```/g,"").trim();
       const parsed=JSON.parse(clean);
@@ -2390,7 +2403,7 @@ Responde SOLO con JSON válido, sin markdown:
         await saveM({grupos,partidos,stats});
         setAiMsg(`✅ Resultado: ${parsed.local?.nombre} ${parsed.local?.goles} - ${parsed.visitante?.goles} ${parsed.visitante?.nombre}`);
       }
-    }catch(e){setAiMsg("❌ Error al procesar: "+e.message);}
+    }catch(e){setAiMsg("❌ Error: "+e.message);}
     setUploading(false);
   };
 
