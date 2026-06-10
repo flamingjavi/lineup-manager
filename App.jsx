@@ -2511,12 +2511,12 @@ Responde SOLO con JSON válido, sin markdown:
             <div style={{display:"flex",flexDirection:"column",gap:12}}>
               <div style={{fontSize:11,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",textAlign:"center"}}>Sube capturas de FC26 para poblar el Mundial automáticamente</div>
               {/* Subir grupos */}
-              <button onClick={()=>{setUploadType("grupos");fileRef.current?.click();}}
+              <button onClick={()=>{fileRef.current.dataset.type="grupos";fileRef.current.click();}}
                 style={{padding:"12px",borderRadius:10,background:"linear-gradient(135deg,#4c1d95,#7c3aed)",color:"#fff",border:"none",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
                 {uploading&&uploadType==="grupos"?"Procesando…":"📸 Subir capturas de GRUPOS (1 o varias)"}
               </button>
               {/* Subir resultado */}
-              <button onClick={()=>{setUploadType("resultado");fileRef.current?.click();}}
+              <button onClick={()=>{fileRef.current.dataset.type="resultado";fileRef.current.click();}}
                 style={{padding:"12px",borderRadius:10,background:"#1a3a5c",color:"#fff",border:"none",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
                 {uploading&&uploadType==="resultado"?"Procesando…":"📸 Subir RESULTADOS (1 o varios)"}
               </button>
@@ -2536,9 +2536,11 @@ Responde SOLO con JSON válido, sin markdown:
       <input ref={fileRef} type="file" accept="image/*" multiple style={{display:"none"}} onChange={async e=>{
         const files=Array.from(e.target.files||[]);
         if(!files.length) return;
+        const type=fileRef.current?.dataset?.type||"resultado";
+        setUploadType(type);
         for(let i=0;i<files.length;i++){
           setAiMsg(`Procesando imagen ${i+1} de ${files.length}…`);
-          await processImage(files[i],uploadType);
+          await processImage(files[i],type);
         }
         setAiMsg(`✅ ${files.length} imagen${files.length>1?"es":""} procesada${files.length>1?"s":""}`);
         e.target.value="";
@@ -2727,6 +2729,9 @@ function MainApp({user,isAdmin,onLogout}){
     await setDoc(poolRef,current);
   };
 
+  // Update global C based on user's dark mode preference (before any early returns)
+  C = getC(teamData?.darkMode);
+
   if(!teamData) return(
     <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center"}}>
       <div style={{width:36,height:36,border:`3px solid ${C.border}`,borderTopColor:C.accent,borderRadius:"50%",animation:"spin .7s linear infinite"}}/>
@@ -2737,9 +2742,6 @@ function MainApp({user,isAdmin,onLogout}){
   const lineups=teamData.lineups||[];
   const squad=teamData.squad||[];
   const isSel=activeLineupId==="sel_nacional";
-
-  // Update global C based on user's dark mode preference
-  C = getC(teamData?.darkMode);
   const activeLineup=isSel
     ? (selNacional?{id:"sel_nacional",name:selNacional.country||"Selección",formation:selNacional.formation||"4-3-3",starters:selNacional.starters||{},subs:selNacional.subs||Array(7).fill(null),locked:true}:{formation:"4-3-3",starters:{},subs:Array(7).fill(null),locked:true})
     : lineups.find(l=>l.id===activeLineupId)||lineups[0]||{formation:"4-3-3",starters:{},subs:Array(7).fill(null)};
