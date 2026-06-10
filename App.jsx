@@ -3026,6 +3026,7 @@ function MainApp({user,isAdmin,onLogout}){
                           style={{padding:"2px 6px",borderRadius:5,border:`1px solid ${t.betaAccess?"#9b59b6":C.borderDark}`,background:t.betaAccess?"#9b59b6":"transparent",color:t.betaAccess?"#fff":C.textFaint,fontSize:9,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",flexShrink:0}}>
                           β
                         </button>
+                        <NationalTeamPicker
                           teamId={t.uid||t.id}
                           current={t.nationalTeam||""}
                           allSels={allSels}
