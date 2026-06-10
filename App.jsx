@@ -2319,20 +2319,19 @@ Responde SOLO con JSON válido, sin markdown:
 {"local":{"nombre":"","goles":0},"visitante":{"nombre":"","goles":0},"goleadores":[{"nombre":"","equipo":"","goles":1}],"asistencias":[{"nombre":"","equipo":"","asistencias":1}],"calificaciones":[{"nombre":"","equipo":"","rating":0.0}]}`
         :`Analiza esta captura de FC26 y extrae todos los datos disponibles (tabla, goleadores, asistencias, ratings). Responde SOLO con JSON.`;
 
-      const resp=await fetch("https://api.anthropic.com/v1/messages",{
+      const resp=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=AIzaSyAGlxjD12k38Xu9L-8K165iJma1ZwR7tyY`,{
         method:"POST",
         headers:{"Content-Type":"application/json"},
         body:JSON.stringify({
-          model:"claude-sonnet-4-20250514",
-          max_tokens:2000,
-          messages:[{role:"user",content:[
-            {type:"image",source:{type:"base64",media_type:file.type||"image/jpeg",data:b64}},
-            {type:"text",text:prompt}
-          ]}]
+          contents:[{parts:[
+            {inline_data:{mime_type:file.type||"image/jpeg",data:b64}},
+            {text:prompt}
+          ]}],
+          generationConfig:{temperature:0,maxOutputTokens:2000}
         })
       });
       const data=await resp.json();
-      const text=data.content?.find(c=>c.type==="text")?.text||"{}";
+      const text=data.candidates?.[0]?.content?.parts?.[0]?.text||"{}";
       const clean=text.replace(/```json|```/g,"").trim();
       const parsed=JSON.parse(clean);
 
