@@ -2514,12 +2514,12 @@ Responde SOLO con JSON válido, sin markdown:
               {/* Subir grupos */}
               <button onClick={()=>{setUploadType("grupos");fileRef.current?.click();}}
                 style={{padding:"12px",borderRadius:10,background:"linear-gradient(135deg,#4c1d95,#7c3aed)",color:"#fff",border:"none",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
-                {uploading&&uploadType==="grupos"?"Procesando…":"📸 Subir captura de GRUPOS"}
+                {uploading&&uploadType==="grupos"?"Procesando…":"📸 Subir capturas de GRUPOS (1 o varias)"}
               </button>
               {/* Subir resultado */}
               <button onClick={()=>{setUploadType("resultado");fileRef.current?.click();}}
                 style={{padding:"12px",borderRadius:10,background:"#1a3a5c",color:"#fff",border:"none",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
-                {uploading&&uploadType==="resultado"?"Procesando…":"📸 Subir RESULTADO de partido"}
+                {uploading&&uploadType==="resultado"?"Procesando…":"📸 Subir RESULTADOS (1 o varios)"}
               </button>
               {/* Reset */}
               <button onClick={async()=>{if(!window.confirm("¿Resetear todo el Mundial?")) return;await setDoc(doc(db,"mundial","data"),{grupos:[],partidos:[],stats:{}});setAiMsg("✅ Mundial reseteado");}}
@@ -2534,9 +2534,14 @@ Responde SOLO con JSON válido, sin markdown:
           )}
         </div>
       </div>
-      <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{
-        const f=e.target.files?.[0];if(!f) return;
-        processImage(f,uploadType);
+      <input ref={fileRef} type="file" accept="image/*" multiple style={{display:"none"}} onChange={async e=>{
+        const files=Array.from(e.target.files||[]);
+        if(!files.length) return;
+        for(let i=0;i<files.length;i++){
+          setAiMsg(`Procesando imagen ${i+1} de ${files.length}…`);
+          await processImage(files[i],uploadType);
+        }
+        setAiMsg(`✅ ${files.length} imagen${files.length>1?"es":""} procesada${files.length>1?"s":""}`);
         e.target.value="";
       }}/>
     </div>
