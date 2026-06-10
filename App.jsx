@@ -1770,6 +1770,141 @@ function SeleccionesModal({onClose,lockedCountry,isAdmin,allSels:allSelsProp}){
 }
 
 // ─── TRANSFER CENTER ─────────────────────────────────────────────────────────
+// ─── MERCADO CALCULATOR ───────────────────────────────────────────────────────
+function MercadoModal({onClose,teamData,saveTeam}){
+  const mercado=teamData?.mercado||{bajas:Array(6).fill({name:"",price:""}),altas:Array(6).fill({name:"",price:""}),finalizado:false};
+  const[bajas,setBajas]=useState(mercado.bajas.map(b=>({name:b.name||"",price:b.price||""})));
+  const[altas,setAltas]=useState(mercado.altas.map(a=>({name:a.name||"",price:a.price||""})));
+  const[saving,setSaving]=useState(false);
+
+  const presupuesto=Number(teamData?.presupuesto)||0;
+  const totalBajas=bajas.reduce((s,b)=>s+(Number(b.price)||0),0);
+  const totalAltas=altas.reduce((s,a)=>s+(Number(a.price)||0),0);
+  const saldo=presupuesto+totalBajas-totalAltas;
+
+  const bajasCompletas=bajas.every(b=>b.name.trim()&&b.price!=="");
+  const altasCompletas=altas.every(a=>a.name.trim()&&a.price!=="");
+  const completo=bajasCompletas&&altasCompletas;
+
+  const autosave=async(newBajas,newAltas)=>{
+    await saveTeam({mercado:{bajas:newBajas,altas:newAltas,finalizado:false}});
+  };
+
+  const updateBaja=(i,field,val)=>{
+    const nb=[...bajas];nb[i]={...nb[i],[field]:val};setBajas(nb);
+    autosave(nb,altas);
+  };
+  const updateAlta=(i,field,val)=>{
+    const na=[...altas];na[i]={...na[i],[field]:val};setAltas(na);
+    autosave(bajas,na);
+  };
+
+  const finalizar=async()=>{
+    if(!completo) return;
+    if(!window.confirm(`¿Confirmar mercado?\n\nSaldo final: ${saldo.toLocaleString()}\n\nEsta acción aplicará los cambios a tu presupuesto.`)) return;
+    setSaving(true);
+    await saveTeam({presupuesto:String(saldo),mercado:{bajas,altas,finalizado:true}});
+    setSaving(false);
+    onClose();
+  };
+
+  const done=mercado.finalizado;
+
+  const rowStyle={display:"flex",gap:6,marginBottom:5,alignItems:"center"};
+  const inp=(val,onChange,placeholder)=>(
+    <input value={val} onChange={e=>onChange(e.target.value)} placeholder={placeholder} disabled={done}
+      style={{flex:1,padding:"6px 9px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:done?"transparent":C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif",outline:"none",opacity:done?0.7:1}}/>
+  );
+  const priceInp=(val,onChange)=>(
+    <input type="number" value={val} onChange={e=>onChange(e.target.value)} placeholder="💰" disabled={done}
+      style={{width:80,padding:"6px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:done?"transparent":C.inputBg,color:C.text,fontSize:11,fontFamily:"monospace",outline:"none",opacity:done?0.7:1}}/>
+  );
+
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:2000,display:"flex",alignItems:"stretch",justifyContent:"center",backdropFilter:"blur(8px)"}} onClick={onClose}>
+      <div style={{background:C.card,width:"100%",maxWidth:520,display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 0 60px rgba(0,0,0,0.3)"}} onClick={e=>e.stopPropagation()}>
+        {/* Header */}
+        <div style={{padding:"12px 16px",background:"#1a3a5c",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+          <span style={{fontSize:14,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>📊 CALCULADORA DE MERCADO</span>
+          {done&&<span style={{fontSize:10,background:"#27ae60",color:"#fff",padding:"2px 8px",borderRadius:20,fontFamily:"'DM Sans',sans-serif",fontWeight:700}}>FINALIZADO</span>}
+          <button onClick={onClose} style={{marginLeft:"auto",background:"rgba(255,255,255,0.15)",border:"none",borderRadius:"50%",width:28,height:28,color:"#fff",cursor:"pointer",fontSize:15,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+        </div>
+
+        <div style={{flex:1,overflowY:"auto",padding:"14px 16px",display:"flex",flexDirection:"column",gap:14}}>
+          {/* BAJAS */}
+          <div>
+            <div style={{fontSize:11,fontWeight:800,color:"#e74c3c",fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.5,marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span>📤 Bajas ({bajas.filter(b=>b.name.trim()).length}/6)</span>
+              <span style={{fontSize:10,color:C.textFaint}}>Total: +{totalBajas.toLocaleString()}</span>
+            </div>
+            {bajas.map((b,i)=>(
+              <div key={i} style={rowStyle}>
+                <span style={{fontSize:10,color:C.textFaint,fontFamily:"monospace",width:14,textAlign:"right",flexShrink:0}}>{i+1}.</span>
+                {inp(b.name,v=>updateBaja(i,"name",v),"Nombre del jugador")}
+                {priceInp(b.price,v=>updateBaja(i,"price",v))}
+              </div>
+            ))}
+          </div>
+
+          {/* ALTAS */}
+          <div>
+            <div style={{fontSize:11,fontWeight:800,color:"#27ae60",fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.5,marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span>📥 Altas ({altas.filter(a=>a.name.trim()).length}/6)</span>
+              <span style={{fontSize:10,color:C.textFaint}}>Total: -{totalAltas.toLocaleString()}</span>
+            </div>
+            {altas.map((a,i)=>(
+              <div key={i} style={rowStyle}>
+                <span style={{fontSize:10,color:C.textFaint,fontFamily:"monospace",width:14,textAlign:"right",flexShrink:0}}>{i+1}.</span>
+                {inp(a.name,v=>updateAlta(i,"name",v),"Nombre del jugador")}
+                {priceInp(a.price,v=>updateAlta(i,"price",v))}
+              </div>
+            ))}
+          </div>
+
+          {/* Saldo */}
+          <div style={{background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 16px"}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+              <span style={{fontSize:11,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Presupuesto actual</span>
+              <span style={{fontSize:11,fontWeight:700,color:C.text,fontFamily:"monospace"}}>{presupuesto.toLocaleString()}</span>
+            </div>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+              <span style={{fontSize:11,color:"#e74c3c",fontFamily:"'DM Sans',sans-serif"}}>+ Ingresos (bajas)</span>
+              <span style={{fontSize:11,fontWeight:700,color:"#e74c3c",fontFamily:"monospace"}}>+{totalBajas.toLocaleString()}</span>
+            </div>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+              <span style={{fontSize:11,color:"#27ae60",fontFamily:"'DM Sans',sans-serif"}}>- Gasto (altas)</span>
+              <span style={{fontSize:11,fontWeight:700,color:"#27ae60",fontFamily:"monospace"}}>-{totalAltas.toLocaleString()}</span>
+            </div>
+            <div style={{borderTop:`1px solid ${C.border}`,paddingTop:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span style={{fontSize:12,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>Saldo final</span>
+              <span style={{fontSize:16,fontWeight:800,color:saldo>=0?"#27ae60":"#e74c3c",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:0.5}}>{saldo.toLocaleString()}</span>
+            </div>
+          </div>
+
+          {/* Estado */}
+          {!done&&!completo&&(
+            <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",textAlign:"center",padding:"4px 0"}}>
+              Faltan {6-bajas.filter(b=>b.name.trim()&&b.price!=="").length} bajas y {6-altas.filter(a=>a.name.trim()&&a.price!=="").length} altas por completar
+            </div>
+          )}
+
+          {!done&&(
+            <button onClick={finalizar} disabled={!completo||saving}
+              style={{width:"100%",padding:"12px",borderRadius:10,background:completo?"#1a3a5c":"#ccc",color:"#fff",border:"none",fontSize:13,fontWeight:800,cursor:completo?"pointer":"not-allowed",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1,opacity:saving?0.6:1}}>
+              {saving?"Guardando…":"✅ Finalizar mercado"}
+            </button>
+          )}
+          {done&&(
+            <div style={{textAlign:"center",color:"#27ae60",fontWeight:700,fontFamily:"'DM Sans',sans-serif",fontSize:12,padding:"8px 0"}}>
+              ✅ Mercado finalizado — presupuesto actualizado
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TransferCenter({onClose,user,isAdmin,teamData,allTeams,pool}){
   const[tab,setTab]=useState("inbox"); // inbox | outbox | new | admin
   const[transfers,setTransfers]=useState([]);
@@ -2115,7 +2250,8 @@ function MainApp({user,isAdmin,onLogout}){
   const[showTransfers,setShowTransfers]=useState(false);
   const[transferBadge,setTransferBadge]=useState(0);
   const[showHamburger,setShowHamburger]=useState(false);
-  const[showAdminMenu,setShowAdminMenu]=useState(false); // {formation, starters, subs, country}
+  const[showAdminMenu,setShowAdminMenu]=useState(false);
+  const[showMercado,setShowMercado]=useState(false); // {formation, starters, subs, country}
   const[activeLineupId,setActiveLineupId]=useState("a");
   const[showLineupPanel,setShowLineupPanel]=useState(false);
   const[showFormations,setShowFormations]=useState(false);
@@ -2441,6 +2577,10 @@ function MainApp({user,isAdmin,onLogout}){
                   🔄 <span>Transferencias</span>
                   {transferBadge>0&&<span style={{marginLeft:"auto",background:"#e74c3c",color:"#fff",borderRadius:20,padding:"1px 7px",fontSize:9,fontWeight:800}}>{transferBadge}</span>}
                 </div>
+                <div onClick={()=>{setShowMercado(true);setShowHamburger(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:C.text}}>
+                  📊 <span>Mercado</span>
+                  {teamData?.mercado?.finalizado&&<span style={{marginLeft:"auto",fontSize:9,background:"#27ae60",color:"#fff",borderRadius:20,padding:"1px 7px",fontWeight:800}}>✓</span>}
+                </div>
                 <div style={{borderTop:`1px solid ${C.border}`,margin:"4px 0"}}/>
                 <div onClick={()=>{saveTeam({darkMode:!teamData?.darkMode});setShowHamburger(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:C.text}}>
                   {teamData?.darkMode?"☀️":"🌙"} <span>{teamData?.darkMode?"Modo claro":"Modo oscuro"}</span>
@@ -2497,6 +2637,10 @@ function MainApp({user,isAdmin,onLogout}){
                         </div>
                         <div onClick={()=>{setShowSelecciones(true);setShowAdminMenu(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:"#2980b9"}}>
                           🏳️ <span>Selecciones</span>
+                        </div>
+                        {/* Mercado progress */}
+                        <div style={{padding:"8px 12px",borderRadius:8,fontFamily:"'DM Sans',sans-serif",fontSize:11,color:C.textLight,display:"flex",alignItems:"center",gap:8}}>
+                          📊 <span>Mercado: <strong style={{color:C.text}}>{allTeams.filter(t=>t.mercado?.finalizado).length}/{allTeams.length}</strong> finalizados</span>
                         </div>
                         <div onClick={()=>{setShowCreateTeam(true);setShowAdminMenu(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:C.accentDark}}>
                           ➕ <span>Nuevo equipo</span>
@@ -3416,6 +3560,7 @@ function MainApp({user,isAdmin,onLogout}){
       {showSelecciones&&<SeleccionesModal isAdmin={true} allSels={allSels} onClose={()=>setShowSelecciones(false)}/>}
       {showMiSeleccion&&<SeleccionesModal lockedCountry={teamData?.nationalTeam} allSels={allSels} onClose={()=>setShowMiSeleccion(false)}/>}
       {showTransfers&&<TransferCenter onClose={()=>setShowTransfers(false)} user={user} isAdmin={isAdmin} teamData={teamData} allTeams={allTeams} pool={pool}/>}
+      {showMercado&&<MercadoModal onClose={()=>setShowMercado(false)} teamData={teamData} saveTeam={saveTeam}/>}
 
       {/* SUB MENU MODAL */}
       {pickModal?.type==="subMenu"&&(
