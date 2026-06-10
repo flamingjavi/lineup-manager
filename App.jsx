@@ -1777,10 +1777,23 @@ function MercadoModal({onClose,teamData,saveTeam}){
   const[altas,setAltas]=useState(mercado.altas.map(a=>({name:a.name||"",price:a.price||""})));
   const[saving,setSaving]=useState(false);
 
-  const presupuesto=Number(teamData?.presupuesto)||0;
-  const totalBajas=bajas.reduce((s,b)=>s+(Number(b.price)||0),0);
-  const totalAltas=altas.reduce((s,a)=>s+(Number(a.price)||0),0);
+  const parsePresupuesto=v=>{
+    if(!v) return 0;
+    const s=String(v).trim().replace(/,/g,"");
+    if(s.toUpperCase().endsWith("M")) return parseFloat(s)*1000000;
+    return Number(s)||0;
+  };
+  const presupuesto=parsePresupuesto(teamData?.presupuesto);
+  // prices stored as millions (e.g. "10.5" = 10.5M), multiply for real value
+  const toVal=p=>(Number(p)||0)*1000000;
+  const totalBajas=bajas.reduce((s,b)=>s+toVal(b.price),0);
+  const totalAltas=altas.reduce((s,a)=>s+toVal(a.price),0);
   const saldo=presupuesto+totalBajas-totalAltas;
+
+  const fmtM=n=>{
+    const m=n/1000000;
+    return m===Math.round(m)?`${m}M`:`${m.toFixed(1)}M`;
+  };
 
   const bajasCompletas=bajas.every(b=>b.name.trim()&&b.price!=="");
   const altasCompletas=altas.every(a=>a.name.trim()&&a.price!=="");
@@ -1801,7 +1814,7 @@ function MercadoModal({onClose,teamData,saveTeam}){
 
   const finalizar=async()=>{
     if(!completo) return;
-    if(!window.confirm(`¿Confirmar mercado?\n\nSaldo final: ${saldo.toLocaleString()}\n\nEsta acción aplicará los cambios a tu presupuesto.`)) return;
+    if(!window.confirm(`¿Confirmar mercado?\n\nSaldo final: ${fmtM(saldo)}\n\nEsta acción aplicará los cambios a tu presupuesto.`)) return;
     setSaving(true);
     await saveTeam({presupuesto:String(saldo),mercado:{bajas,altas,finalizado:true}});
     setSaving(false);
@@ -1816,8 +1829,11 @@ function MercadoModal({onClose,teamData,saveTeam}){
       style={{flex:1,padding:"6px 9px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:done?"transparent":C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif",outline:"none",opacity:done?0.7:1}}/>
   );
   const priceInp=(val,onChange)=>(
-    <input type="number" value={val} onChange={e=>onChange(e.target.value)} placeholder="💰" disabled={done}
-      style={{width:80,padding:"6px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:done?"transparent":C.inputBg,color:C.text,fontSize:11,fontFamily:"monospace",outline:"none",opacity:done?0.7:1}}/>
+    <div style={{display:"flex",alignItems:"center",gap:3,flexShrink:0}}>
+      <input type="number" value={val} onChange={e=>onChange(e.target.value)} placeholder="0" disabled={done} step="0.5" min="0"
+        style={{width:64,padding:"6px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:done?"transparent":C.inputBg,color:C.text,fontSize:11,fontFamily:"monospace",outline:"none",opacity:done?0.7:1}}/>
+      <span style={{fontSize:10,fontWeight:700,color:C.textFaint,fontFamily:"monospace"}}>M</span>
+    </div>
   );
 
   return(
@@ -1835,7 +1851,7 @@ function MercadoModal({onClose,teamData,saveTeam}){
           <div>
             <div style={{fontSize:11,fontWeight:800,color:"#e74c3c",fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.5,marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <span>📤 Bajas ({bajas.filter(b=>b.name.trim()).length}/6)</span>
-              <span style={{fontSize:10,color:C.textFaint}}>Total: +{totalBajas.toLocaleString()}</span>
+              <span style={{fontSize:10,color:C.textFaint}}>Total: +{fmtM(totalBajas)}</span>
             </div>
             {bajas.map((b,i)=>(
               <div key={i} style={rowStyle}>
@@ -1850,7 +1866,7 @@ function MercadoModal({onClose,teamData,saveTeam}){
           <div>
             <div style={{fontSize:11,fontWeight:800,color:"#27ae60",fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.5,marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <span>📥 Altas ({altas.filter(a=>a.name.trim()).length}/6)</span>
-              <span style={{fontSize:10,color:C.textFaint}}>Total: -{totalAltas.toLocaleString()}</span>
+              <span style={{fontSize:10,color:C.textFaint}}>Total: -{fmtM(totalAltas)}</span>
             </div>
             {altas.map((a,i)=>(
               <div key={i} style={rowStyle}>
@@ -1865,19 +1881,19 @@ function MercadoModal({onClose,teamData,saveTeam}){
           <div style={{background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 16px"}}>
             <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
               <span style={{fontSize:11,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Presupuesto actual</span>
-              <span style={{fontSize:11,fontWeight:700,color:C.text,fontFamily:"monospace"}}>{presupuesto.toLocaleString()}</span>
+              <span style={{fontSize:11,fontWeight:700,color:C.text,fontFamily:"monospace"}}>{fmtM(presupuesto)}</span>
             </div>
             <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
               <span style={{fontSize:11,color:"#e74c3c",fontFamily:"'DM Sans',sans-serif"}}>+ Ingresos (bajas)</span>
-              <span style={{fontSize:11,fontWeight:700,color:"#e74c3c",fontFamily:"monospace"}}>+{totalBajas.toLocaleString()}</span>
+              <span style={{fontSize:11,fontWeight:700,color:"#e74c3c",fontFamily:"monospace"}}>+{fmtM(totalBajas)}</span>
             </div>
             <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
               <span style={{fontSize:11,color:"#27ae60",fontFamily:"'DM Sans',sans-serif"}}>- Gasto (altas)</span>
-              <span style={{fontSize:11,fontWeight:700,color:"#27ae60",fontFamily:"monospace"}}>-{totalAltas.toLocaleString()}</span>
+              <span style={{fontSize:11,fontWeight:700,color:"#27ae60",fontFamily:"monospace"}}>-{fmtM(totalAltas)}</span>
             </div>
             <div style={{borderTop:`1px solid ${C.border}`,paddingTop:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <span style={{fontSize:12,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>Saldo final</span>
-              <span style={{fontSize:16,fontWeight:800,color:saldo>=0?"#27ae60":"#e74c3c",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:0.5}}>{saldo.toLocaleString()}</span>
+              <span style={{fontSize:16,fontWeight:800,color:saldo>=0?"#27ae60":"#e74c3c",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:0.5}}>{fmtM(saldo)}</span>
             </div>
           </div>
 
