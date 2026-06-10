@@ -1771,10 +1771,10 @@ function SeleccionesModal({onClose,lockedCountry,isAdmin,allSels:allSelsProp}){
 
 // ─── TRANSFER CENTER ─────────────────────────────────────────────────────────
 // ─── MERCADO CALCULATOR ───────────────────────────────────────────────────────
-function MercadoModal({onClose,teamData,saveTeam}){
-  const mercado=teamData?.mercado||{bajas:Array(6).fill({name:"",price:""}),altas:Array(6).fill({name:"",price:""}),finalizado:false};
-  const[bajas,setBajas]=useState(mercado.bajas.map(b=>({name:b.name||"",price:b.price||""})));
-  const[altas,setAltas]=useState(mercado.altas.map(a=>({name:a.name||"",price:a.price||""})));
+function MercadoModal({onClose,teamData,saveTeam,allTeams}){
+  const mercado=teamData?.mercado||{bajas:Array(6).fill({name:"",price:"",team:""}),altas:Array(6).fill({name:"",price:"",team:""}),finalizado:false};
+  const[bajas,setBajas]=useState(mercado.bajas.map(b=>({name:b.name||"",price:b.price||"",team:b.team||""})));
+  const[altas,setAltas]=useState(mercado.altas.map(a=>({name:a.name||"",price:a.price||"",team:a.team||""})));
   const[saving,setSaving]=useState(false);
 
   const parsePresupuesto=v=>{
@@ -1823,17 +1823,27 @@ function MercadoModal({onClose,teamData,saveTeam}){
 
   const done=mercado.finalizado;
 
-  const rowStyle={display:"flex",gap:6,marginBottom:5,alignItems:"center"};
+  const rowStyle={display:"flex",gap:6,marginBottom:5,alignItems:"center",flexWrap:"wrap"};
   const inp=(val,onChange,placeholder)=>(
     <input value={val} onChange={e=>onChange(e.target.value)} placeholder={placeholder} disabled={done}
-      style={{flex:1,padding:"6px 9px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:done?"transparent":C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif",outline:"none",opacity:done?0.7:1}}/>
+      style={{flex:1,minWidth:100,padding:"6px 9px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:done?"transparent":C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif",outline:"none",opacity:done?0.7:1}}/>
   );
   const priceInp=(val,onChange)=>(
     <div style={{display:"flex",alignItems:"center",gap:3,flexShrink:0}}>
       <input type="number" value={val} onChange={e=>onChange(e.target.value)} placeholder="0" disabled={done} step="0.5" min="0"
-        style={{width:64,padding:"6px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:done?"transparent":C.inputBg,color:C.text,fontSize:11,fontFamily:"monospace",outline:"none",opacity:done?0.7:1}}/>
+        style={{width:58,padding:"6px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:done?"transparent":C.inputBg,color:C.text,fontSize:11,fontFamily:"monospace",outline:"none",opacity:done?0.7:1}}/>
       <span style={{fontSize:10,fontWeight:700,color:C.textFaint,fontFamily:"monospace"}}>M</span>
     </div>
+  );
+  const teamSel=(val,onChange,label)=>(
+    <select value={val} onChange={e=>onChange(e.target.value)} disabled={done}
+      style={{flex:1,minWidth:90,padding:"6px 7px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:done?"transparent":C.inputBg,color:val?C.text:C.textFaint,fontSize:10,fontFamily:"'DM Sans',sans-serif",outline:"none",opacity:done?0.7:1}}>
+      <option value="">{label}</option>
+      <option value="LIBRE">🆓 Agente libre</option>
+      {[...allTeams].filter(t=>(t.uid||t.id)!==(teamData?.uid||teamData?.id)).sort((a,b)=>(a.teamName||"").localeCompare(b.teamName||"")).map(t=>(
+        <option key={t.uid||t.id} value={t.teamName}>{t.teamName}</option>
+      ))}
+    </select>
   );
 
   return(
@@ -1856,8 +1866,9 @@ function MercadoModal({onClose,teamData,saveTeam}){
             {bajas.map((b,i)=>(
               <div key={i} style={rowStyle}>
                 <span style={{fontSize:10,color:C.textFaint,fontFamily:"monospace",width:14,textAlign:"right",flexShrink:0}}>{i+1}.</span>
-                {inp(b.name,v=>updateBaja(i,"name",v),"Nombre del jugador")}
+                {inp(b.name,v=>updateBaja(i,"name",v),"Jugador")}
                 {priceInp(b.price,v=>updateBaja(i,"price",v))}
+                {teamSel(b.team,v=>updateBaja(i,"team",v),"→ Destino")}
               </div>
             ))}
           </div>
@@ -1871,8 +1882,9 @@ function MercadoModal({onClose,teamData,saveTeam}){
             {altas.map((a,i)=>(
               <div key={i} style={rowStyle}>
                 <span style={{fontSize:10,color:C.textFaint,fontFamily:"monospace",width:14,textAlign:"right",flexShrink:0}}>{i+1}.</span>
-                {inp(a.name,v=>updateAlta(i,"name",v),"Nombre del jugador")}
+                {inp(a.name,v=>updateAlta(i,"name",v),"Jugador")}
                 {priceInp(a.price,v=>updateAlta(i,"price",v))}
+                {teamSel(a.team,v=>updateAlta(i,"team",v),"← Origen")}
               </div>
             ))}
           </div>
@@ -2244,6 +2256,293 @@ function TransferCenter({onClose,user,isAdmin,teamData,allTeams,pool}){
   );
 }
 
+// ─── MUNDIAL ──────────────────────────────────────────────────────────────────
+function MundialModal({onClose,user,isAdmin,allSels,pool}){
+  const[tab,setTab]=useState("tabla"); // tabla|goleadores|asistencias|fixture|admin
+  const[mundial,setMundial]=useState(null);
+  const[uploading,setUploading]=useState(false);
+  const[uploadType,setUploadType]=useState(null); // "grupos"|"resultado"
+  const[aiMsg,setAiMsg]=useState("");
+  const fileRef=useRef(null);
+
+  useEffect(()=>{
+    const unsub=onSnapshot(doc(db,"mundial","data"),snap=>{
+      if(snap.exists()) setMundial(snap.data());
+      else setMundial(null);
+    });
+    return unsub;
+  },[]);
+
+  const saveM=async patch=>{
+    await setDoc(doc(db,"mundial","data"),{...(mundial||{}),...patch},{merge:true});
+  };
+
+  // fuzzy match player name from OCR to convocatoria
+  const fuzzyMatch=(ocrName,squad)=>{
+    if(!squad||!ocrName) return null;
+    const norm=s=>s.toLowerCase().replace(/[^a-z]/g,"");
+    const parts=norm(ocrName).split(" ").filter(Boolean);
+    let best=null,bestScore=0;
+    squad.forEach(p=>{
+      const pn=norm(p.name||"");
+      const score=parts.reduce((s,part)=>s+(pn.includes(part)?part.length:0),0);
+      if(score>bestScore){bestScore=score;best=p;}
+    });
+    return bestScore>2?best:null;
+  };
+
+  // get all players from all sels
+  const allSelPlayers=allSels.reduce((acc,s)=>{
+    (s.squad||[]).forEach(p=>acc.push({...p,selId:s.id,selName:s.country}));
+    return acc;
+  },[]);
+
+  const processImage=async(file,type)=>{
+    setUploading(true);
+    setAiMsg("Analizando captura…");
+    try{
+      const b64=await new Promise((res,rej)=>{
+        const r=new FileReader();
+        r.onload=()=>res(r.result.split(",")[1]);
+        r.onerror=rej;
+        r.readAsDataURL(file);
+      });
+
+      const prompt=type==="grupos"
+        ?`Eres un asistente de liga de fútbol FC26. Analiza esta captura y extrae los grupos del mundial.
+Responde SOLO con JSON válido, sin markdown:
+{"grupos":[{"nombre":"Grupo A","selecciones":["NOMBRE1","NOMBRE2","NOMBRE3","NOMBRE4"]},...]}`
+        :type==="resultado"
+        ?`Eres un asistente de liga de fútbol FC26. Analiza esta captura de resultado de partido.
+Extrae: equipos, marcador, goleadores (nombre y cantidad de goles), asistencias, calificaciones de jugadores.
+Responde SOLO con JSON válido, sin markdown:
+{"local":{"nombre":"","goles":0},"visitante":{"nombre":"","goles":0},"goleadores":[{"nombre":"","equipo":"","goles":1}],"asistencias":[{"nombre":"","equipo":"","asistencias":1}],"calificaciones":[{"nombre":"","equipo":"","rating":0.0}]}`
+        :`Analiza esta captura de FC26 y extrae todos los datos disponibles (tabla, goleadores, asistencias, ratings). Responde SOLO con JSON.`;
+
+      const resp=await fetch("https://api.anthropic.com/v1/messages",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          model:"claude-sonnet-4-20250514",
+          max_tokens:2000,
+          messages:[{role:"user",content:[
+            {type:"image",source:{type:"base64",media_type:file.type||"image/jpeg",data:b64}},
+            {type:"text",text:prompt}
+          ]}]
+        })
+      });
+      const data=await resp.json();
+      const text=data.content?.find(c=>c.type==="text")?.text||"{}";
+      const clean=text.replace(/```json|```/g,"").trim();
+      const parsed=JSON.parse(clean);
+
+      if(type==="grupos"){
+        await saveM({grupos:parsed.grupos,partidos:[],stats:{}});
+        setAiMsg(`✅ ${parsed.grupos?.length||0} grupos importados`);
+      } else if(type==="resultado"){
+        // fuzzy match players and save stats
+        const existing=mundial||{};
+        const stats={...(existing.stats||{})};
+        const partidos=[...(existing.partidos||[])];
+
+        // add match
+        partidos.push({
+          local:parsed.local,
+          visitante:parsed.visitante,
+          fecha:new Date().toISOString()
+        });
+
+        // merge stats
+        const mergePlayer=(arr,field)=>{
+          (arr||[]).forEach(p=>{
+            const matched=fuzzyMatch(p.nombre,allSelPlayers);
+            const key=matched?`${matched.selId}_${matched.name}`:p.nombre;
+            if(!stats[key]) stats[key]={name:matched?.name||p.nombre,selName:matched?.selName||p.equipo,goles:0,asistencias:0,ratings:[],partidos:0};
+            if(field==="goles") stats[key].goles+=(p.goles||1);
+            if(field==="asistencias") stats[key].asistencias+=(p.asistencias||1);
+            if(field==="rating"&&p.rating){stats[key].ratings.push(p.rating);stats[key].partidos++;}
+          });
+        };
+        mergePlayer(parsed.goleadores,"goles");
+        mergePlayer(parsed.asistencias,"asistencias");
+        mergePlayer(parsed.calificaciones,"rating");
+
+        // update group table
+        const grupos=(existing.grupos||[]).map(g=>{
+          const sels=g.selecciones||[];
+          const localIn=sels.some(s=>fuzzyMatch(parsed.local?.nombre,[{name:s}])||s.toLowerCase().includes((parsed.local?.nombre||"").toLowerCase().slice(0,4)));
+          const visitIn=sels.some(s=>fuzzyMatch(parsed.visitante?.nombre,[{name:s}])||s.toLowerCase().includes((parsed.visitante?.nombre||"").toLowerCase().slice(0,4)));
+          if(!localIn||!visitIn) return g;
+          const tabla=[...(g.tabla||sels.map(s=>({sel:s,pj:0,pg:0,pe:0,pp:0,gf:0,gc:0,pts:0})))];
+          const gl=parsed.local?.goles||0,gv=parsed.visitante?.goles||0;
+          const upd=(sel,gf,gc)=>{
+            const idx=tabla.findIndex(r=>r.sel===sel);
+            if(idx===-1) return;
+            tabla[idx]={...tabla[idx],pj:tabla[idx].pj+1,gf:tabla[idx].gf+gf,gc:tabla[idx].gc+gc,
+              pg:tabla[idx].pg+(gf>gc?1:0),pe:tabla[idx].pe+(gf===gc?1:0),pp:tabla[idx].pp+(gf<gc?1:0),
+              pts:tabla[idx].pts+(gf>gc?3:gf===gc?1:0)};
+          };
+          const lname=sels.find(s=>s.toLowerCase().includes((parsed.local?.nombre||"").toLowerCase().slice(0,4)))||parsed.local?.nombre;
+          const vname=sels.find(s=>s.toLowerCase().includes((parsed.visitante?.nombre||"").toLowerCase().slice(0,4)))||parsed.visitante?.nombre;
+          upd(lname,gl,gv);upd(vname,gv,gl);
+          return{...g,tabla};
+        });
+
+        await saveM({grupos,partidos,stats});
+        setAiMsg(`✅ Resultado: ${parsed.local?.nombre} ${parsed.local?.goles} - ${parsed.visitante?.goles} ${parsed.visitante?.nombre}`);
+      }
+    }catch(e){setAiMsg("❌ Error al procesar: "+e.message);}
+    setUploading(false);
+  };
+
+  const grupos=mundial?.grupos||[];
+  const partidos=mundial?.partidos||[];
+  const stats=Object.values(mundial?.stats||{});
+  const goleadores=[...stats].sort((a,b)=>b.goles-a.goles).filter(p=>p.goles>0);
+  const asistentes=[...stats].sort((a,b)=>b.asistencias-a.asistencias).filter(p=>p.asistencias>0);
+  const ratings=[...stats].filter(p=>p.ratings?.length>0).sort((a,b)=>{
+    const ra=a.ratings.reduce((s,r)=>s+r,0)/a.ratings.length;
+    const rb=b.ratings.reduce((s,r)=>s+r,0)/b.ratings.length;
+    return rb-ra;
+  });
+
+  const tabBtn=(id,label)=>(
+    <button onClick={()=>setTab(id)} style={{padding:"5px 10px",borderRadius:7,border:`1.5px solid ${tab===id?"#7c3aed":C.borderDark}`,background:tab===id?"#7c3aed":C.inputBg,color:tab===id?"#fff":C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",whiteSpace:"nowrap"}}>
+      {label}
+    </button>
+  );
+
+  const StatRow=({i,name,sel,val,label})=>(
+    <div style={{display:"flex",alignItems:"center",gap:10,padding:"7px 10px",borderRadius:8,background:i===0?"#7c3aed11":C.inputBg,border:`1px solid ${i===0?"#7c3aed":C.border}`,marginBottom:4}}>
+      <span style={{fontSize:11,fontWeight:800,color:i===0?"#7c3aed":C.textFaint,fontFamily:"monospace",width:18}}>{i+1}</span>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:12,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{name}</div>
+        <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>{sel}</div>
+      </div>
+      <span style={{fontSize:13,fontWeight:800,color:"#7c3aed",fontFamily:"'Bebas Neue',sans-serif"}}>{val} {label}</span>
+    </div>
+  );
+
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:2000,display:"flex",alignItems:"stretch",justifyContent:"center",backdropFilter:"blur(10px)"}} onClick={onClose}>
+      <div style={{background:C.card,width:"100%",maxWidth:520,display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 0 80px rgba(124,58,237,0.3)"}} onClick={e=>e.stopPropagation()}>
+        {/* Header */}
+        <div style={{padding:"12px 16px",background:"linear-gradient(135deg,#4c1d95,#7c3aed)",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+          <span style={{fontSize:15,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>🌍 MUNDIAL DE SELECCIONES</span>
+          <span style={{fontSize:9,background:"rgba(255,255,255,0.2)",color:"#fff",padding:"2px 7px",borderRadius:20,fontFamily:"'DM Sans',sans-serif",fontWeight:700}}>BETA</span>
+          <button onClick={onClose} style={{marginLeft:"auto",background:"rgba(255,255,255,0.15)",border:"none",borderRadius:"50%",width:28,height:28,color:"#fff",cursor:"pointer",fontSize:15,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+        </div>
+
+        {/* Tabs */}
+        <div style={{padding:"8px 12px",borderBottom:`1px solid ${C.border}`,display:"flex",gap:5,overflowX:"auto",flexShrink:0}}>
+          {tabBtn("tabla","📊 Tabla")}
+          {tabBtn("goleadores","⚽ Goles")}
+          {tabBtn("asistencias","🎯 Asist.")}
+          {tabBtn("ratings","⭐ Ratings")}
+          {tabBtn("fixture","📅 Partidos")}
+          {isAdmin&&tabBtn("admin","⚙️ Admin")}
+        </div>
+
+        {aiMsg&&<div style={{padding:"6px 14px",background:"#f0fdf4",borderBottom:`1px solid #bbf7d0`,fontSize:11,color:"#166534",fontFamily:"'DM Sans',sans-serif"}}>{aiMsg}</div>}
+
+        <div style={{flex:1,overflowY:"auto",padding:"12px 14px"}}>
+
+          {/* TABLA POR GRUPOS */}
+          {tab==="tabla"&&(
+            grupos.length===0
+              ?<div style={{textAlign:"center",color:C.textFaint,fontSize:12,padding:24,fontFamily:"'DM Sans',sans-serif"}}>⏳ Esperando grupos del admin</div>
+              :grupos.map((g,gi)=>(
+                <div key={gi} style={{marginBottom:16}}>
+                  <div style={{fontSize:11,fontWeight:800,color:"#7c3aed",fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.5,marginBottom:6}}>{g.nombre}</div>
+                  <div style={{borderRadius:10,overflow:"hidden",border:`1px solid ${C.border}`}}>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 30px 30px 30px 30px 30px 30px 36px",gap:0,padding:"5px 8px",background:"#7c3aed11",borderBottom:`1px solid ${C.border}`}}>
+                      {["Sel","PJ","PG","PE","PP","GF","GC","Pts"].map(h=><span key={h} style={{fontSize:9,fontWeight:800,color:"#7c3aed",fontFamily:"monospace",textAlign:"center"}}>{h}</span>)}
+                    </div>
+                    {[...(g.tabla||g.selecciones.map(s=>({sel:s,pj:0,pg:0,pe:0,pp:0,gf:0,gc:0,pts:0})))].sort((a,b)=>b.pts-a.pts||(b.gf-b.gc)-(a.gf-a.gc)).map((r,ri)=>(
+                      <div key={ri} style={{display:"grid",gridTemplateColumns:"1fr 30px 30px 30px 30px 30px 30px 36px",padding:"6px 8px",borderBottom:ri<g.selecciones.length-1?`1px solid ${C.border}`:"none",background:ri<2?"rgba(124,58,237,0.04)":"transparent"}}>
+                        <span style={{fontSize:11,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.sel}</span>
+                        {[r.pj,r.pg,r.pe,r.pp,r.gf,r.gc].map((v,i)=><span key={i} style={{fontSize:11,color:C.textMid,fontFamily:"monospace",textAlign:"center"}}>{v}</span>)}
+                        <span style={{fontSize:12,fontWeight:800,color:"#7c3aed",fontFamily:"monospace",textAlign:"center"}}>{r.pts}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))
+          )}
+
+          {/* GOLEADORES */}
+          {tab==="goleadores"&&(
+            goleadores.length===0
+              ?<div style={{textAlign:"center",color:C.textFaint,fontSize:12,padding:24,fontFamily:"'DM Sans',sans-serif"}}>Sin datos aún</div>
+              :goleadores.map((p,i)=><StatRow key={i} i={i} name={p.name} sel={p.selName} val={p.goles} label="⚽"/>)
+          )}
+
+          {/* ASISTENCIAS */}
+          {tab==="asistencias"&&(
+            asistentes.length===0
+              ?<div style={{textAlign:"center",color:C.textFaint,fontSize:12,padding:24,fontFamily:"'DM Sans',sans-serif"}}>Sin datos aún</div>
+              :asistentes.map((p,i)=><StatRow key={i} i={i} name={p.name} sel={p.selName} val={p.asistencias} label="🎯"/>)
+          )}
+
+          {/* RATINGS */}
+          {tab==="ratings"&&(
+            ratings.length===0
+              ?<div style={{textAlign:"center",color:C.textFaint,fontSize:12,padding:24,fontFamily:"'DM Sans',sans-serif"}}>Sin datos aún</div>
+              :ratings.map((p,i)=>{
+                const avg=(p.ratings.reduce((s,r)=>s+r,0)/p.ratings.length).toFixed(1);
+                return <StatRow key={i} i={i} name={p.name} sel={p.selName} val={avg} label="⭐"/>;
+              })
+          )}
+
+          {/* FIXTURE */}
+          {tab==="fixture"&&(
+            partidos.length===0
+              ?<div style={{textAlign:"center",color:C.textFaint,fontSize:12,padding:24,fontFamily:"'DM Sans',sans-serif"}}>Sin partidos aún</div>
+              :partidos.map((p,i)=>(
+                <div key={i} style={{background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 14px",marginBottom:6,display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{flex:1,fontSize:12,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif",textAlign:"right"}}>{p.local?.nombre}</span>
+                  <span style={{fontSize:14,fontWeight:800,color:"#7c3aed",fontFamily:"'Bebas Neue',sans-serif",padding:"2px 10px",background:"#7c3aed11",borderRadius:6}}>{p.local?.goles} - {p.visitante?.goles}</span>
+                  <span style={{flex:1,fontSize:12,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{p.visitante?.nombre}</span>
+                </div>
+              ))
+          )}
+
+          {/* ADMIN */}
+          {tab==="admin"&&isAdmin&&(
+            <div style={{display:"flex",flexDirection:"column",gap:12}}>
+              <div style={{fontSize:11,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",textAlign:"center"}}>Sube capturas de FC26 para poblar el Mundial automáticamente</div>
+              {/* Subir grupos */}
+              <button onClick={()=>{setUploadType("grupos");fileRef.current?.click();}}
+                style={{padding:"12px",borderRadius:10,background:"linear-gradient(135deg,#4c1d95,#7c3aed)",color:"#fff",border:"none",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                {uploading&&uploadType==="grupos"?"Procesando…":"📸 Subir captura de GRUPOS"}
+              </button>
+              {/* Subir resultado */}
+              <button onClick={()=>{setUploadType("resultado");fileRef.current?.click();}}
+                style={{padding:"12px",borderRadius:10,background:"#1a3a5c",color:"#fff",border:"none",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                {uploading&&uploadType==="resultado"?"Procesando…":"📸 Subir RESULTADO de partido"}
+              </button>
+              {/* Reset */}
+              <button onClick={async()=>{if(!window.confirm("¿Resetear todo el Mundial?")) return;await setDoc(doc(db,"mundial","data"),{grupos:[],partidos:[],stats:{}});setAiMsg("✅ Mundial reseteado");}}
+                style={{padding:"10px",borderRadius:10,background:"#fff5f5",color:"#e74c3c",border:"1px solid #e74c3c",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                🗑️ Resetear Mundial
+              </button>
+              {/* Partidos info */}
+              <div style={{background:C.inputBg,borderRadius:10,padding:"10px 14px",fontSize:11,color:C.textMid,fontFamily:"'DM Sans',sans-serif"}}>
+                📊 {grupos.length} grupos · {partidos.length} partidos · {stats.length} jugadores con stats
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+      <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{
+        const f=e.target.files?.[0];if(!f) return;
+        processImage(f,uploadType);
+        e.target.value="";
+      }}/>
+    </div>
+  );
+}
+
 function MainApp({user,isAdmin,onLogout}){
   const[teamData,setTeamData]=useState(null);
   const[allTeams,setAllTeams]=useState([]);
@@ -2267,7 +2566,8 @@ function MainApp({user,isAdmin,onLogout}){
   const[transferBadge,setTransferBadge]=useState(0);
   const[showHamburger,setShowHamburger]=useState(false);
   const[showAdminMenu,setShowAdminMenu]=useState(false);
-  const[showMercado,setShowMercado]=useState(false); // {formation, starters, subs, country}
+  const[showMercado,setShowMercado]=useState(false);
+  const[showMundial,setShowMundial]=useState(false); // {formation, starters, subs, country}
   const[activeLineupId,setActiveLineupId]=useState("a");
   const[showLineupPanel,setShowLineupPanel]=useState(false);
   const[showFormations,setShowFormations]=useState(false);
@@ -2597,6 +2897,10 @@ function MainApp({user,isAdmin,onLogout}){
                   📊 <span>Mercado</span>
                   {teamData?.mercado?.finalizado&&<span style={{marginLeft:"auto",fontSize:9,background:"#27ae60",color:"#fff",borderRadius:20,padding:"1px 7px",fontWeight:800}}>✓</span>}
                 </div>
+                {(teamData?.betaAccess||isAdmin)&&<div onClick={()=>{setShowMundial(true);setShowHamburger(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:"#7c3aed"}}>
+                  🌍 <span>Mundial</span>
+                  <span style={{marginLeft:"auto",fontSize:9,background:"#7c3aed",color:"#fff",borderRadius:20,padding:"1px 6px",fontWeight:800}}>β</span>
+                </div>}
                 <div style={{borderTop:`1px solid ${C.border}`,margin:"4px 0"}}/>
                 <div onClick={()=>{saveTeam({darkMode:!teamData?.darkMode});setShowHamburger(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:C.text}}>
                   {teamData?.darkMode?"☀️":"🌙"} <span>{teamData?.darkMode?"Modo claro":"Modo oscuro"}</span>
@@ -2710,8 +3014,12 @@ function MainApp({user,isAdmin,onLogout}){
                         <span style={{fontSize:12,fontWeight:700,color:C.text,flex:1,fontFamily:"'DM Sans',sans-serif",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.teamName}</span>
                         <span style={{fontSize:9,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>{(t.squad||[]).length}j</span>
                         {isTeamAdmin&&<span style={{fontSize:8,fontWeight:800,color:C.accent,background:C.goldLight,padding:"1px 5px",borderRadius:8,fontFamily:"'DM Sans',sans-serif",border:`1px solid ${C.accent}`,flexShrink:0}}>ADMIN</span>}
-                        {/* Selección nacional asignada */}
-                        <NationalTeamPicker
+                        {/* Beta Access */}
+                        <button onClick={async e=>{e.stopPropagation();await updateDoc(doc(db,"teams",t.uid||t.id),{betaAccess:!t.betaAccess});}}
+                          title="Beta access (Mundial)"
+                          style={{padding:"2px 6px",borderRadius:5,border:`1px solid ${t.betaAccess?"#9b59b6":C.borderDark}`,background:t.betaAccess?"#9b59b6":"transparent",color:t.betaAccess?"#fff":C.textFaint,fontSize:9,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",flexShrink:0}}>
+                          β
+                        </button>
                           teamId={t.uid||t.id}
                           current={t.nationalTeam||""}
                           allSels={allSels}
@@ -3576,7 +3884,8 @@ function MainApp({user,isAdmin,onLogout}){
       {showSelecciones&&<SeleccionesModal isAdmin={true} allSels={allSels} onClose={()=>setShowSelecciones(false)}/>}
       {showMiSeleccion&&<SeleccionesModal lockedCountry={teamData?.nationalTeam} allSels={allSels} onClose={()=>setShowMiSeleccion(false)}/>}
       {showTransfers&&<TransferCenter onClose={()=>setShowTransfers(false)} user={user} isAdmin={isAdmin} teamData={teamData} allTeams={allTeams} pool={pool}/>}
-      {showMercado&&<MercadoModal onClose={()=>setShowMercado(false)} teamData={teamData} saveTeam={saveTeam}/>}
+      {showMercado&&<MercadoModal onClose={()=>setShowMercado(false)} teamData={teamData} saveTeam={saveTeam} allTeams={allTeams}/>}
+      {showMundial&&<MundialModal onClose={()=>setShowMundial(false)} user={user} isAdmin={isAdmin} allSels={allSels} pool={pool}/>}
 
       {/* SUB MENU MODAL */}
       {pickModal?.type==="subMenu"&&(
