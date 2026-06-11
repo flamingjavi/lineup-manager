@@ -2514,10 +2514,11 @@ Responde SOLO con JSON válido, sin markdown:
           {tab==="admin"&&isAdmin&&(
             <div style={{display:"flex",flexDirection:"column",gap:12}}>
               <div style={{fontSize:11,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",textAlign:"center"}}>Sube capturas de FC26 para poblar el Mundial automáticamente</div>
-              {/* Subir grupos */}
-              <label style={{display:"block",padding:"12px",borderRadius:10,background:"linear-gradient(135deg,#4c1d95,#7c3aed)",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textAlign:"center"}}>
-                📸 Subir capturas de GRUPOS (1 o varias)
-                <input type="file" accept="image/*" multiple style={{position:"absolute",opacity:0,width:0,height:0,overflow:"hidden"}}
+              {/* iOS-compatible: input visible en el flujo normal del DOM */}
+              <div style={{background:"linear-gradient(135deg,#4c1d95,#7c3aed)",borderRadius:10,padding:2}}>
+                <div style={{padding:"10px 12px",color:"#fff",fontSize:11,fontWeight:700,fontFamily:"'DM Sans',sans-serif",textAlign:"center"}}>📸 GRUPOS (1 o varias capturas)</div>
+                <input type="file" accept="image/*" multiple
+                  style={{display:"block",width:"100%",padding:"10px 12px",background:"rgba(255,255,255,0.1)",color:"#fff",fontSize:11,fontFamily:"'DM Sans',sans-serif",border:"none",borderRadius:"0 0 9px 9px",cursor:"pointer"}}
                   onChange={e=>{
                     const files=Array.from(e.target.files||[]);
                     e.target.value="";
@@ -2525,7 +2526,7 @@ Responde SOLO con JSON válido, sin markdown:
                     const run=async()=>{
                       setUploadType("grupos");
                       for(let i=0;i<files.length;i++){
-                        setAiMsg(`Procesando ${i+1}/${files.length}…`);
+                        setAiMsg(`Procesando grupo ${i+1}/${files.length}…`);
                         await processImage(files[i],"grupos");
                       }
                       setAiMsg(`✅ ${files.length} imagen${files.length>1?"es":""} procesada${files.length>1?"s":""}`);
@@ -2533,10 +2534,11 @@ Responde SOLO con JSON válido, sin markdown:
                     run();
                   }}
                 />
-              </label>
-              <label style={{display:"block",padding:"12px",borderRadius:10,background:"#1a3a5c",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textAlign:"center"}}>
-                📸 Subir RESULTADOS (1 o varios)
-                <input type="file" accept="image/*" multiple style={{position:"absolute",opacity:0,width:0,height:0,overflow:"hidden"}}
+              </div>
+              <div style={{background:"#1a3a5c",borderRadius:10,padding:2}}>
+                <div style={{padding:"10px 12px",color:"#fff",fontSize:11,fontWeight:700,fontFamily:"'DM Sans',sans-serif",textAlign:"center"}}>📸 RESULTADOS (1 o varios)</div>
+                <input type="file" accept="image/*" multiple
+                  style={{display:"block",width:"100%",padding:"10px 12px",background:"rgba(255,255,255,0.1)",color:"#fff",fontSize:11,fontFamily:"'DM Sans',sans-serif",border:"none",borderRadius:"0 0 9px 9px",cursor:"pointer"}}
                   onChange={e=>{
                     const files=Array.from(e.target.files||[]);
                     e.target.value="";
@@ -2544,7 +2546,7 @@ Responde SOLO con JSON válido, sin markdown:
                     const run=async()=>{
                       setUploadType("resultado");
                       for(let i=0;i<files.length;i++){
-                        setAiMsg(`Procesando ${i+1}/${files.length}…`);
+                        setAiMsg(`Procesando resultado ${i+1}/${files.length}…`);
                         await processImage(files[i],"resultado");
                       }
                       setAiMsg(`✅ ${files.length} imagen${files.length>1?"es":""} procesada${files.length>1?"s":""}`);
@@ -2552,7 +2554,7 @@ Responde SOLO con JSON válido, sin markdown:
                     run();
                   }}
                 />
-              </label>
+              </div>
               {/* Reset */}
               <button onClick={async()=>{if(!window.confirm("¿Resetear todo el Mundial?")) return;await setDoc(doc(db,"mundial","data"),{grupos:[],partidos:[],stats:{}});setAiMsg("✅ Mundial reseteado");}}
                 style={{padding:"10px",borderRadius:10,background:"#fff5f5",color:"#e74c3c",border:"1px solid #e74c3c",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
