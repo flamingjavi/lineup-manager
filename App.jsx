@@ -2346,6 +2346,8 @@ Responde SOLO con JSON válido, sin markdown:
       if(data.error){throw new Error(data.error.message||"Error de API");}
       const text=data.candidates?.[0]?.content?.parts?.[0]?.text||"{}";
       const clean=text.replace(/```json|```/g,"").trim();
+      setAiMsg("Respuesta: "+clean.slice(0,200));
+      await new Promise(r=>setTimeout(r,3000)); // show for 3 seconds
       const parsed=JSON.parse(clean);
 
       if(type==="grupos"){
