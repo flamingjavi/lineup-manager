@@ -1922,6 +1922,28 @@ function MercadoModal({onClose,teamData,saveTeam,allTeams}){
               {saving?"Guardando…":"✅ Finalizar mercado"}
             </button>
           )}
+          {/* Compartir — siempre visible */}
+          <button onClick={()=>{
+            const lines=[
+              `📊 MERCADO — ${teamData?.teamName||"Mi equipo"}`,
+              `💰 Presupuesto: ${fmtM(presupuesto)}`,
+              ``,
+              `📤 BAJAS`,
+              ...bajas.map((b,i)=>`${i+1}. ${b.name||"—"} ${b.price?`(${b.price}M)`:""} ${b.team?`→ ${b.team}`:""}`),
+              ``,
+              `📥 ALTAS`,
+              ...altas.map((a,i)=>`${i+1}. ${a.name||"—"} ${a.price?`(${a.price}M)`:""} ${a.team?`← ${a.team}`:""}`),
+              ``,
+              `💵 Saldo final: ${fmtM(saldo)}`,
+              done?"✅ Mercado finalizado":"⏳ Pendiente de finalizar",
+            ];
+            const text=lines.join("\n");
+            if(navigator.share){navigator.share({text});}
+            else{navigator.clipboard.writeText(text).then(()=>alert("✅ Copiado al portapapeles"));}
+          }}
+            style={{width:"100%",padding:"10px",borderRadius:10,background:C.inputBg,color:C.textMid,border:`1px solid ${C.border}`,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+            📤 Compartir mercado
+          </button>
           {done&&(
             <div style={{textAlign:"center",color:"#27ae60",fontWeight:700,fontFamily:"'DM Sans',sans-serif",fontSize:12,padding:"8px 0"}}>
               ✅ Mercado finalizado — presupuesto actualizado
@@ -2257,6 +2279,20 @@ function TransferCenter({onClose,user,isAdmin,teamData,allTeams,pool}){
 }
 
 // ─── AVISO BANNER ─────────────────────────────────────────────────────────────
+function CountdownTimer({endsAt}){
+  const[remaining,setRemaining]=useState(Math.max(0,endsAt-Date.now()));
+  useEffect(()=>{
+    const id=setInterval(()=>setRemaining(Math.max(0,endsAt-Date.now())),1000);
+    return()=>clearInterval(id);
+  },[endsAt]);
+  const totalSec=Math.floor(remaining/1000);
+  const h=Math.floor(totalSec/3600);
+  const m=Math.floor((totalSec%3600)/60);
+  const s=totalSec%60;
+  const str=remaining<=0?"¡Ya comenzó!":h>0?`${h}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`:`${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+  return <span style={{fontSize:14,fontWeight:800,color:"#fff",fontFamily:"monospace",background:"rgba(0,0,0,0.2)",padding:"2px 8px",borderRadius:7,flexShrink:0}}>{str}</span>;
+}
+
 function AvisoBanner({onOpen}){
   const[aviso,setAviso]=useState(null);
   useEffect(()=>{
@@ -2269,136 +2305,160 @@ function AvisoBanner({onOpen}){
   return(
     <div onClick={onOpen} style={{position:"fixed",bottom:0,left:0,right:0,zIndex:1000,background:"#e74c3c",padding:"10px 16px",display:"flex",alignItems:"center",gap:8,cursor:"pointer",boxShadow:"0 -4px 20px rgba(231,76,60,0.4)"}}>
       <span style={{fontSize:14}}>🔴</span>
-      <span style={{fontSize:12,fontWeight:700,color:"#fff",fontFamily:"'DM Sans',sans-serif",flex:1}}>{aviso.texto}{aviso.minutos?` — en ${aviso.minutos} min`:""}</span>
-      <span style={{fontSize:10,color:"rgba(255,255,255,0.85)",fontFamily:"'DM Sans',sans-serif",flexShrink:0}}>Ver Mundial →</span>
+      <span style={{fontSize:12,fontWeight:700,color:"#fff",fontFamily:"'DM Sans',sans-serif",flex:1}}>{aviso.texto}</span>
+      {aviso.endsAt&&<CountdownTimer endsAt={aviso.endsAt}/>}
+      <span style={{fontSize:10,color:"rgba(255,255,255,0.85)",fontFamily:"'DM Sans',sans-serif",flexShrink:0}}>Ver →</span>
     </div>
   );
 }
 
-// ─── MANUAL FORMS ─────────────────────────────────────────────────────────────
-function ManualGrupoForm({onSave}){
-  const[nombre,setNombre]=useState("");
-  const[sels,setSels]=useState(["","","",""]);
-  const save=()=>{
-    if(!nombre.trim()||sels.some(s=>!s.trim())) return;
-    onSave({nombre:nombre.trim().toUpperCase(),selecciones:sels.map(s=>s.trim().toUpperCase()),tabla:sels.map(s=>({sel:s.trim().toUpperCase(),pj:0,pg:0,pe:0,pp:0,gf:0,gc:0,pts:0}))});
-    setNombre("");setSels(["","","",""]);
+const GRUPOS_FIJOS=["A","B","C","D","E","F","G","H"];
+const JORNADAS=["1ra Jornada","2da Jornada","3ra Jornada"];
+const FIXTURE_JORNADA=[[[0,1],[2,3]],[[0,2],[1,3]],[[0,3],[1,2]]];
+
+function GruposSetup({grupos,saveM,setAiMsg}){
+  const gruposMap=Object.fromEntries(GRUPOS_FIJOS.map(g=>{
+    const found=grupos.find(gr=>gr.nombre===`GRUPO ${g}`);
+    return [g,found?.selecciones||["","","",""]];
+  }));
+  const[local,setLocal]=useState(gruposMap);
+  const[saving,setSaving]=useState(null);
+  const saveGrupo=async(letra)=>{
+    setSaving(letra);
+    const sels=local[letra].map(s=>s.trim().toUpperCase()).filter(Boolean);
+    if(sels.length!==4){setAiMsg("❌ Necesitas 4 selecciones");setSaving(null);return;}
+    const nombre=`GRUPO ${letra}`;
+    const existing=grupos.filter(g=>g.nombre!==nombre);
+    const found=grupos.find(g=>g.nombre===nombre);
+    const tabla=found?.tabla||sels.map(s=>({sel:s,pj:0,pg:0,pe:0,pp:0,gf:0,gc:0,pts:0}));
+    const newTabla=sels.map((s,i)=>({...(tabla[i]||{pj:0,pg:0,pe:0,pp:0,gf:0,gc:0,pts:0}),sel:s}));
+    await saveM({grupos:[...existing,{nombre,selecciones:sels,tabla:newTabla}]});
+    setAiMsg(`✅ Grupo ${letra} guardado`);setSaving(null);
   };
   return(
-    <div style={{display:"flex",flexDirection:"column",gap:6}}>
-      <input value={nombre} onChange={e=>setNombre(e.target.value)} placeholder="Nombre (ej: GRUPO A)"
-        style={{padding:"7px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:12,fontFamily:"'DM Sans',sans-serif",outline:"none"}}/>
-      {sels.map((s,i)=>(
-        <input key={i} value={s} onChange={e=>{const n=[...sels];n[i]=e.target.value;setSels(n);}} placeholder={`Selección ${i+1}`}
-          style={{padding:"7px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:12,fontFamily:"'DM Sans',sans-serif",outline:"none"}}/>
-      ))}
-      <button onClick={save} disabled={!nombre.trim()||sels.some(s=>!s.trim())}
-        style={{padding:"8px",borderRadius:8,background:"#7c3aed",color:"#fff",border:"none",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:(!nombre.trim()||sels.some(s=>!s.trim()))?0.5:1}}>
-        ➕ Guardar Grupo
-      </button>
+    <div style={{display:"flex",flexDirection:"column",gap:8}}>
+      {GRUPOS_FIJOS.map(letra=>{
+        const guardado=grupos.some(g=>g.nombre===`GRUPO ${letra}`&&(g.selecciones||[]).length===4);
+        return(<div key={letra} style={{background:C.card,borderRadius:9,padding:"10px 12px",border:`1.5px solid ${guardado?"#7c3aed":C.border}`}}>
+          <div style={{fontSize:10,fontWeight:800,color:"#7c3aed",fontFamily:"'DM Sans',sans-serif",marginBottom:6,display:"flex",justifyContent:"space-between"}}>
+            <span>GRUPO {letra}</span>
+            {guardado&&<span style={{fontSize:9,color:"#27ae60"}}>✓ Guardado</span>}
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:4}}>
+            {[0,1,2,3].map(i=>(
+              <input key={i} value={local[letra][i]||""} onChange={e=>{const n={...local};n[letra]=[...n[letra]];n[letra][i]=e.target.value;setLocal(n);}}
+                placeholder={`Selección ${i+1}`}
+                style={{padding:"5px 9px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif",outline:"none"}}/>
+            ))}
+            <button onClick={()=>saveGrupo(letra)} disabled={saving===letra||local[letra].some(s=>!s.trim())}
+              style={{padding:"6px",borderRadius:7,background:"#7c3aed",color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:saving===letra||local[letra].some(s=>!s.trim())?0.5:1}}>
+              {saving===letra?"Guardando…":"Guardar Grupo "+letra}
+            </button>
+          </div>
+        </div>);
+      })}
     </div>
   );
 }
 
 function ManualResultadoForm({grupos,allSelPlayers,fuzzyMatch,mundial,saveM,setAiMsg}){
-  const[local,setLocal]=useState({nombre:"",goles:""});
-  const[visitante,setVisitante]=useState({nombre:"",goles:""});
+  const[jornada,setJornada]=useState("");
+  const[grupoLetra,setGrupoLetra]=useState("");
+  const[partidoIdx,setPartidoIdx]=useState(0);
+  const[golesLocal,setGolesLocal]=useState("");
+  const[golesVisitante,setGolesVisitante]=useState("");
   const[goleadores,setGoleadores]=useState([{nombre:"",equipo:"",goles:1}]);
   const[asistencias,setAsistencias]=useState([{nombre:"",equipo:"",asistencias:1}]);
   const[saving,setSaving]=useState(false);
-
-  const allSels=grupos.flatMap(g=>g.selecciones||[]);
-
+  const grupoData=grupos.find(g=>g.nombre===`GRUPO ${grupoLetra}`);
+  const sels=grupoData?.selecciones||[];
+  const jornadaIdx=JORNADAS.indexOf(jornada);
+  const partidos=jornadaIdx>=0&&sels.length===4?FIXTURE_JORNADA[jornadaIdx]:[];
+  const partido=partidos[partidoIdx]||null;
+  const localNombre=partido?sels[partido[0]]:"";
+  const visitanteNombre=partido?sels[partido[1]]:"";
   const save=async()=>{
-    if(!local.nombre||!visitante.nombre||local.goles===""||visitante.goles==="") return;
+    if(!localNombre||!visitanteNombre||golesLocal===""||golesVisitante==="") return;
     setSaving(true);
     const existing=mundial||{};
     const stats={...(existing.stats||{})};
-    const partidos=[...(existing.partidos||[])];
-    partidos.push({local:{nombre:local.nombre,goles:Number(local.goles)},visitante:{nombre:visitante.nombre,goles:Number(visitante.goles)},fecha:new Date().toISOString()});
-    const mergePlayer=(arr,field)=>{
-      arr.filter(p=>p.nombre.trim()).forEach(p=>{
-        const matched=fuzzyMatch(p.nombre,allSelPlayers);
-        const key=matched?`${matched.selId}_${matched.name}`:p.nombre;
-        if(!stats[key]) stats[key]={name:matched?.name||p.nombre,selName:matched?.selName||p.equipo,goles:0,asistencias:0,ratings:[],partidos:0};
-        if(field==="goles") stats[key].goles+=Number(p.goles)||1;
-        if(field==="asistencias") stats[key].asistencias+=Number(p.asistencias)||1;
-      });
-    };
-    mergePlayer(goleadores,"goles");
-    mergePlayer(asistencias,"asistencias");
-    // update tabla
-    const gl=Number(local.goles),gv=Number(visitante.goles);
+    const pts=[...(existing.partidos||[])];
+    const gl=Number(golesLocal),gv=Number(golesVisitante);
+    pts.push({local:{nombre:localNombre,goles:gl},visitante:{nombre:visitanteNombre,goles:gv},jornada,grupo:`GRUPO ${grupoLetra}`,fecha:new Date().toISOString()});
+    const mergePlayer=(arr,field)=>{arr.filter(p=>p.nombre.trim()).forEach(p=>{
+      const matched=fuzzyMatch(p.nombre,allSelPlayers);
+      const key=matched?`${matched.selId}_${matched.name}`:p.nombre;
+      if(!stats[key]) stats[key]={name:matched?.name||p.nombre,selName:matched?.selName||p.equipo,goles:0,asistencias:0,ratings:[],partidos:0};
+      if(field==="goles") stats[key].goles+=Number(p.goles)||1;
+      if(field==="asistencias") stats[key].asistencias+=Number(p.asistencias)||1;
+    });};
+    mergePlayer(goleadores,"goles");mergePlayer(asistencias,"asistencias");
     const gs=(existing.grupos||[]).map(g=>{
-      const sels=g.selecciones||[];
-      const lname=sels.find(s=>s.toLowerCase().includes(local.nombre.toLowerCase().slice(0,4)))||local.nombre;
-      const vname=sels.find(s=>s.toLowerCase().includes(visitante.nombre.toLowerCase().slice(0,4)))||visitante.nombre;
-      if(!sels.includes(lname)&&!sels.includes(vname)) return g;
+      if(g.nombre!==`GRUPO ${grupoLetra}`) return g;
       const tabla=[...(g.tabla||sels.map(s=>({sel:s,pj:0,pg:0,pe:0,pp:0,gf:0,gc:0,pts:0})))];
       const upd=(sel,gf,gc)=>{const idx=tabla.findIndex(r=>r.sel===sel);if(idx===-1)return;tabla[idx]={...tabla[idx],pj:tabla[idx].pj+1,gf:tabla[idx].gf+gf,gc:tabla[idx].gc+gc,pg:tabla[idx].pg+(gf>gc?1:0),pe:tabla[idx].pe+(gf===gc?1:0),pp:tabla[idx].pp+(gf<gc?1:0),pts:tabla[idx].pts+(gf>gc?3:gf===gc?1:0)};};
-      upd(lname,gl,gv);upd(vname,gv,gl);
+      upd(localNombre,gl,gv);upd(visitanteNombre,gv,gl);
       return{...g,tabla};
     });
-    await saveM({grupos:gs,partidos,stats});
-    setAiMsg(`✅ ${local.nombre} ${gl} - ${gv} ${visitante.nombre}`);
-    setLocal({nombre:"",goles:""});setVisitante({nombre:"",goles:""});
-    setGoleadores([{nombre:"",equipo:"",goles:1}]);setAsistencias([{nombre:"",equipo:"",asistencias:1}]);
+    await saveM({grupos:gs,partidos:pts,stats});
+    setAiMsg(`✅ ${localNombre} ${gl} - ${gv} ${visitanteNombre}`);
+    setGolesLocal("");setGolesVisitante("");setGoleadores([{nombre:"",equipo:"",goles:1}]);setAsistencias([{nombre:"",equipo:"",asistencias:1}]);
     setSaving(false);
   };
-
-  const inp=(val,onChange,placeholder,w="flex")=>(
-    <input value={val} onChange={e=>onChange(e.target.value)} placeholder={placeholder}
-      style={{flex:w==="flex"?1:undefined,width:w!=="flex"?w:undefined,padding:"6px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif",outline:"none"}}/>
-  );
-
+  const inp=(val,onChange,placeholder)=>(<input value={val} onChange={e=>onChange(e.target.value)} placeholder={placeholder} style={{flex:1,padding:"6px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif",outline:"none"}}/>);
   return(
     <div style={{display:"flex",flexDirection:"column",gap:8}}>
-      {/* Marcador */}
-      <div style={{display:"flex",gap:6,alignItems:"center"}}>
-        <select value={local.nombre} onChange={e=>setLocal(l=>({...l,nombre:e.target.value}))}
-          style={{flex:1,padding:"6px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:local.nombre?C.text:C.textFaint,fontSize:11,fontFamily:"'DM Sans',sans-serif",outline:"none"}}>
-          <option value="">Local</option>
-          {allSels.map(s=><option key={s} value={s}>{s}</option>)}
+      <div style={{display:"flex",gap:6}}>
+        <select value={jornada} onChange={e=>{setJornada(e.target.value);setPartidoIdx(0);}} style={{flex:1,padding:"7px 8px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.card,color:jornada?C.text:C.textFaint,fontSize:11,fontFamily:"'DM Sans',sans-serif",outline:"none"}}>
+          <option value="">Jornada</option>
+          {JORNADAS.map(j=><option key={j} value={j}>{j}</option>)}
         </select>
-        <input type="number" min="0" value={local.goles} onChange={e=>setLocal(l=>({...l,goles:e.target.value}))} placeholder="0"
-          style={{width:44,padding:"6px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:12,fontFamily:"monospace",outline:"none",textAlign:"center"}}/>
-        <span style={{color:C.textFaint,fontWeight:800}}>-</span>
-        <input type="number" min="0" value={visitante.goles} onChange={e=>setVisitante(v=>({...v,goles:e.target.value}))} placeholder="0"
-          style={{width:44,padding:"6px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:12,fontFamily:"monospace",outline:"none",textAlign:"center"}}/>
-        <select value={visitante.nombre} onChange={e=>setVisitante(v=>({...v,nombre:e.target.value}))}
-          style={{flex:1,padding:"6px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:visitante.nombre?C.text:C.textFaint,fontSize:11,fontFamily:"'DM Sans',sans-serif",outline:"none"}}>
-          <option value="">Visitante</option>
-          {allSels.map(s=><option key={s} value={s}>{s}</option>)}
+        <select value={grupoLetra} onChange={e=>{setGrupoLetra(e.target.value);setPartidoIdx(0);}} style={{flex:1,padding:"7px 8px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.card,color:grupoLetra?C.text:C.textFaint,fontSize:11,fontFamily:"'DM Sans',sans-serif",outline:"none"}}>
+          <option value="">Grupo</option>
+          {GRUPOS_FIJOS.filter(g=>grupos.some(gr=>gr.nombre===`GRUPO ${g}`&&(gr.selecciones||[]).length===4)).map(g=><option key={g} value={g}>Grupo {g}</option>)}
         </select>
       </div>
-      {/* Goleadores */}
-      <div style={{fontSize:10,fontWeight:700,color:"#27ae60",fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase"}}>⚽ Goleadores</div>
-      {goleadores.map((g,i)=>(
-        <div key={i} style={{display:"flex",gap:5}}>
+      {jornada&&grupoLetra&&partidos.length>0&&(
+        <div style={{display:"flex",gap:6}}>
+          {partidos.map((_,i)=>(
+            <button key={i} onClick={()=>setPartidoIdx(i)} style={{flex:1,padding:"6px 4px",borderRadius:8,border:`1.5px solid ${partidoIdx===i?"#1a3a5c":C.borderDark}`,background:partidoIdx===i?"#1a3a5c":C.card,color:partidoIdx===i?"#fff":C.textMid,fontSize:9,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+              {sels[partidos[i][0]]} vs {sels[partidos[i][1]]}
+            </button>
+          ))}
+        </div>
+      )}
+      {partido&&(<>
+        <div style={{background:"#7c3aed11",borderRadius:9,padding:"8px 12px",display:"flex",alignItems:"center",gap:8}}>
+          <span style={{flex:1,fontSize:11,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif",textAlign:"center"}}>{localNombre}</span>
+          <input type="number" min="0" value={golesLocal} onChange={e=>setGolesLocal(e.target.value)} placeholder="0" style={{width:40,padding:"6px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:14,fontFamily:"monospace",outline:"none",textAlign:"center",fontWeight:800}}/>
+          <span style={{color:C.textFaint,fontWeight:800}}>-</span>
+          <input type="number" min="0" value={golesVisitante} onChange={e=>setGolesVisitante(e.target.value)} placeholder="0" style={{width:40,padding:"6px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:14,fontFamily:"monospace",outline:"none",textAlign:"center",fontWeight:800}}/>
+          <span style={{flex:1,fontSize:11,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif",textAlign:"center"}}>{visitanteNombre}</span>
+        </div>
+        <div style={{fontSize:10,fontWeight:700,color:"#27ae60",fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase"}}>⚽ Goleadores</div>
+        {goleadores.map((g,i)=>(<div key={i} style={{display:"flex",gap:5,alignItems:"center"}}>
           {inp(g.nombre,v=>{const n=[...goleadores];n[i]={...n[i],nombre:v};setGoleadores(n);},"Nombre")}
-          {inp(g.equipo,v=>{const n=[...goleadores];n[i]={...n[i],equipo:v};setGoleadores(n);},"Equipo")}
-          <input type="number" min="1" value={g.goles} onChange={e=>{const n=[...goleadores];n[i]={...n[i],goles:e.target.value};setGoleadores(n);}}
-            style={{width:44,padding:"6px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:11,fontFamily:"monospace",outline:"none",textAlign:"center"}}/>
-          {goleadores.length>1&&<button onClick={()=>setGoleadores(goleadores.filter((_,j)=>j!==i))} style={{background:"none",border:"none",color:"#e74c3c",cursor:"pointer",fontSize:14}}>×</button>}
-        </div>
-      ))}
-      <button onClick={()=>setGoleadores([...goleadores,{nombre:"",equipo:"",goles:1}])} style={{padding:"4px",borderRadius:7,border:`1px dashed #27ae60`,background:"transparent",color:"#27ae60",fontSize:10,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>+ Goleador</button>
-      {/* Asistencias */}
-      <div style={{fontSize:10,fontWeight:700,color:"#2980b9",fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase"}}>🎯 Asistencias</div>
-      {asistencias.map((a,i)=>(
-        <div key={i} style={{display:"flex",gap:5}}>
+          <select value={g.equipo} onChange={e=>{const n=[...goleadores];n[i]={...n[i],equipo:e.target.value};setGoleadores(n);}} style={{width:80,padding:"6px 4px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:g.equipo?C.text:C.textFaint,fontSize:9,fontFamily:"'DM Sans',sans-serif",outline:"none"}}>
+            <option value="">Equipo</option><option value={localNombre}>{localNombre}</option><option value={visitanteNombre}>{visitanteNombre}</option>
+          </select>
+          <input type="number" min="1" value={g.goles} onChange={e=>{const n=[...goleadores];n[i]={...n[i],goles:e.target.value};setGoleadores(n);}} style={{width:38,padding:"6px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:11,fontFamily:"monospace",outline:"none",textAlign:"center"}}/>
+          {goleadores.length>1&&<button onClick={()=>setGoleadores(goleadores.filter((_,j)=>j!==i))} style={{background:"none",border:"none",color:"#e74c3c",cursor:"pointer",fontSize:14,padding:0}}>×</button>}
+        </div>))}
+        <button onClick={()=>setGoleadores([...goleadores,{nombre:"",equipo:"",goles:1}])} style={{padding:"4px",borderRadius:7,border:`1px dashed #27ae60`,background:"transparent",color:"#27ae60",fontSize:10,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>+ Goleador</button>
+        <div style={{fontSize:10,fontWeight:700,color:"#2980b9",fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase"}}>🎯 Asistencias</div>
+        {asistencias.map((a,i)=>(<div key={i} style={{display:"flex",gap:5,alignItems:"center"}}>
           {inp(a.nombre,v=>{const n=[...asistencias];n[i]={...n[i],nombre:v};setAsistencias(n);},"Nombre")}
-          {inp(a.equipo,v=>{const n=[...asistencias];n[i]={...n[i],equipo:v};setAsistencias(n);},"Equipo")}
-          <input type="number" min="1" value={a.asistencias} onChange={e=>{const n=[...asistencias];n[i]={...n[i],asistencias:e.target.value};setAsistencias(n);}}
-            style={{width:44,padding:"6px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:11,fontFamily:"monospace",outline:"none",textAlign:"center"}}/>
-          {asistencias.length>1&&<button onClick={()=>setAsistencias(asistencias.filter((_,j)=>j!==i))} style={{background:"none",border:"none",color:"#e74c3c",cursor:"pointer",fontSize:14}}>×</button>}
-        </div>
-      ))}
-      <button onClick={()=>setAsistencias([...asistencias,{nombre:"",equipo:"",asistencias:1}])} style={{padding:"4px",borderRadius:7,border:`1px dashed #2980b9`,background:"transparent",color:"#2980b9",fontSize:10,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>+ Asistencia</button>
-      <button onClick={save} disabled={saving||!local.nombre||!visitante.nombre||local.goles===""||visitante.goles===""}
-        style={{padding:"10px",borderRadius:9,background:"#1a3a5c",color:"#fff",border:"none",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:saving?0.6:1}}>
-        {saving?"Guardando…":"✅ Guardar Resultado"}
-      </button>
+          <select value={a.equipo} onChange={e=>{const n=[...asistencias];n[i]={...n[i],equipo:e.target.value};setAsistencias(n);}} style={{width:80,padding:"6px 4px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:a.equipo?C.text:C.textFaint,fontSize:9,fontFamily:"'DM Sans',sans-serif",outline:"none"}}>
+            <option value="">Equipo</option><option value={localNombre}>{localNombre}</option><option value={visitanteNombre}>{visitanteNombre}</option>
+          </select>
+          <input type="number" min="1" value={a.asistencias} onChange={e=>{const n=[...asistencias];n[i]={...n[i],asistencias:e.target.value};setAsistencias(n);}} style={{width:38,padding:"6px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:11,fontFamily:"monospace",outline:"none",textAlign:"center"}}/>
+          {asistencias.length>1&&<button onClick={()=>setAsistencias(asistencias.filter((_,j)=>j!==i))} style={{background:"none",border:"none",color:"#e74c3c",cursor:"pointer",fontSize:14,padding:0}}>×</button>}
+        </div>))}
+        <button onClick={()=>setAsistencias([...asistencias,{nombre:"",equipo:"",asistencias:1}])} style={{padding:"4px",borderRadius:7,border:`1px dashed #2980b9`,background:"transparent",color:"#2980b9",fontSize:10,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>+ Asistencia</button>
+        <button onClick={save} disabled={saving||golesLocal===""||golesVisitante===""} style={{padding:"10px",borderRadius:9,background:"#1a3a5c",color:"#fff",border:"none",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:saving?0.6:1}}>
+          {saving?"Guardando…":"✅ Guardar Resultado"}
+        </button>
+      </>)}
     </div>
   );
 }
@@ -2565,7 +2625,8 @@ function MundialModal({onClose,user,isAdmin,allSels,pool}){
         {/* Aviso banner */}
         {mundial?.aviso?.activo&&<div style={{padding:"8px 16px",background:"#e74c3c",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
           <span style={{fontSize:13}}>🔴</span>
-          <span style={{fontSize:12,fontWeight:700,color:"#fff",fontFamily:"'DM Sans',sans-serif",flex:1}}>{mundial.aviso.texto}{mundial.aviso.minutos?` — en ${mundial.aviso.minutos} minutos`:""}</span>
+          <span style={{fontSize:12,fontWeight:700,color:"#fff",fontFamily:"'DM Sans',sans-serif",flex:1}}>{mundial.aviso.texto}</span>
+          {mundial.aviso.endsAt&&<CountdownTimer endsAt={mundial.aviso.endsAt}/>}
         </div>}
         {/* Twitch embed */}
         {showTwitch&&mundial?.twitchChannel&&(
@@ -2666,7 +2727,11 @@ function MundialModal({onClose,user,isAdmin,allSels,pool}){
                   <div style={{display:"flex",gap:6}}>
                     <input type="number" value={avisoMin} onChange={e=>setAvisoMin(e.target.value)} placeholder="Minutos (opcional)"
                       style={{flex:1,padding:"7px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:12,fontFamily:"monospace",outline:"none"}}/>
-                    <button onClick={async()=>{await saveM({aviso:{texto:avisoText,minutos:avisoMin,activo:true}});setAiMsg("✅ Aviso enviado");}}
+                    <button onClick={async()=>{
+                      const endsAt=avisoMin?Date.now()+(Number(avisoMin)*60*1000):null;
+                      await saveM({aviso:{texto:avisoText,minutos:avisoMin,endsAt,activo:true}});
+                      setAiMsg("✅ Aviso enviado");
+                    }}
                       disabled={!avisoText.trim()}
                       style={{padding:"7px 14px",borderRadius:8,background:"#e74c3c",color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:avisoText.trim()?1:0.5}}>
                       Enviar
@@ -2694,20 +2759,15 @@ function MundialModal({onClose,user,isAdmin,allSels,pool}){
                 {mundial?.twitchChannel&&<div style={{fontSize:10,color:"#9147ff",fontFamily:"'DM Sans',sans-serif",marginTop:4}}>Canal: {mundial.twitchChannel}</div>}
               </div>
 
-              {/* AGREGAR GRUPO MANUAL */}
+              {/* GRUPOS A-H */}
               <div style={{background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 14px"}}>
-                <div style={{fontSize:11,fontWeight:800,color:"#7c3aed",fontFamily:"'DM Sans',sans-serif",marginBottom:8,textTransform:"uppercase",letterSpacing:0.5}}>➕ Agregar Grupo</div>
-                <ManualGrupoForm onSave={async(grupo)=>{
-                  const existing=mundial||{};
-                  const grupos=[...(existing.grupos||[]),grupo];
-                  await saveM({grupos});
-                  setAiMsg("✅ Grupo "+grupo.nombre+" agregado");
-                }}/>
+                <div style={{fontSize:11,fontWeight:800,color:"#7c3aed",fontFamily:"'DM Sans',sans-serif",marginBottom:8,textTransform:"uppercase",letterSpacing:0.5}}>🏳️ Selecciones por Grupo</div>
+                <GruposSetup grupos={grupos} saveM={saveM} setAiMsg={setAiMsg}/>
               </div>
 
-              {/* AGREGAR RESULTADO MANUAL */}
+              {/* RESULTADO POR JORNADA */}
               <div style={{background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 14px"}}>
-                <div style={{fontSize:11,fontWeight:800,color:"#1a3a5c",fontFamily:"'DM Sans',sans-serif",marginBottom:8,textTransform:"uppercase",letterSpacing:0.5}}>⚽ Agregar Resultado</div>
+                <div style={{fontSize:11,fontWeight:800,color:"#1a3a5c",fontFamily:"'DM Sans',sans-serif",marginBottom:8,textTransform:"uppercase",letterSpacing:0.5}}>⚽ Resultado por Jornada</div>
                 <ManualResultadoForm grupos={grupos} allSelPlayers={allSelPlayers} fuzzyMatch={fuzzyMatch} mundial={mundial} saveM={saveM} setAiMsg={setAiMsg}/>
               </div>
 
