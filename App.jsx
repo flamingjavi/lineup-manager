@@ -2361,6 +2361,83 @@ function GruposSetup({grupos,saveM,setAiMsg}){
   );
 }
 
+function FixtureSetup({grupos,mundial,saveM,setAiMsg}){
+  // fixture structure: {grupoA: {j1:[{local,visitante},{local,visitante}], j2:..., j3:...}, ...}
+  const fixtureBase=mundial?.fixture||{};
+  const[fixture,setFixture]=useState(fixtureBase);
+  const[saving,setSaving]=useState(false);
+
+  const gruposConSels=GRUPOS_FIJOS.filter(g=>grupos.some(gr=>gr.nombre===`GRUPO ${g}`&&(gr.selecciones||[]).length===4));
+
+  const getSels=g=>grupos.find(gr=>gr.nombre===`GRUPO ${g}`)?.selecciones||[];
+
+  const setPartido=(grupo,jornada,partidoIdx,side,val)=>{
+    setFixture(prev=>{
+      const f={...prev};
+      if(!f[grupo]) f[grupo]={};
+      if(!f[grupo][jornada]) f[grupo][jornada]=[{local:"",visitante:""},{local:"",visitante:""}];
+      const partidos=[...f[grupo][jornada]];
+      partidos[partidoIdx]={...partidos[partidoIdx],[side]:val};
+      f[grupo]={...f[grupo],[jornada]:partidos};
+      return f;
+    });
+  };
+
+  const saveFixture=async()=>{
+    setSaving(true);
+    await saveM({fixture});
+    setAiMsg("✅ Fixture guardado");
+    setSaving(false);
+  };
+
+  if(gruposConSels.length===0) return(
+    <div style={{color:C.textFaint,fontSize:11,fontFamily:"'DM Sans',sans-serif",textAlign:"center",padding:8}}>Primero configura los grupos con sus selecciones</div>
+  );
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+      {gruposConSels.map(letra=>{
+        const sels=getSels(letra);
+        return(
+          <div key={letra} style={{background:C.card,borderRadius:9,border:`1px solid ${C.border}`,padding:"10px 12px"}}>
+            <div style={{fontSize:10,fontWeight:800,color:"#e67e22",fontFamily:"'DM Sans',sans-serif",marginBottom:8}}>GRUPO {letra}</div>
+            {JORNADAS.map(j=>{
+              const jKey=j.replace(/ /g,"_");
+              const p0=fixture[letra]?.[jKey]?.[0]||{local:"",visitante:""};
+              const p1=fixture[letra]?.[jKey]?.[1]||{local:"",visitante:""};
+              return(
+                <div key={j} style={{marginBottom:8}}>
+                  <div style={{fontSize:9,fontWeight:700,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginBottom:4,textTransform:"uppercase"}}>{j}</div>
+                  {[{p:p0,i:0},{p:p1,i:1}].map(({p,i})=>(
+                    <div key={i} style={{display:"flex",gap:5,alignItems:"center",marginBottom:4}}>
+                      <span style={{fontSize:9,color:C.textFaint,fontFamily:"monospace",width:10,flexShrink:0}}>{i+1}.</span>
+                      <select value={p.local} onChange={e=>setPartido(letra,jKey,i,"local",e.target.value)}
+                        style={{flex:1,padding:"5px 6px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:p.local?C.text:C.textFaint,fontSize:10,fontFamily:"'DM Sans',sans-serif",outline:"none"}}>
+                        <option value="">Local</option>
+                        {sels.filter(s=>s!==p.visitante).map(s=><option key={s} value={s}>{s}</option>)}
+                      </select>
+                      <span style={{fontSize:9,color:C.textFaint,flexShrink:0}}>vs</span>
+                      <select value={p.visitante} onChange={e=>setPartido(letra,jKey,i,"visitante",e.target.value)}
+                        style={{flex:1,padding:"5px 6px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:p.visitante?C.text:C.textFaint,fontSize:10,fontFamily:"'DM Sans',sans-serif",outline:"none"}}>
+                        <option value="">Visitante</option>
+                        {sels.filter(s=>s!==p.local).map(s=><option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
+      <button onClick={saveFixture} disabled={saving}
+        style={{padding:"10px",borderRadius:9,background:"#e67e22",color:"#fff",border:"none",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:saving?0.6:1}}>
+        {saving?"Guardando…":"💾 Guardar Fixture Completo"}
+      </button>
+    </div>
+  );
+}
+
 function ManualResultadoForm({grupos,allSelPlayers,fuzzyMatch,mundial,saveM,setAiMsg}){
   const[jornada,setJornada]=useState("");
   const[grupoLetra,setGrupoLetra]=useState("");
@@ -2373,6 +2450,11 @@ function ManualResultadoForm({grupos,allSelPlayers,fuzzyMatch,mundial,saveM,setA
   const[saving,setSaving]=useState(false);
   const grupoData=grupos.find(g=>g.nombre===`GRUPO ${grupoLetra}`);
   const sels=grupoData?.selecciones||[];
+
+  // Get saved fixture for this grupo+jornada
+  const jKey=jornada.replace(/ /g,"_");
+  const fixturePartidos=mundial?.fixture?.[grupoLetra]?.[jKey]||[];
+  const hasFixture=fixturePartidos.length>0&&fixturePartidos.some(p=>p.local&&p.visitante);
   const save=async()=>{
     if(!localNombre||!visitanteNombre||golesLocal===""||golesVisitante==="") return;
     setSaving(true);
@@ -2415,19 +2497,33 @@ function ManualResultadoForm({grupos,allSelPlayers,fuzzyMatch,mundial,saveM,setA
         </select>
       </div>
       {jornada&&grupoLetra&&sels.length===4&&(
-        <div style={{display:"flex",gap:6,alignItems:"center"}}>
-          <select value={localNombre} onChange={e=>{setLocalNombre(e.target.value);if(e.target.value===visitanteNombre)setVisitanteNombre("");}}
-            style={{flex:1,padding:"7px 8px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.card,color:localNombre?C.text:C.textFaint,fontSize:11,fontFamily:"'DM Sans',sans-serif",outline:"none"}}>
-            <option value="">Local</option>
-            {sels.filter(s=>s!==visitanteNombre).map(s=><option key={s} value={s}>{s}</option>)}
-          </select>
-          <span style={{color:C.textFaint,fontWeight:800,fontSize:12,flexShrink:0}}>vs</span>
-          <select value={visitanteNombre} onChange={e=>{setVisitanteNombre(e.target.value);if(e.target.value===localNombre)setLocalNombre("");}}
-            style={{flex:1,padding:"7px 8px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.card,color:visitanteNombre?C.text:C.textFaint,fontSize:11,fontFamily:"'DM Sans',sans-serif",outline:"none"}}>
-            <option value="">Visitante</option>
-            {sels.filter(s=>s!==localNombre).map(s=><option key={s} value={s}>{s}</option>)}
-          </select>
-        </div>
+        hasFixture?(
+          // Show saved fixture matchups as buttons
+          <div style={{display:"flex",flexDirection:"column",gap:5}}>
+            <div style={{fontSize:9,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",textAlign:"center"}}>Elige el partido:</div>
+            {fixturePartidos.filter(p=>p.local&&p.visitante).map((p,i)=>(
+              <button key={i} onClick={()=>{setLocalNombre(p.local);setVisitanteNombre(p.visitante);}}
+                style={{padding:"8px 10px",borderRadius:8,border:`1.5px solid ${localNombre===p.local&&visitanteNombre===p.visitante?"#1a3a5c":C.borderDark}`,background:localNombre===p.local&&visitanteNombre===p.visitante?"#1a3a5c":C.card,color:localNombre===p.local&&visitanteNombre===p.visitante?"#fff":C.text,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textAlign:"center"}}>
+                {p.local} vs {p.visitante}
+              </button>
+            ))}
+          </div>
+        ):(
+          // Manual fallback if no fixture configured
+          <div style={{display:"flex",gap:6,alignItems:"center"}}>
+            <select value={localNombre} onChange={e=>{setLocalNombre(e.target.value);if(e.target.value===visitanteNombre)setVisitanteNombre("");}}
+              style={{flex:1,padding:"7px 8px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.card,color:localNombre?C.text:C.textFaint,fontSize:11,fontFamily:"'DM Sans',sans-serif",outline:"none"}}>
+              <option value="">Local</option>
+              {sels.filter(s=>s!==visitanteNombre).map(s=><option key={s} value={s}>{s}</option>)}
+            </select>
+            <span style={{color:C.textFaint,fontWeight:800,fontSize:12,flexShrink:0}}>vs</span>
+            <select value={visitanteNombre} onChange={e=>{setVisitanteNombre(e.target.value);if(e.target.value===localNombre)setLocalNombre("");}}
+              style={{flex:1,padding:"7px 8px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.card,color:visitanteNombre?C.text:C.textFaint,fontSize:11,fontFamily:"'DM Sans',sans-serif",outline:"none"}}>
+              <option value="">Visitante</option>
+              {sels.filter(s=>s!==localNombre).map(s=><option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+        )
       )}
       {localNombre&&visitanteNombre&&(<>
         <div style={{background:"#7c3aed11",borderRadius:9,padding:"8px 12px",display:"flex",alignItems:"center",gap:8}}>
@@ -2765,6 +2861,12 @@ function MundialModal({onClose,user,isAdmin,allSels,pool}){
               <div style={{background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 14px"}}>
                 <div style={{fontSize:11,fontWeight:800,color:"#7c3aed",fontFamily:"'DM Sans',sans-serif",marginBottom:8,textTransform:"uppercase",letterSpacing:0.5}}>🏳️ Selecciones por Grupo</div>
                 <GruposSetup grupos={grupos} saveM={saveM} setAiMsg={setAiMsg}/>
+              </div>
+
+              {/* FIXTURE */}
+              <div style={{background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 14px"}}>
+                <div style={{fontSize:11,fontWeight:800,color:"#e67e22",fontFamily:"'DM Sans',sans-serif",marginBottom:8,textTransform:"uppercase",letterSpacing:0.5}}>📅 Configurar Fixture</div>
+                <FixtureSetup grupos={grupos} mundial={mundial} saveM={saveM} setAiMsg={setAiMsg}/>
               </div>
 
               {/* RESULTADO POR JORNADA */}
