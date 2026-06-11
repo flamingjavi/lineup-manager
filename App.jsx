@@ -1620,6 +1620,19 @@ function SeleccionesModal({onClose,lockedCountry,isAdmin,allSels:allSelsProp}){
             {selPais&&<select value={selFormation} onChange={e=>{setSelFormation(e.target.value);save({formation:e.target.value});}} style={{width:90,padding:"7px 6px",borderRadius:9,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"monospace",outline:"none"}}>
               {Object.keys(FORMATIONS).map(f=><option key={f} value={f}>{f}</option>)}
             </select>}
+            {selPais&&<button title="Renombrar" onClick={async()=>{
+              const newName=window.prompt("Nuevo nombre para la selección:",allSels.find(s=>s.id===selPais)?.country||selPais);
+              if(!newName||!newName.trim()) return;
+              await updateDoc(doc(db,"selecciones",selPais),{country:newName.trim().toUpperCase()});
+              setAllSelsFb(prev=>prev.map(s=>s.id===selPais?{...s,country:newName.trim().toUpperCase()}:s));
+            }} style={{padding:"6px 8px",borderRadius:8,background:"#ebf5fb",border:"1px solid #2980b9",color:"#2980b9",fontSize:12,cursor:"pointer",flexShrink:0}}>✏️</button>}
+            {selPais&&<button title="Eliminar selección" onClick={async()=>{
+              const sel=allSels.find(s=>s.id===selPais);
+              if(!window.confirm(`¿Eliminar "${sel?.country||selPais}"? Esta acción no se puede deshacer.`)) return;
+              await deleteDoc(doc(db,"selecciones",selPais));
+              setAllSelsFb(prev=>prev.filter(s=>s.id!==selPais));
+              setSelPais("");
+            }} style={{padding:"6px 8px",borderRadius:8,background:"#fff5f5",border:"1px solid #e74c3c",color:"#e74c3c",fontSize:12,cursor:"pointer",flexShrink:0}}>🗑️</button>}
           </div>
         )}
         {/* Formación inline cuando el país está fijado */}
