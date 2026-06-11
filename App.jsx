@@ -2311,11 +2311,20 @@ function MundialModal({onClose,user,isAdmin,allSels,pool}){
       const prompt=type==="grupos"
         ?`Analiza esta captura de FC26 y extrae los grupos del mundial. Responde SOLO con JSON sin markdown: {"grupos":[{"nombre":"Grupo A","selecciones":["NOMBRE1","NOMBRE2","NOMBRE3","NOMBRE4"]}]}`
         :`Analiza esta captura de resultado FC26. Responde SOLO con JSON sin markdown: {"local":{"nombre":"","goles":0},"visitante":{"nombre":"","goles":0},"goleadores":[{"nombre":"","equipo":"","goles":1}],"asistencias":[{"nombre":"","equipo":"","asistencias":1}],"calificaciones":[{"nombre":"","equipo":"","rating":0.0}]}`;
-      const resp=await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=AIzaSyAGlxjD12k38Xu9L-8K165iJma1ZwR7tyY",{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({contents:[{parts:[{inline_data:{mime_type:file.type||"image/jpeg",data:b64}},{text:prompt}]}],generationConfig:{temperature:0,maxOutputTokens:2000}})
-      });
+      const GEMINI_KEY="AIzaSyAGlxjD12k38Xu9L-8K165iJma1ZwR7tyY";
+      const body=JSON.stringify({contents:[{parts:[{inline_data:{mime_type:file.type||"image/jpeg",data:b64}},{text:prompt}]}],generationConfig:{temperature:0,maxOutputTokens:2000}});
+      let resp;
+      // Try direct first, fallback to allorigins proxy
+      try{
+        resp=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`,{
+          method:"POST",headers:{"Content-Type":"application/json"},body
+        });
+      }catch(corsErr){
+        // Fallback: use cors proxy
+        resp=await fetch(`https://corsproxy.io/?url=${encodeURIComponent(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`)}`,{
+          method:"POST",headers:{"Content-Type":"application/json"},body
+        });
+      }
       if(!resp.ok) throw new Error("HTTP "+resp.status);
       const data=await resp.json();
       if(data.error) throw new Error(data.error.message);
