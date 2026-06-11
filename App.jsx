@@ -2256,6 +2256,134 @@ function TransferCenter({onClose,user,isAdmin,teamData,allTeams,pool}){
   );
 }
 
+// ─── MANUAL FORMS ─────────────────────────────────────────────────────────────
+function ManualGrupoForm({onSave}){
+  const[nombre,setNombre]=useState("");
+  const[sels,setSels]=useState(["","","",""]);
+  const save=()=>{
+    if(!nombre.trim()||sels.some(s=>!s.trim())) return;
+    onSave({nombre:nombre.trim().toUpperCase(),selecciones:sels.map(s=>s.trim().toUpperCase()),tabla:sels.map(s=>({sel:s.trim().toUpperCase(),pj:0,pg:0,pe:0,pp:0,gf:0,gc:0,pts:0}))});
+    setNombre("");setSels(["","","",""]);
+  };
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:6}}>
+      <input value={nombre} onChange={e=>setNombre(e.target.value)} placeholder="Nombre (ej: GRUPO A)"
+        style={{padding:"7px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:12,fontFamily:"'DM Sans',sans-serif",outline:"none"}}/>
+      {sels.map((s,i)=>(
+        <input key={i} value={s} onChange={e=>{const n=[...sels];n[i]=e.target.value;setSels(n);}} placeholder={`Selección ${i+1}`}
+          style={{padding:"7px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:12,fontFamily:"'DM Sans',sans-serif",outline:"none"}}/>
+      ))}
+      <button onClick={save} disabled={!nombre.trim()||sels.some(s=>!s.trim())}
+        style={{padding:"8px",borderRadius:8,background:"#7c3aed",color:"#fff",border:"none",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:(!nombre.trim()||sels.some(s=>!s.trim()))?0.5:1}}>
+        ➕ Guardar Grupo
+      </button>
+    </div>
+  );
+}
+
+function ManualResultadoForm({grupos,allSelPlayers,fuzzyMatch,mundial,saveM,setAiMsg}){
+  const[local,setLocal]=useState({nombre:"",goles:""});
+  const[visitante,setVisitante]=useState({nombre:"",goles:""});
+  const[goleadores,setGoleadores]=useState([{nombre:"",equipo:"",goles:1}]);
+  const[asistencias,setAsistencias]=useState([{nombre:"",equipo:"",asistencias:1}]);
+  const[saving,setSaving]=useState(false);
+
+  const allSels=grupos.flatMap(g=>g.selecciones||[]);
+
+  const save=async()=>{
+    if(!local.nombre||!visitante.nombre||local.goles===""||visitante.goles==="") return;
+    setSaving(true);
+    const existing=mundial||{};
+    const stats={...(existing.stats||{})};
+    const partidos=[...(existing.partidos||[])];
+    partidos.push({local:{nombre:local.nombre,goles:Number(local.goles)},visitante:{nombre:visitante.nombre,goles:Number(visitante.goles)},fecha:new Date().toISOString()});
+    const mergePlayer=(arr,field)=>{
+      arr.filter(p=>p.nombre.trim()).forEach(p=>{
+        const matched=fuzzyMatch(p.nombre,allSelPlayers);
+        const key=matched?`${matched.selId}_${matched.name}`:p.nombre;
+        if(!stats[key]) stats[key]={name:matched?.name||p.nombre,selName:matched?.selName||p.equipo,goles:0,asistencias:0,ratings:[],partidos:0};
+        if(field==="goles") stats[key].goles+=Number(p.goles)||1;
+        if(field==="asistencias") stats[key].asistencias+=Number(p.asistencias)||1;
+      });
+    };
+    mergePlayer(goleadores,"goles");
+    mergePlayer(asistencias,"asistencias");
+    // update tabla
+    const gl=Number(local.goles),gv=Number(visitante.goles);
+    const gs=(existing.grupos||[]).map(g=>{
+      const sels=g.selecciones||[];
+      const lname=sels.find(s=>s.toLowerCase().includes(local.nombre.toLowerCase().slice(0,4)))||local.nombre;
+      const vname=sels.find(s=>s.toLowerCase().includes(visitante.nombre.toLowerCase().slice(0,4)))||visitante.nombre;
+      if(!sels.includes(lname)&&!sels.includes(vname)) return g;
+      const tabla=[...(g.tabla||sels.map(s=>({sel:s,pj:0,pg:0,pe:0,pp:0,gf:0,gc:0,pts:0})))];
+      const upd=(sel,gf,gc)=>{const idx=tabla.findIndex(r=>r.sel===sel);if(idx===-1)return;tabla[idx]={...tabla[idx],pj:tabla[idx].pj+1,gf:tabla[idx].gf+gf,gc:tabla[idx].gc+gc,pg:tabla[idx].pg+(gf>gc?1:0),pe:tabla[idx].pe+(gf===gc?1:0),pp:tabla[idx].pp+(gf<gc?1:0),pts:tabla[idx].pts+(gf>gc?3:gf===gc?1:0)};};
+      upd(lname,gl,gv);upd(vname,gv,gl);
+      return{...g,tabla};
+    });
+    await saveM({grupos:gs,partidos,stats});
+    setAiMsg(`✅ ${local.nombre} ${gl} - ${gv} ${visitante.nombre}`);
+    setLocal({nombre:"",goles:""});setVisitante({nombre:"",goles:""});
+    setGoleadores([{nombre:"",equipo:"",goles:1}]);setAsistencias([{nombre:"",equipo:"",asistencias:1}]);
+    setSaving(false);
+  };
+
+  const inp=(val,onChange,placeholder,w="flex")=>(
+    <input value={val} onChange={e=>onChange(e.target.value)} placeholder={placeholder}
+      style={{flex:w==="flex"?1:undefined,width:w!=="flex"?w:undefined,padding:"6px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif",outline:"none"}}/>
+  );
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:8}}>
+      {/* Marcador */}
+      <div style={{display:"flex",gap:6,alignItems:"center"}}>
+        <select value={local.nombre} onChange={e=>setLocal(l=>({...l,nombre:e.target.value}))}
+          style={{flex:1,padding:"6px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:local.nombre?C.text:C.textFaint,fontSize:11,fontFamily:"'DM Sans',sans-serif",outline:"none"}}>
+          <option value="">Local</option>
+          {allSels.map(s=><option key={s} value={s}>{s}</option>)}
+        </select>
+        <input type="number" min="0" value={local.goles} onChange={e=>setLocal(l=>({...l,goles:e.target.value}))} placeholder="0"
+          style={{width:44,padding:"6px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:12,fontFamily:"monospace",outline:"none",textAlign:"center"}}/>
+        <span style={{color:C.textFaint,fontWeight:800}}>-</span>
+        <input type="number" min="0" value={visitante.goles} onChange={e=>setVisitante(v=>({...v,goles:e.target.value}))} placeholder="0"
+          style={{width:44,padding:"6px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:12,fontFamily:"monospace",outline:"none",textAlign:"center"}}/>
+        <select value={visitante.nombre} onChange={e=>setVisitante(v=>({...v,nombre:e.target.value}))}
+          style={{flex:1,padding:"6px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:visitante.nombre?C.text:C.textFaint,fontSize:11,fontFamily:"'DM Sans',sans-serif",outline:"none"}}>
+          <option value="">Visitante</option>
+          {allSels.map(s=><option key={s} value={s}>{s}</option>)}
+        </select>
+      </div>
+      {/* Goleadores */}
+      <div style={{fontSize:10,fontWeight:700,color:"#27ae60",fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase"}}>⚽ Goleadores</div>
+      {goleadores.map((g,i)=>(
+        <div key={i} style={{display:"flex",gap:5}}>
+          {inp(g.nombre,v=>{const n=[...goleadores];n[i]={...n[i],nombre:v};setGoleadores(n);},"Nombre")}
+          {inp(g.equipo,v=>{const n=[...goleadores];n[i]={...n[i],equipo:v};setGoleadores(n);},"Equipo")}
+          <input type="number" min="1" value={g.goles} onChange={e=>{const n=[...goleadores];n[i]={...n[i],goles:e.target.value};setGoleadores(n);}}
+            style={{width:44,padding:"6px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:11,fontFamily:"monospace",outline:"none",textAlign:"center"}}/>
+          {goleadores.length>1&&<button onClick={()=>setGoleadores(goleadores.filter((_,j)=>j!==i))} style={{background:"none",border:"none",color:"#e74c3c",cursor:"pointer",fontSize:14}}>×</button>}
+        </div>
+      ))}
+      <button onClick={()=>setGoleadores([...goleadores,{nombre:"",equipo:"",goles:1}])} style={{padding:"4px",borderRadius:7,border:`1px dashed #27ae60`,background:"transparent",color:"#27ae60",fontSize:10,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>+ Goleador</button>
+      {/* Asistencias */}
+      <div style={{fontSize:10,fontWeight:700,color:"#2980b9",fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase"}}>🎯 Asistencias</div>
+      {asistencias.map((a,i)=>(
+        <div key={i} style={{display:"flex",gap:5}}>
+          {inp(a.nombre,v=>{const n=[...asistencias];n[i]={...n[i],nombre:v};setAsistencias(n);},"Nombre")}
+          {inp(a.equipo,v=>{const n=[...asistencias];n[i]={...n[i],equipo:v};setAsistencias(n);},"Equipo")}
+          <input type="number" min="1" value={a.asistencias} onChange={e=>{const n=[...asistencias];n[i]={...n[i],asistencias:e.target.value};setAsistencias(n);}}
+            style={{width:44,padding:"6px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:11,fontFamily:"monospace",outline:"none",textAlign:"center"}}/>
+          {asistencias.length>1&&<button onClick={()=>setAsistencias(asistencias.filter((_,j)=>j!==i))} style={{background:"none",border:"none",color:"#e74c3c",cursor:"pointer",fontSize:14}}>×</button>}
+        </div>
+      ))}
+      <button onClick={()=>setAsistencias([...asistencias,{nombre:"",equipo:"",asistencias:1}])} style={{padding:"4px",borderRadius:7,border:`1px dashed #2980b9`,background:"transparent",color:"#2980b9",fontSize:10,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>+ Asistencia</button>
+      <button onClick={save} disabled={saving||!local.nombre||!visitante.nombre||local.goles===""||visitante.goles===""}
+        style={{padding:"10px",borderRadius:9,background:"#1a3a5c",color:"#fff",border:"none",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:saving?0.6:1}}>
+        {saving?"Guardando…":"✅ Guardar Resultado"}
+      </button>
+    </div>
+  );
+}
+
 // ─── MUNDIAL ──────────────────────────────────────────────────────────────────
 function MundialModal({onClose,user,isAdmin,allSels,pool}){
   const[tab,setTab]=useState("tabla"); // tabla|goleadores|asistencias|fixture|admin
@@ -2480,54 +2608,30 @@ function MundialModal({onClose,user,isAdmin,allSels,pool}){
           {/* ADMIN */}
           {tab==="admin"&&isAdmin&&(
             <div style={{display:"flex",flexDirection:"column",gap:12}}>
-              <div style={{fontSize:11,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",textAlign:"center"}}>Sube capturas de FC26 para poblar el Mundial automáticamente</div>
-              {/* iOS-compatible: input visible en el flujo normal del DOM */}
-              <div style={{background:"linear-gradient(135deg,#4c1d95,#7c3aed)",borderRadius:10,padding:2}}>
-                <div style={{padding:"10px 12px",color:"#fff",fontSize:11,fontWeight:700,fontFamily:"'DM Sans',sans-serif",textAlign:"center"}}>📸 GRUPOS (1 o varias capturas)</div>
-                <input type="file" accept="image/*" multiple
-                  style={{display:"block",width:"100%",padding:"10px 12px",background:"rgba(255,255,255,0.1)",color:"#fff",fontSize:11,fontFamily:"'DM Sans',sans-serif",border:"none",borderRadius:"0 0 9px 9px",cursor:"pointer"}}
-                  onChange={e=>{
-                    const files=Array.from(e.target.files||[]);
-                    e.target.value="";
-                    if(!files.length) return;
-                    const run=async()=>{
-                      setUploadType("grupos");
-                      for(let i=0;i<files.length;i++){
-                        setAiMsg(`Procesando grupo ${i+1}/${files.length}…`);
-                        await processImage(files[i],"grupos");
-                      }
-                      setAiMsg(`✅ ${files.length} imagen${files.length>1?"es":""} procesada${files.length>1?"s":""}`);
-                    };
-                    run();
-                  }}
-                />
+
+              {/* AGREGAR GRUPO MANUAL */}
+              <div style={{background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 14px"}}>
+                <div style={{fontSize:11,fontWeight:800,color:"#7c3aed",fontFamily:"'DM Sans',sans-serif",marginBottom:8,textTransform:"uppercase",letterSpacing:0.5}}>➕ Agregar Grupo</div>
+                <ManualGrupoForm onSave={async(grupo)=>{
+                  const existing=mundial||{};
+                  const grupos=[...(existing.grupos||[]),grupo];
+                  await saveM({grupos});
+                  setAiMsg("✅ Grupo "+grupo.nombre+" agregado");
+                }}/>
               </div>
-              <div style={{background:"#1a3a5c",borderRadius:10,padding:2}}>
-                <div style={{padding:"10px 12px",color:"#fff",fontSize:11,fontWeight:700,fontFamily:"'DM Sans',sans-serif",textAlign:"center"}}>📸 RESULTADOS (1 o varios)</div>
-                <input type="file" accept="image/*" multiple
-                  style={{display:"block",width:"100%",padding:"10px 12px",background:"rgba(255,255,255,0.1)",color:"#fff",fontSize:11,fontFamily:"'DM Sans',sans-serif",border:"none",borderRadius:"0 0 9px 9px",cursor:"pointer"}}
-                  onChange={e=>{
-                    const files=Array.from(e.target.files||[]);
-                    e.target.value="";
-                    if(!files.length) return;
-                    const run=async()=>{
-                      setUploadType("resultado");
-                      for(let i=0;i<files.length;i++){
-                        setAiMsg(`Procesando resultado ${i+1}/${files.length}…`);
-                        await processImage(files[i],"resultado");
-                      }
-                      setAiMsg(`✅ ${files.length} imagen${files.length>1?"es":""} procesada${files.length>1?"s":""}`);
-                    };
-                    run();
-                  }}
-                />
+
+              {/* AGREGAR RESULTADO MANUAL */}
+              <div style={{background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 14px"}}>
+                <div style={{fontSize:11,fontWeight:800,color:"#1a3a5c",fontFamily:"'DM Sans',sans-serif",marginBottom:8,textTransform:"uppercase",letterSpacing:0.5}}>⚽ Agregar Resultado</div>
+                <ManualResultadoForm grupos={grupos} allSelPlayers={allSelPlayers} fuzzyMatch={fuzzyMatch} mundial={mundial} saveM={saveM} setAiMsg={setAiMsg}/>
               </div>
+
               {/* Reset */}
               <button onClick={async()=>{if(!window.confirm("¿Resetear todo el Mundial?")) return;await setDoc(doc(db,"mundial","data"),{grupos:[],partidos:[],stats:{}});setAiMsg("✅ Mundial reseteado");}}
                 style={{padding:"10px",borderRadius:10,background:"#fff5f5",color:"#e74c3c",border:"1px solid #e74c3c",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
                 🗑️ Resetear Mundial
               </button>
-              {/* Partidos info */}
+
               <div style={{background:C.inputBg,borderRadius:10,padding:"10px 14px",fontSize:11,color:C.textMid,fontFamily:"'DM Sans',sans-serif"}}>
                 📊 {grupos.length} grupos · {partidos.length} partidos · {stats.length} jugadores con stats
               </div>
