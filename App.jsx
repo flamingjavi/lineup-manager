@@ -2256,6 +2256,25 @@ function TransferCenter({onClose,user,isAdmin,teamData,allTeams,pool}){
   );
 }
 
+// ─── AVISO BANNER ─────────────────────────────────────────────────────────────
+function AvisoBanner({onOpen}){
+  const[aviso,setAviso]=useState(null);
+  useEffect(()=>{
+    const unsub=onSnapshot(doc(db,"mundial","data"),snap=>{
+      if(snap.exists()) setAviso(snap.data()?.aviso||null);
+    });
+    return unsub;
+  },[]);
+  if(!aviso?.activo) return null;
+  return(
+    <div onClick={onOpen} style={{position:"fixed",bottom:0,left:0,right:0,zIndex:1000,background:"#e74c3c",padding:"10px 16px",display:"flex",alignItems:"center",gap:8,cursor:"pointer",boxShadow:"0 -4px 20px rgba(231,76,60,0.4)"}}>
+      <span style={{fontSize:14}}>🔴</span>
+      <span style={{fontSize:12,fontWeight:700,color:"#fff",fontFamily:"'DM Sans',sans-serif",flex:1}}>{aviso.texto}{aviso.minutos?` — en ${aviso.minutos} min`:""}</span>
+      <span style={{fontSize:10,color:"rgba(255,255,255,0.85)",fontFamily:"'DM Sans',sans-serif",flexShrink:0}}>Ver Mundial →</span>
+    </div>
+  );
+}
+
 // ─── MANUAL FORMS ─────────────────────────────────────────────────────────────
 function ManualGrupoForm({onSave}){
   const[nombre,setNombre]=useState("");
@@ -2386,17 +2405,26 @@ function ManualResultadoForm({grupos,allSelPlayers,fuzzyMatch,mundial,saveM,setA
 
 // ─── MUNDIAL ──────────────────────────────────────────────────────────────────
 function MundialModal({onClose,user,isAdmin,allSels,pool}){
-  const[tab,setTab]=useState("tabla"); // tabla|goleadores|asistencias|fixture|admin
+  const[tab,setTab]=useState("tabla");
   const[mundial,setMundial]=useState(null);
   const[uploading,setUploading]=useState(false);
-  const[uploadType,setUploadType]=useState(null); // "grupos"|"resultado"
+  const[uploadType,setUploadType]=useState(null);
   const[aiMsg,setAiMsg]=useState("");
+  const[avisoText,setAvisoText]=useState("");
+  const[avisoMin,setAvisoMin]=useState("");
+  const[twitchChannel,setTwitchChannel]=useState("");
+  const[showTwitch,setShowTwitch]=useState(false);
   const fileRef=useRef(null);
 
   useEffect(()=>{
     const unsub=onSnapshot(doc(db,"mundial","data"),snap=>{
-      if(snap.exists()) setMundial(snap.data());
-      else setMundial(null);
+      if(snap.exists()){
+        const d=snap.data();
+        setMundial(d);
+        setAvisoText(d.aviso?.texto||"");
+        setAvisoMin(d.aviso?.minutos||"");
+        setTwitchChannel(d.twitchChannel||"");
+      } else setMundial(null);
     });
     return unsub;
   },[]);
@@ -2528,8 +2556,28 @@ function MundialModal({onClose,user,isAdmin,allSels,pool}){
         <div style={{padding:"12px 16px",background:"linear-gradient(135deg,#4c1d95,#7c3aed)",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
           <span style={{fontSize:15,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>🌍 MUNDIAL DE SELECCIONES</span>
           <span style={{fontSize:9,background:"rgba(255,255,255,0.2)",color:"#fff",padding:"2px 7px",borderRadius:20,fontFamily:"'DM Sans',sans-serif",fontWeight:700}}>BETA</span>
-          <button onClick={onClose} style={{marginLeft:"auto",background:"rgba(255,255,255,0.15)",border:"none",borderRadius:"50%",width:28,height:28,color:"#fff",cursor:"pointer",fontSize:15,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+          {mundial?.twitchChannel&&<button onClick={()=>setShowTwitch(v=>!v)}
+            style={{marginLeft:"auto",padding:"4px 10px",borderRadius:20,background:showTwitch?"#e74c3c":"rgba(255,255,255,0.15)",border:"none",color:"#fff",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",display:"flex",alignItems:"center",gap:4}}>
+            🔴 {showTwitch?"Cerrar":"En Vivo"}
+          </button>}
+          <button onClick={onClose} style={{marginLeft:mundial?.twitchChannel?"0":"auto",background:"rgba(255,255,255,0.15)",border:"none",borderRadius:"50%",width:28,height:28,color:"#fff",cursor:"pointer",fontSize:15,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
         </div>
+        {/* Aviso banner */}
+        {mundial?.aviso?.activo&&<div style={{padding:"8px 16px",background:"#e74c3c",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+          <span style={{fontSize:13}}>🔴</span>
+          <span style={{fontSize:12,fontWeight:700,color:"#fff",fontFamily:"'DM Sans',sans-serif",flex:1}}>{mundial.aviso.texto}{mundial.aviso.minutos?` — en ${mundial.aviso.minutos} minutos`:""}</span>
+        </div>}
+        {/* Twitch embed */}
+        {showTwitch&&mundial?.twitchChannel&&(
+          <div style={{flexShrink:0,background:"#000",height:220}}>
+            <iframe
+              src={`https://player.twitch.tv/?channel=${mundial.twitchChannel}&parent=${window.location.hostname}`}
+              height="220" width="100%" allowFullScreen frameBorder="0"
+              allow="autoplay; fullscreen"
+              style={{display:"block"}}
+            />
+          </div>
+        )}
 
         {/* Tabs */}
         <div style={{padding:"8px 12px",borderBottom:`1px solid ${C.border}`,display:"flex",gap:5,overflowX:"auto",flexShrink:0}}>
@@ -2608,6 +2656,43 @@ function MundialModal({onClose,user,isAdmin,allSels,pool}){
           {/* ADMIN */}
           {tab==="admin"&&isAdmin&&(
             <div style={{display:"flex",flexDirection:"column",gap:12}}>
+
+              {/* AVISO */}
+              <div style={{background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 14px"}}>
+                <div style={{fontSize:11,fontWeight:800,color:"#e74c3c",fontFamily:"'DM Sans',sans-serif",marginBottom:8,textTransform:"uppercase",letterSpacing:0.5}}>🔴 Aviso a usuarios</div>
+                <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                  <input value={avisoText} onChange={e=>setAvisoText(e.target.value)} placeholder="Mensaje (ej: El live inicia pronto)"
+                    style={{padding:"7px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:12,fontFamily:"'DM Sans',sans-serif",outline:"none"}}/>
+                  <div style={{display:"flex",gap:6}}>
+                    <input type="number" value={avisoMin} onChange={e=>setAvisoMin(e.target.value)} placeholder="Minutos (opcional)"
+                      style={{flex:1,padding:"7px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:12,fontFamily:"monospace",outline:"none"}}/>
+                    <button onClick={async()=>{await saveM({aviso:{texto:avisoText,minutos:avisoMin,activo:true}});setAiMsg("✅ Aviso enviado");}}
+                      disabled={!avisoText.trim()}
+                      style={{padding:"7px 14px",borderRadius:8,background:"#e74c3c",color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:avisoText.trim()?1:0.5}}>
+                      Enviar
+                    </button>
+                    {mundial?.aviso?.activo&&<button onClick={async()=>{await saveM({aviso:{...mundial.aviso,activo:false}});setAiMsg("✅ Aviso desactivado");}}
+                      style={{padding:"7px 14px",borderRadius:8,background:C.inputBg,color:"#e74c3c",border:"1px solid #e74c3c",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                      Quitar
+                    </button>}
+                  </div>
+                  {mundial?.aviso?.activo&&<div style={{fontSize:10,color:"#e74c3c",fontFamily:"'DM Sans',sans-serif"}}>🔴 Activo: "{mundial.aviso.texto}"</div>}
+                </div>
+              </div>
+
+              {/* TWITCH */}
+              <div style={{background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 14px"}}>
+                <div style={{fontSize:11,fontWeight:800,color:"#9147ff",fontFamily:"'DM Sans',sans-serif",marginBottom:8,textTransform:"uppercase",letterSpacing:0.5}}>📺 Canal de Twitch</div>
+                <div style={{display:"flex",gap:6}}>
+                  <input value={twitchChannel} onChange={e=>setTwitchChannel(e.target.value)} placeholder="Nombre del canal (ej: FederacionLS)"
+                    style={{flex:1,padding:"7px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:12,fontFamily:"'DM Sans',sans-serif",outline:"none"}}/>
+                  <button onClick={async()=>{await saveM({twitchChannel:twitchChannel.trim()});setAiMsg("✅ Canal guardado");}}
+                    style={{padding:"7px 14px",borderRadius:8,background:"#9147ff",color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                    Guardar
+                  </button>
+                </div>
+                {mundial?.twitchChannel&&<div style={{fontSize:10,color:"#9147ff",fontFamily:"'DM Sans',sans-serif",marginTop:4}}>Canal: {mundial.twitchChannel}</div>}
+              </div>
 
               {/* AGREGAR GRUPO MANUAL */}
               <div style={{background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 14px"}}>
@@ -3987,6 +4072,7 @@ function MainApp({user,isAdmin,onLogout}){
       {showTransfers&&<TransferCenter onClose={()=>setShowTransfers(false)} user={user} isAdmin={isAdmin} teamData={teamData} allTeams={allTeams} pool={pool}/>}
       {showMercado&&<MercadoModal onClose={()=>setShowMercado(false)} teamData={teamData} saveTeam={saveTeam} allTeams={allTeams}/>}
       {showMundial&&<MundialModal onClose={()=>setShowMundial(false)} user={user} isAdmin={isAdmin} allSels={allSels} pool={pool}/>}
+      {(teamData?.betaAccess||isAdmin)&&!showMundial&&<AvisoBanner onOpen={()=>setShowMundial(true)}/>}
 
       {/* SUB MENU MODAL */}
       {pickModal?.type==="subMenu"&&(
