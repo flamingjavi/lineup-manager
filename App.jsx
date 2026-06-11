@@ -1789,8 +1789,7 @@ function MercadoModal({onClose,teamData,saveTeam,allTeams}){
   const[bajas,setBajas]=useState(mercado.bajas.map(b=>({name:b.name||"",price:b.price||"",team:b.team||""})));
   const[altas,setAltas]=useState(mercado.altas.map(a=>({name:a.name||"",price:a.price||"",team:a.team||""})));
   const[saving,setSaving]=useState(false);
-
-  const parsePresupuesto=v=>{
+  const[shareText,setShareText]=useState("");
     if(!v) return 0;
     const s=String(v).trim().replace(/,/g,"");
     if(s.toUpperCase().endsWith("M")) return parseFloat(s)*1000000;
@@ -1951,12 +1950,40 @@ function MercadoModal({onClose,teamData,saveTeam,allTeams}){
               done?"✅ Mercado finalizado":"⏳ Pendiente de finalizar",
             ];
             const text=lines.join("\n");
-            if(navigator.share){navigator.share({text});}
-            else{navigator.clipboard.writeText(text).then(()=>alert("✅ Copiado al portapapeles"));}
+            if(navigator.share){
+              navigator.share({text}).catch(()=>setShareText(text));
+            } else {
+              setShareText(text);
+            }
           }}
             style={{width:"100%",padding:"10px",borderRadius:10,background:C.inputBg,color:C.textMid,border:`1px solid ${C.border}`,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
             📤 Compartir mercado
           </button>
+          {shareText&&(
+            <div style={{display:"flex",flexDirection:"column",gap:6}}>
+              <textarea readOnly value={shareText} rows={14}
+                style={{width:"100%",padding:"10px",borderRadius:9,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"monospace",resize:"none",outline:"none",boxSizing:"border-box"}}
+                onFocus={e=>e.target.select()}
+              />
+              <div style={{display:"flex",gap:6}}>
+                <button onClick={()=>{
+                  const ta=document.createElement("textarea");
+                  ta.value=shareText;
+                  document.body.appendChild(ta);
+                  ta.select();
+                  document.execCommand("copy");
+                  document.body.removeChild(ta);
+                  alert("✅ Copiado");
+                }} style={{flex:1,padding:"8px",borderRadius:8,background:"#1a3a5c",color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                  📋 Copiar
+                </button>
+                <button onClick={()=>setShareText("")}
+                  style={{padding:"8px 14px",borderRadius:8,background:C.inputBg,color:C.textMid,border:`1px solid ${C.border}`,fontSize:11,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                  ✕
+                </button>
+              </div>
+            </div>
+          )}
           {done&&(
             <div style={{textAlign:"center",color:"#27ae60",fontWeight:700,fontFamily:"'DM Sans',sans-serif",fontSize:12,padding:"8px 0"}}>
               ✅ Mercado finalizado — presupuesto actualizado
