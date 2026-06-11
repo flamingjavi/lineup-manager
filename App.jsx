@@ -2364,7 +2364,8 @@ function GruposSetup({grupos,saveM,setAiMsg}){
 function ManualResultadoForm({grupos,allSelPlayers,fuzzyMatch,mundial,saveM,setAiMsg}){
   const[jornada,setJornada]=useState("");
   const[grupoLetra,setGrupoLetra]=useState("");
-  const[partidoIdx,setPartidoIdx]=useState(0);
+  const[localNombre,setLocalNombre]=useState("");
+  const[visitanteNombre,setVisitanteNombre]=useState("");
   const[golesLocal,setGolesLocal]=useState("");
   const[golesVisitante,setGolesVisitante]=useState("");
   const[goleadores,setGoleadores]=useState([{nombre:"",equipo:"",goles:1}]);
@@ -2372,11 +2373,6 @@ function ManualResultadoForm({grupos,allSelPlayers,fuzzyMatch,mundial,saveM,setA
   const[saving,setSaving]=useState(false);
   const grupoData=grupos.find(g=>g.nombre===`GRUPO ${grupoLetra}`);
   const sels=grupoData?.selecciones||[];
-  const jornadaIdx=JORNADAS.indexOf(jornada);
-  const partidos=jornadaIdx>=0&&sels.length===4?FIXTURE_JORNADA[jornadaIdx]:[];
-  const partido=partidos[partidoIdx]||null;
-  const localNombre=partido?sels[partido[0]]:"";
-  const visitanteNombre=partido?sels[partido[1]]:"";
   const save=async()=>{
     if(!localNombre||!visitanteNombre||golesLocal===""||golesVisitante==="") return;
     setSaving(true);
@@ -2402,7 +2398,7 @@ function ManualResultadoForm({grupos,allSelPlayers,fuzzyMatch,mundial,saveM,setA
     });
     await saveM({grupos:gs,partidos:pts,stats});
     setAiMsg(`✅ ${localNombre} ${gl} - ${gv} ${visitanteNombre}`);
-    setGolesLocal("");setGolesVisitante("");setGoleadores([{nombre:"",equipo:"",goles:1}]);setAsistencias([{nombre:"",equipo:"",asistencias:1}]);
+    setGolesLocal("");setGolesVisitante("");setLocalNombre("");setVisitanteNombre("");setGoleadores([{nombre:"",equipo:"",goles:1}]);setAsistencias([{nombre:"",equipo:"",asistencias:1}]);
     setSaving(false);
   };
   const inp=(val,onChange,placeholder)=>(<input value={val} onChange={e=>onChange(e.target.value)} placeholder={placeholder} style={{flex:1,padding:"6px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif",outline:"none"}}/>);
@@ -2418,16 +2414,22 @@ function ManualResultadoForm({grupos,allSelPlayers,fuzzyMatch,mundial,saveM,setA
           {GRUPOS_FIJOS.filter(g=>grupos.some(gr=>gr.nombre===`GRUPO ${g}`&&(gr.selecciones||[]).length===4)).map(g=><option key={g} value={g}>Grupo {g}</option>)}
         </select>
       </div>
-      {jornada&&grupoLetra&&partidos.length>0&&(
-        <div style={{display:"flex",gap:6}}>
-          {partidos.map((_,i)=>(
-            <button key={i} onClick={()=>setPartidoIdx(i)} style={{flex:1,padding:"6px 4px",borderRadius:8,border:`1.5px solid ${partidoIdx===i?"#1a3a5c":C.borderDark}`,background:partidoIdx===i?"#1a3a5c":C.card,color:partidoIdx===i?"#fff":C.textMid,fontSize:9,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
-              {sels[partidos[i][0]]} vs {sels[partidos[i][1]]}
-            </button>
-          ))}
+      {jornada&&grupoLetra&&sels.length===4&&(
+        <div style={{display:"flex",gap:6,alignItems:"center"}}>
+          <select value={localNombre} onChange={e=>{setLocalNombre(e.target.value);if(e.target.value===visitanteNombre)setVisitanteNombre("");}}
+            style={{flex:1,padding:"7px 8px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.card,color:localNombre?C.text:C.textFaint,fontSize:11,fontFamily:"'DM Sans',sans-serif",outline:"none"}}>
+            <option value="">Local</option>
+            {sels.filter(s=>s!==visitanteNombre).map(s=><option key={s} value={s}>{s}</option>)}
+          </select>
+          <span style={{color:C.textFaint,fontWeight:800,fontSize:12,flexShrink:0}}>vs</span>
+          <select value={visitanteNombre} onChange={e=>{setVisitanteNombre(e.target.value);if(e.target.value===localNombre)setLocalNombre("");}}
+            style={{flex:1,padding:"7px 8px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.card,color:visitanteNombre?C.text:C.textFaint,fontSize:11,fontFamily:"'DM Sans',sans-serif",outline:"none"}}>
+            <option value="">Visitante</option>
+            {sels.filter(s=>s!==localNombre).map(s=><option key={s} value={s}>{s}</option>)}
+          </select>
         </div>
       )}
-      {partido&&(<>
+      {localNombre&&visitanteNombre&&(<>
         <div style={{background:"#7c3aed11",borderRadius:9,padding:"8px 12px",display:"flex",alignItems:"center",gap:8}}>
           <span style={{flex:1,fontSize:11,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif",textAlign:"center"}}>{localNombre}</span>
           <input type="number" min="0" value={golesLocal} onChange={e=>setGolesLocal(e.target.value)} placeholder="0" style={{width:40,padding:"6px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:14,fontFamily:"monospace",outline:"none",textAlign:"center",fontWeight:800}}/>
