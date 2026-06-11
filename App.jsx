@@ -2299,26 +2299,15 @@ function MundialModal({onClose,user,isAdmin,allSels,pool}){
 
   const processImage=async(file,type)=>{
     setUploading(true);
-    setAiMsg("Procesando imagen…");
+    setAiMsg("Leyendo imagen…");
     try{
-      // Compress image before sending to API
       const b64=await new Promise((res,rej)=>{
-        const img=new Image();
-        const url=URL.createObjectURL(file);
-        img.onload=()=>{
-          const canvas=document.createElement("canvas");
-          const MAX=1024;
-          let w=img.width,h=img.height;
-          if(w>MAX||h>MAX){const r=Math.min(MAX/w,MAX/h);w=Math.round(w*r);h=Math.round(h*r);}
-          canvas.width=w;canvas.height=h;
-          canvas.getContext("2d").drawImage(img,0,0,w,h);
-          URL.revokeObjectURL(url);
-          const data=canvas.toDataURL("image/jpeg",0.85).split(",")[1];
-          res(data);
-        };
-        img.onerror=rej;
-        img.src=url;
+        const r=new FileReader();
+        r.onload=()=>res(r.result.split(",")[1]);
+        r.onerror=e=>rej(e);
+        r.readAsDataURL(file);
       });
+      setAiMsg("Enviando a Gemini…");
 
       const prompt=type==="grupos"
         ?`Eres un asistente de liga de fútbol FC26. Analiza esta captura y extrae los grupos del mundial.
@@ -2336,7 +2325,7 @@ Responde SOLO con JSON válido, sin markdown:
         headers:{"Content-Type":"application/json"},
         body:JSON.stringify({
           contents:[{parts:[
-            {inline_data:{mime_type:"image/jpeg",data:b64}},
+            {inline_data:{mime_type:file.type||"image/jpeg",data:b64}},
             {text:prompt}
           ]}],
           generationConfig:{temperature:0,maxOutputTokens:2000}
@@ -2526,33 +2515,43 @@ Responde SOLO con JSON válido, sin markdown:
             <div style={{display:"flex",flexDirection:"column",gap:12}}>
               <div style={{fontSize:11,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",textAlign:"center"}}>Sube capturas de FC26 para poblar el Mundial automáticamente</div>
               {/* Subir grupos */}
-              <label style={{display:"block",padding:"12px",borderRadius:10,background:"linear-gradient(135deg,#4c1d95,#7c3aed)",color:"#fff",border:"none",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textAlign:"center"}}>
-                {uploading&&uploadType==="grupos"?"Procesando…":"📸 Subir capturas de GRUPOS (1 o varias)"}
-                <input type="file" accept="image/*" multiple style={{display:"none"}} onChange={async e=>{
-                  const files=Array.from(e.target.files||[]);
-                  if(!files.length) return;
-                  setUploadType("grupos");
-                  for(let i=0;i<files.length;i++){
-                    setAiMsg(`Procesando imagen ${i+1} de ${files.length}…`);
-                    await processImage(files[i],"grupos");
-                  }
-                  setAiMsg(`✅ ${files.length} imagen${files.length>1?"es":""} procesada${files.length>1?"s":""}`);
-                  e.target.value="";
-                }}/>
+              <label style={{display:"block",padding:"12px",borderRadius:10,background:"linear-gradient(135deg,#4c1d95,#7c3aed)",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textAlign:"center"}}>
+                📸 Subir capturas de GRUPOS (1 o varias)
+                <input type="file" accept="image/*" multiple style={{position:"absolute",opacity:0,width:0,height:0,overflow:"hidden"}}
+                  onChange={e=>{
+                    const files=Array.from(e.target.files||[]);
+                    e.target.value="";
+                    if(!files.length) return;
+                    const run=async()=>{
+                      setUploadType("grupos");
+                      for(let i=0;i<files.length;i++){
+                        setAiMsg(`Procesando ${i+1}/${files.length}…`);
+                        await processImage(files[i],"grupos");
+                      }
+                      setAiMsg(`✅ ${files.length} imagen${files.length>1?"es":""} procesada${files.length>1?"s":""}`);
+                    };
+                    run();
+                  }}
+                />
               </label>
-              <label style={{display:"block",padding:"12px",borderRadius:10,background:"#1a3a5c",color:"#fff",border:"none",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textAlign:"center"}}>
-                {uploading&&uploadType==="resultado"?"Procesando…":"📸 Subir RESULTADOS (1 o varios)"}
-                <input type="file" accept="image/*" multiple style={{display:"none"}} onChange={async e=>{
-                  const files=Array.from(e.target.files||[]);
-                  if(!files.length) return;
-                  setUploadType("resultado");
-                  for(let i=0;i<files.length;i++){
-                    setAiMsg(`Procesando imagen ${i+1} de ${files.length}…`);
-                    await processImage(files[i],"resultado");
-                  }
-                  setAiMsg(`✅ ${files.length} imagen${files.length>1?"es":""} procesada${files.length>1?"s":""}`);
-                  e.target.value="";
-                }}/>
+              <label style={{display:"block",padding:"12px",borderRadius:10,background:"#1a3a5c",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textAlign:"center"}}>
+                📸 Subir RESULTADOS (1 o varios)
+                <input type="file" accept="image/*" multiple style={{position:"absolute",opacity:0,width:0,height:0,overflow:"hidden"}}
+                  onChange={e=>{
+                    const files=Array.from(e.target.files||[]);
+                    e.target.value="";
+                    if(!files.length) return;
+                    const run=async()=>{
+                      setUploadType("resultado");
+                      for(let i=0;i<files.length;i++){
+                        setAiMsg(`Procesando ${i+1}/${files.length}…`);
+                        await processImage(files[i],"resultado");
+                      }
+                      setAiMsg(`✅ ${files.length} imagen${files.length>1?"es":""} procesada${files.length>1?"s":""}`);
+                    };
+                    run();
+                  }}
+                />
               </label>
               {/* Reset */}
               <button onClick={async()=>{if(!window.confirm("¿Resetear todo el Mundial?")) return;await setDoc(doc(db,"mundial","data"),{grupos:[],partidos:[],stats:{}});setAiMsg("✅ Mundial reseteado");}}
