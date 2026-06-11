@@ -1790,6 +1790,8 @@ function MercadoModal({onClose,teamData,saveTeam,allTeams}){
   const[altas,setAltas]=useState(mercado.altas.map(a=>({name:a.name||"",price:a.price||"",team:a.team||""})));
   const[saving,setSaving]=useState(false);
   const[shareText,setShareText]=useState("");
+
+  const parsePresupuesto=v=>{
     if(!v) return 0;
     const s=String(v).trim().replace(/,/g,"");
     if(s.toUpperCase().endsWith("M")) return parseFloat(s)*1000000;
