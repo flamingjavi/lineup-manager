@@ -2304,58 +2304,33 @@ function MundialModal({onClose,user,isAdmin,allSels,pool}){
       const b64=await new Promise((res,rej)=>{
         const r=new FileReader();
         r.onload=()=>res(r.result.split(",")[1]);
-        r.onerror=e=>rej(e);
+        r.onerror=e=>rej(new Error("FileReader error"));
         r.readAsDataURL(file);
       });
-      setAiMsg("Enviando a Gemini…");
-
+      setAiMsg("Conectando con Gemini…");
       const prompt=type==="grupos"
-        ?`Eres un asistente de liga de fútbol FC26. Analiza esta captura y extrae los grupos del mundial.
-Responde SOLO con JSON válido, sin markdown:
-{"grupos":[{"nombre":"Grupo A","selecciones":["NOMBRE1","NOMBRE2","NOMBRE3","NOMBRE4"]},...]}`
-        :type==="resultado"
-        ?`Eres un asistente de liga de fútbol FC26. Analiza esta captura de resultado de partido.
-Extrae: equipos, marcador, goleadores (nombre y cantidad de goles), asistencias, calificaciones de jugadores.
-Responde SOLO con JSON válido, sin markdown:
-{"local":{"nombre":"","goles":0},"visitante":{"nombre":"","goles":0},"goleadores":[{"nombre":"","equipo":"","goles":1}],"asistencias":[{"nombre":"","equipo":"","asistencias":1}],"calificaciones":[{"nombre":"","equipo":"","rating":0.0}]}`
-        :`Analiza esta captura de FC26 y extrae todos los datos disponibles (tabla, goleadores, asistencias, ratings). Responde SOLO con JSON.`;
-
-      const resp=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=AIzaSyAGlxjD12k38Xu9L-8K165iJma1ZwR7tyY`,{
+        ?`Analiza esta captura de FC26 y extrae los grupos del mundial. Responde SOLO con JSON sin markdown: {"grupos":[{"nombre":"Grupo A","selecciones":["NOMBRE1","NOMBRE2","NOMBRE3","NOMBRE4"]}]}`
+        :`Analiza esta captura de resultado FC26. Responde SOLO con JSON sin markdown: {"local":{"nombre":"","goles":0},"visitante":{"nombre":"","goles":0},"goleadores":[{"nombre":"","equipo":"","goles":1}],"asistencias":[{"nombre":"","equipo":"","asistencias":1}],"calificaciones":[{"nombre":"","equipo":"","rating":0.0}]}`;
+      const resp=await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=AIzaSyAGlxjD12k38Xu9L-8K165iJma1ZwR7tyY",{
         method:"POST",
         headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({
-          contents:[{parts:[
-            {inline_data:{mime_type:file.type||"image/jpeg",data:b64}},
-            {text:prompt}
-          ]}],
-          generationConfig:{temperature:0,maxOutputTokens:2000}
-        })
+        body:JSON.stringify({contents:[{parts:[{inline_data:{mime_type:file.type||"image/jpeg",data:b64}},{text:prompt}]}],generationConfig:{temperature:0,maxOutputTokens:2000}})
       });
+      if(!resp.ok) throw new Error("HTTP "+resp.status);
       const data=await resp.json();
-      if(data.error){throw new Error(data.error.message||"Error de API");}
-      const text=data.candidates?.[0]?.content?.parts?.[0]?.text||"{}";
-      const clean=text.replace(/```json|```/g,"").trim();
-      setAiMsg("Respuesta: "+clean.slice(0,200));
-      await new Promise(r=>setTimeout(r,3000)); // show for 3 seconds
-      const parsed=JSON.parse(clean);
-
+      if(data.error) throw new Error(data.error.message);
+      const raw=data.candidates?.[0]?.content?.parts?.[0]?.text||"{}";
+      setAiMsg("Gemini respondió: "+raw.slice(0,150));
+      await new Promise(r=>setTimeout(r,3000));
+      const parsed=JSON.parse(raw.replace(/```json|```/g,"").trim());
       if(type==="grupos"){
-        await saveM({grupos:parsed.grupos,partidos:[],stats:{}});
-        setAiMsg(`✅ ${parsed.grupos?.length||0} grupos importados`);
-      } else if(type==="resultado"){
-        // fuzzy match players and save stats
+        await saveM({grupos:parsed.grupos||[],partidos:[],stats:{}});
+        setAiMsg("✅ "+(parsed.grupos?.length||0)+" grupos importados");
+      } else {
         const existing=mundial||{};
         const stats={...(existing.stats||{})};
         const partidos=[...(existing.partidos||[])];
-
-        // add match
-        partidos.push({
-          local:parsed.local,
-          visitante:parsed.visitante,
-          fecha:new Date().toISOString()
-        });
-
-        // merge stats
+        partidos.push({local:parsed.local,visitante:parsed.visitante,fecha:new Date().toISOString()});
         const mergePlayer=(arr,field)=>{
           (arr||[]).forEach(p=>{
             const matched=fuzzyMatch(p.nombre,allSelPlayers);
@@ -2369,32 +2344,21 @@ Responde SOLO con JSON válido, sin markdown:
         mergePlayer(parsed.goleadores,"goles");
         mergePlayer(parsed.asistencias,"asistencias");
         mergePlayer(parsed.calificaciones,"rating");
-
-        // update group table
         const grupos=(existing.grupos||[]).map(g=>{
           const sels=g.selecciones||[];
-          const localIn=sels.some(s=>fuzzyMatch(parsed.local?.nombre,[{name:s}])||s.toLowerCase().includes((parsed.local?.nombre||"").toLowerCase().slice(0,4)));
-          const visitIn=sels.some(s=>fuzzyMatch(parsed.visitante?.nombre,[{name:s}])||s.toLowerCase().includes((parsed.visitante?.nombre||"").toLowerCase().slice(0,4)));
-          if(!localIn||!visitIn) return g;
-          const tabla=[...(g.tabla||sels.map(s=>({sel:s,pj:0,pg:0,pe:0,pp:0,gf:0,gc:0,pts:0})))];
-          const gl=parsed.local?.goles||0,gv=parsed.visitante?.goles||0;
-          const upd=(sel,gf,gc)=>{
-            const idx=tabla.findIndex(r=>r.sel===sel);
-            if(idx===-1) return;
-            tabla[idx]={...tabla[idx],pj:tabla[idx].pj+1,gf:tabla[idx].gf+gf,gc:tabla[idx].gc+gc,
-              pg:tabla[idx].pg+(gf>gc?1:0),pe:tabla[idx].pe+(gf===gc?1:0),pp:tabla[idx].pp+(gf<gc?1:0),
-              pts:tabla[idx].pts+(gf>gc?3:gf===gc?1:0)};
-          };
           const lname=sels.find(s=>s.toLowerCase().includes((parsed.local?.nombre||"").toLowerCase().slice(0,4)))||parsed.local?.nombre;
           const vname=sels.find(s=>s.toLowerCase().includes((parsed.visitante?.nombre||"").toLowerCase().slice(0,4)))||parsed.visitante?.nombre;
+          if(!lname||!vname||!sels.includes(lname)&&!sels.includes(vname)) return g;
+          const tabla=[...(g.tabla||sels.map(s=>({sel:s,pj:0,pg:0,pe:0,pp:0,gf:0,gc:0,pts:0})))];
+          const gl=parsed.local?.goles||0,gv=parsed.visitante?.goles||0;
+          const upd=(sel,gf,gc)=>{const idx=tabla.findIndex(r=>r.sel===sel);if(idx===-1)return;tabla[idx]={...tabla[idx],pj:tabla[idx].pj+1,gf:tabla[idx].gf+gf,gc:tabla[idx].gc+gc,pg:tabla[idx].pg+(gf>gc?1:0),pe:tabla[idx].pe+(gf===gc?1:0),pp:tabla[idx].pp+(gf<gc?1:0),pts:tabla[idx].pts+(gf>gc?3:gf===gc?1:0)};};
           upd(lname,gl,gv);upd(vname,gv,gl);
           return{...g,tabla};
         });
-
         await saveM({grupos,partidos,stats});
-        setAiMsg(`✅ Resultado: ${parsed.local?.nombre} ${parsed.local?.goles} - ${parsed.visitante?.goles} ${parsed.visitante?.nombre}`);
+        setAiMsg("✅ "+parsed.local?.nombre+" "+parsed.local?.goles+" - "+parsed.visitante?.goles+" "+parsed.visitante?.nombre);
       }
-    }catch(e){setAiMsg("❌ Error: "+e.message);}
+    }catch(e){setAiMsg("❌ "+e.message);}
     setUploading(false);
   };
 
