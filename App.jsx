@@ -3611,7 +3611,9 @@ function MainApp({user,isAdmin,onLogout}){
                     const isMe=t.uid===user.uid;
                     const isSelected=viewingTeam&&(viewingTeam.id||viewingTeam.uid)===(t.id||t.uid);
                     return(
-                      <div key={t.id||t.uid} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 10px",borderRadius:9,border:`1.5px solid ${isSelected?C.accent:C.border}`,background:isSelected?C.goldLight:C.inputBg}}>
+                      <div key={t.id||t.uid} style={{padding:"7px 10px",borderRadius:9,border:`1.5px solid ${isSelected?C.accent:C.border}`,background:isSelected?C.goldLight:C.inputBg}}>
+                        {/* Fila principal */}
+                        <div style={{display:"flex",alignItems:"center",gap:6}}>
                         <div style={{width:10,height:10,borderRadius:"50%",background:getTeamColor(t.teamColor).bg,flexShrink:0,border:"1px solid rgba(0,0,0,0.15)"}}/>
                         <span style={{fontSize:12,fontWeight:700,color:C.text,flex:1,fontFamily:"'DM Sans',sans-serif",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.teamName}</span>
                         <span style={{fontSize:9,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>{(t.squad||[]).length}j</span>
@@ -3622,13 +3624,8 @@ function MainApp({user,isAdmin,onLogout}){
                           style={{padding:"2px 6px",borderRadius:5,border:`1px solid ${t.betaAccess?"#9b59b6":C.borderDark}`,background:t.betaAccess?"#9b59b6":"transparent",color:t.betaAccess?"#fff":C.textFaint,fontSize:9,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",flexShrink:0}}>
                           β
                         </button>
-                        <NationalTeamPicker
-                          teamId={t.uid||t.id}
-                          current={t.nationalTeam||""}
-                          allSels={allSels}
-                        />
                         {/* Competencias */}
-                        <div style={{display:"flex",gap:3,flexWrap:"wrap",alignItems:"center"}}>
+                        <div style={{display:"flex",flexDirection:"row",gap:2,alignItems:"center",flexShrink:0}}>
                           {COMPETENCIAS_AVAILABLE.map(c=>{
                             const active=(t.competencias||[]).includes(c.id);
                             return(
@@ -3639,12 +3636,20 @@ function MainApp({user,isAdmin,onLogout}){
                                 await updateDoc(doc(db,"teams",t.uid||t.id),{competencias:next});
                               }}
                                 title={c.name}
-                                style={{padding:"2px 5px",borderRadius:5,border:`1px solid ${active?c.color:C.borderDark}`,background:active?c.color:"transparent",color:active?"#fff":C.textFaint,fontSize:9,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",flexShrink:0}}>
+                                style={{padding:"2px 3px",borderRadius:4,border:`1px solid ${active?c.color:C.borderDark}`,background:active?c.color:"transparent",color:active?"#fff":C.textFaint,fontSize:10,cursor:"pointer",lineHeight:1,flexShrink:0}}>
                                 {c.icon}
                               </button>
                             );
                           })}
                         </div>
+                        </div>
+                        {/* Segunda línea — selección y acciones */}
+                        <div style={{display:"flex",gap:4,marginTop:5,alignItems:"center",flexWrap:"wrap"}}>
+                        <NationalTeamPicker
+                          teamId={t.uid||t.id}
+                          current={t.nationalTeam||""}
+                          allSels={allSels}
+                        />
                         {!isMe?(
                           <>
                             <button onClick={()=>setViewingTeam(isSelected?null:t)}
@@ -3655,6 +3660,7 @@ function MainApp({user,isAdmin,onLogout}){
                             <button onClick={()=>setDeleteTeamTarget(t)} style={{padding:"4px 7px",borderRadius:7,border:"1px solid #ffcccc",background:"#fff5f5",color:"#c0392b",fontSize:11,cursor:"pointer",flexShrink:0}}>🗑️</button>
                           </>
                         ):<span style={{fontSize:9,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",flexShrink:0}}>Tú</span>}
+                        </div>
                       </div>
                     );
                   })}
