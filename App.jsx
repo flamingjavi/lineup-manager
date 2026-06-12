@@ -2779,7 +2779,6 @@ function MundialModal({onClose,user,isAdmin,allSels,pool,teamData}){
         {/* Header */}
         <div style={{padding:"12px 16px",background:"linear-gradient(135deg,#4c1d95,#7c3aed)",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
           <span style={{fontSize:15,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>🌍 MUNDIAL DE SELECCIONES</span>
-          <span style={{fontSize:9,background:"rgba(255,255,255,0.2)",color:"#fff",padding:"2px 7px",borderRadius:20,fontFamily:"'DM Sans',sans-serif",fontWeight:700}}>BETA</span>
           {mundial?.twitchChannel&&<button onClick={()=>setShowTwitch(v=>!v)}
             style={{marginLeft:"auto",padding:"4px 10px",borderRadius:20,background:showTwitch?"#e74c3c":"rgba(255,255,255,0.15)",border:"none",color:"#fff",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",display:"flex",alignItems:"center",gap:4}}>
             🔴 {showTwitch?"Cerrar":"En Vivo"}
@@ -3388,10 +3387,9 @@ function MainApp({user,isAdmin,onLogout}){
                   📊 <span>Mercado</span>
                   {teamData?.mercado?.finalizado&&<span style={{marginLeft:"auto",fontSize:9,background:"#27ae60",color:"#fff",borderRadius:20,padding:"1px 7px",fontWeight:800}}>✓</span>}
                 </div>
-                {(teamData?.betaAccess||isAdmin)&&<div onClick={()=>{setShowMundial(true);setShowHamburger(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:"#7c3aed"}}>
+                <div onClick={()=>{setShowMundial(true);setShowHamburger(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:"#7c3aed"}}>
                   🌍 <span>Mundial</span>
-                  <span style={{marginLeft:"auto",fontSize:9,background:"#7c3aed",color:"#fff",borderRadius:20,padding:"1px 6px",fontWeight:800}}>β</span>
-                </div>}
+                </div>
                 <div style={{borderTop:`1px solid ${C.border}`,margin:"4px 0"}}/>
                 <div onClick={()=>{saveTeam({darkMode:!teamData?.darkMode});setShowHamburger(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:C.text}}>
                   {teamData?.darkMode?"☀️":"🌙"} <span>{teamData?.darkMode?"Modo claro":"Modo oscuro"}</span>
@@ -3445,6 +3443,16 @@ function MainApp({user,isAdmin,onLogout}){
                         </div>
                         <div onClick={()=>{setShowPool(true);setShowAdminMenu(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:C.text}}>
                           🌍 <span>Pool</span>
+                        </div>
+                        <div onClick={async()=>{
+                          setShowAdminMenu(false);
+                          if(!window.confirm(`¿Activar el Mundial para los ${allTeams.length} equipos?`)) return;
+                          for(const t of allTeams){
+                            await updateDoc(doc(db,"teams",t.uid||t.id),{betaAccess:true});
+                          }
+                          alert("✅ Mundial activado para todos");
+                        }} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:"#9b59b6"}}>
+                          🌍 <span>Activar Mundial para todos</span>
                         </div>
                         <div onClick={()=>{setShowSelecciones(true);setShowAdminMenu(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:"#2980b9"}}>
                           🏳️ <span>Selecciones</span>
@@ -4378,7 +4386,7 @@ function MainApp({user,isAdmin,onLogout}){
       {showTransfers&&<TransferCenter onClose={()=>setShowTransfers(false)} user={user} isAdmin={isAdmin} teamData={teamData} allTeams={allTeams} pool={pool}/>}
       {showMercado&&<MercadoModal onClose={()=>setShowMercado(false)} teamData={teamData} saveTeam={saveTeam} allTeams={allTeams}/>}
       {showMundial&&<MundialModal onClose={()=>setShowMundial(false)} user={user} isAdmin={isAdmin} allSels={allSels} pool={pool} teamData={teamData}/>}
-      {(teamData?.betaAccess||isAdmin)&&!showMundial&&<AvisoBanner onOpen={()=>setShowMundial(true)}/>}
+      {!showMundial&&<AvisoBanner onOpen={()=>setShowMundial(true)}/>}
 
       {/* SUB MENU MODAL */}
       {pickModal?.type==="subMenu"&&(
