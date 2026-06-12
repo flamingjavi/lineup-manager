@@ -3554,7 +3554,7 @@ function MainApp({user,isAdmin,onLogout}){
 
       {/* HOME SCREEN */}
       {showHome&&!showMundial&&(
-        <div style={{position:"fixed",inset:0,zIndex:50,overflowY:"auto"}}>
+        <div style={{position:"fixed",inset:0,zIndex:150,overflowY:"auto",background:C.bg}}>
           <HomeScreen
             teamData={teamData}
             isAdmin={isAdmin}
