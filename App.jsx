@@ -3108,6 +3108,113 @@ function HomeScreen({teamData,onSelect,isAdmin,onOpenMundial}){
   );
 }
 
+// ─── COMPETENCIAS MODAL ───────────────────────────────────────────────────────
+function CompetenciasModal({allTeams,onClose}){
+  const[comps,setComps]=useState(()=>COMPETENCIAS_AVAILABLE.map(c=>({...c})));
+  const[selected,setSelected]=useState(null); // id de la comp activa
+  const[editingName,setEditingName]=useState(null); // id de la que se está renombrando
+  const[editValue,setEditValue]=useState("");
+  const[saving,setSaving]=useState(false);
+
+  const activeComp=comps.find(c=>c.id===selected);
+
+  const toggleTeam=async(team)=>{
+    const cur=team.competencias||[];
+    const hasIt=cur.includes(selected);
+    const next=hasIt?cur.filter(x=>x!==selected):[...cur,selected];
+    await updateDoc(doc(db,"teams",team.uid||team.id),{competencias:next});
+  };
+
+  const saveCompName=async(id)=>{
+    if(!editValue.trim()) return;
+    setSaving(true);
+    // Guardar en Firestore config
+    const settingsRef=doc(db,"config","competencias");
+    const snap=await getDoc(settingsRef).catch(()=>null);
+    const current=snap?.exists()?snap.data():{};
+    await setDoc(settingsRef,{...current,[id]:editValue.trim()},{merge:true});
+    setComps(prev=>prev.map(c=>c.id===id?{...c,name:editValue.trim()}:c));
+    setEditingName(null);
+    setEditValue("");
+    setSaving(false);
+  };
+
+  return(
+    <div style={{position:"fixed",inset:0,zIndex:200,background:"rgba(0,0,0,0.7)",display:"flex",flexDirection:"column"}}>
+      <div style={{background:C.card,flex:1,display:"flex",flexDirection:"column",maxHeight:"100vh",overflowY:"auto"}}>
+        {/* Header */}
+        <div style={{padding:"14px 16px",background:`linear-gradient(135deg,#e67e22,#f39c12)`,display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+          {selected?(
+            <button onClick={()=>setSelected(null)} style={{background:"rgba(255,255,255,0.2)",border:"none",borderRadius:8,padding:"4px 10px",color:"#fff",fontSize:13,cursor:"pointer"}}>←</button>
+          ):(
+            <button onClick={onClose} style={{background:"rgba(255,255,255,0.2)",border:"none",borderRadius:8,padding:"4px 10px",color:"#fff",fontSize:13,cursor:"pointer"}}>←</button>
+          )}
+          <span style={{fontSize:15,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1,flex:1}}>
+            {activeComp?activeComp.name:"🏆 COMPETENCIAS"}
+          </span>
+          {selected&&<span style={{fontSize:11,color:"rgba(255,255,255,0.8)",fontFamily:"'DM Sans',sans-serif"}}>
+            {allTeams.filter(t=>(t.competencias||[]).includes(selected)).length} equipos
+          </span>}
+        </div>
+
+        <div style={{padding:16,display:"flex",flexDirection:"column",gap:10}}>
+          {/* Vista: lista de competencias */}
+          {!selected&&comps.map(comp=>(
+            <div key={comp.id} style={{background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 14px"}}>
+              {editingName===comp.id?(
+                <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                  <input value={editValue} onChange={e=>setEditValue(e.target.value)}
+                    style={{flex:1,padding:"6px 10px",borderRadius:8,border:`1px solid ${comp.color}`,background:C.card,color:C.text,fontSize:13,fontFamily:"'DM Sans',sans-serif",outline:"none"}}
+                    autoFocus onKeyDown={e=>e.key==="Enter"&&saveCompName(comp.id)}/>
+                  <button onClick={()=>saveCompName(comp.id)} disabled={saving}
+                    style={{padding:"6px 12px",borderRadius:8,background:comp.color,color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                    {saving?"…":"✓"}
+                  </button>
+                  <button onClick={()=>{setEditingName(null);setEditValue("");}}
+                    style={{padding:"6px 10px",borderRadius:8,background:C.inputBg,color:C.textMid,border:`1px solid ${C.border}`,fontSize:11,cursor:"pointer"}}>
+                    ✕
+                  </button>
+                </div>
+              ):(
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  <span style={{fontSize:22,flexShrink:0}}>{comp.icon}</span>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:14,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{comp.name}</div>
+                    <div style={{fontSize:11,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>
+                      {allTeams.filter(t=>(t.competencias||[]).includes(comp.id)).length} equipos asignados
+                    </div>
+                  </div>
+                  <button onClick={()=>{setEditingName(comp.id);setEditValue(comp.name);}}
+                    style={{padding:"4px 8px",borderRadius:7,background:"transparent",border:`1px solid ${C.borderDark}`,color:C.textMid,fontSize:11,cursor:"pointer"}}>
+                    ✏️
+                  </button>
+                  <button onClick={()=>setSelected(comp.id)}
+                    style={{padding:"6px 14px",borderRadius:8,background:comp.color,color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                    Gestionar →
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+
+          {/* Vista: equipos de una competencia */}
+          {selected&&allTeams.map(team=>{
+            const active=(team.competencias||[]).includes(selected);
+            return(
+              <button key={team.uid||team.id} onClick={()=>toggleTeam(team)}
+                style={{display:"flex",alignItems:"center",gap:12,padding:"10px 14px",borderRadius:10,border:`2px solid ${active?activeComp.color:C.border}`,background:active?activeComp.color+"18":C.inputBg,cursor:"pointer",textAlign:"left",width:"100%"}}>
+                <div style={{width:12,height:12,borderRadius:"50%",background:getTeamColor(team.teamColor||"blue").bg,flexShrink:0,border:"1px solid rgba(0,0,0,0.15)"}}/>
+                <span style={{flex:1,fontSize:13,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{team.teamName}</span>
+                <span style={{fontSize:16}}>{active?"✅":"⬜"}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MainApp({user,isAdmin,onLogout}){
   const[teamData,setTeamData]=useState(null);
   const[allTeams,setAllTeams]=useState([]);
@@ -3124,6 +3231,7 @@ function MainApp({user,isAdmin,onLogout}){
   const[showPresidents,setShowPresidents]=useState(false);
   const[showImport,setShowImport]=useState(false);
   const[showSelecciones,setShowSelecciones]=useState(false);
+  const[showCompetencias,setShowCompetencias]=useState(false);
   const[showMiSeleccion,setShowMiSeleccion]=useState(false);
   const[allSels,setAllSels]=useState([]);
   const[selNacional,setSelNacional]=useState(null);
@@ -3560,6 +3668,9 @@ function MainApp({user,isAdmin,onLogout}){
                         <div onClick={()=>{setShowSelecciones(true);setShowAdminMenu(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:"#2980b9"}}>
                           🏳️ <span>Selecciones</span>
                         </div>
+                        <div onClick={()=>{setShowCompetencias(true);setShowAdminMenu(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:"#e67e22"}}>
+                          🏆 <span>Competencias</span>
+                        </div>
                         {/* Mercado progress */}
                         <div style={{padding:"8px 12px",borderRadius:8,fontFamily:"'DM Sans',sans-serif",fontSize:11,color:C.textLight,display:"flex",alignItems:"center",gap:8}}>
                           📊 <span>Mercado: <strong style={{color:C.text}}>{allTeams.filter(t=>t.mercado?.finalizado).length}/{allTeams.length}</strong> finalizados</span>
@@ -3624,24 +3735,6 @@ function MainApp({user,isAdmin,onLogout}){
                           style={{padding:"2px 6px",borderRadius:5,border:`1px solid ${t.betaAccess?"#9b59b6":C.borderDark}`,background:t.betaAccess?"#9b59b6":"transparent",color:t.betaAccess?"#fff":C.textFaint,fontSize:9,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",flexShrink:0}}>
                           β
                         </button>
-                        {/* Competencias */}
-                        <div style={{display:"flex",flexDirection:"row",gap:2,alignItems:"center",flexShrink:0}}>
-                          {COMPETENCIAS_AVAILABLE.map(c=>{
-                            const active=(t.competencias||[]).includes(c.id);
-                            return(
-                              <button key={c.id} onClick={async e=>{
-                                e.stopPropagation();
-                                const cur=t.competencias||[];
-                                const next=active?cur.filter(x=>x!==c.id):[...cur,c.id];
-                                await updateDoc(doc(db,"teams",t.uid||t.id),{competencias:next});
-                              }}
-                                title={c.name}
-                                style={{padding:"2px 3px",borderRadius:4,border:`1px solid ${active?c.color:C.borderDark}`,background:active?c.color:"transparent",color:active?"#fff":C.textFaint,fontSize:10,cursor:"pointer",lineHeight:1,flexShrink:0}}>
-                                {c.icon}
-                              </button>
-                            );
-                          })}
-                        </div>
                         </div>
                         {/* Segunda línea — selección y acciones */}
                         <div style={{display:"flex",gap:4,marginTop:5,alignItems:"center",flexWrap:"wrap"}}>
@@ -4509,6 +4602,7 @@ function MainApp({user,isAdmin,onLogout}){
 
       {/* SELECCIONES NACIONALES MODAL */}
       {showSelecciones&&<SeleccionesModal isAdmin={true} allSels={allSels} onClose={()=>setShowSelecciones(false)}/>}
+      {showCompetencias&&<CompetenciasModal allTeams={allTeams} onClose={()=>setShowCompetencias(false)}/>}
       {showMiSeleccion&&<SeleccionesModal lockedCountry={teamData?.nationalTeam} allSels={allSels} onClose={()=>setShowMiSeleccion(false)}/>}
       {showTransfers&&<TransferCenter onClose={()=>setShowTransfers(false)} user={user} isAdmin={isAdmin} teamData={teamData} allTeams={allTeams} pool={pool}/>}
       {showMercado&&<MercadoModal onClose={()=>setShowMercado(false)} teamData={teamData} saveTeam={saveTeam} allTeams={allTeams}/>}
