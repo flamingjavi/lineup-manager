@@ -3047,62 +3047,86 @@ const COMPETENCIAS_AVAILABLE=[
 function HomeScreen({teamData,onSelect,isAdmin,onOpenMundial}){
   const tc=getTeamColor(teamData?.teamColor||"blue");
   const comps=(teamData?.competencias||[]).map(id=>COMPETENCIAS_AVAILABLE.find(c=>c.id===id)).filter(Boolean);
+  const teamInitials=(teamData?.teamName||"?").slice(0,2).toUpperCase();
 
   return(
     <div style={{minHeight:"100vh",background:C.bg,display:"flex",flexDirection:"column"}}>
-      {/* Header */}
-      <div style={{padding:"16px",background:C.card,borderBottom:`2px solid ${tc.dark}`,display:"flex",alignItems:"center",gap:10}}>
-        <div style={{width:36,height:36,borderRadius:"50%",background:`linear-gradient(135deg,${tc.dark},${tc.bg})`,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
-          <span style={{fontSize:13,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif"}}>{(teamData?.teamName||"?").slice(0,2).toUpperCase()}</span>
+
+      {/* Hero header */}
+      <div style={{background:`linear-gradient(160deg,${tc.dark} 0%,${tc.bg} 100%)`,padding:"32px 20px 24px",display:"flex",flexDirection:"column",alignItems:"center",gap:12,position:"relative",overflow:"hidden"}}>
+        {/* Fondo decorativo */}
+        <div style={{position:"absolute",top:-40,right:-40,width:160,height:160,borderRadius:"50%",background:"rgba(255,255,255,0.05)"}}/>
+        <div style={{position:"absolute",bottom:-20,left:-20,width:100,height:100,borderRadius:"50%",background:"rgba(255,255,255,0.04)"}}/>
+        {/* Escudo */}
+        <div style={{width:72,height:72,borderRadius:18,background:"rgba(255,255,255,0.15)",backdropFilter:"blur(10px)",border:"2px solid rgba(255,255,255,0.3)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 8px 32px rgba(0,0,0,0.3)",zIndex:1}}>
+          <span style={{fontSize:26,fontWeight:900,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>{teamInitials}</span>
         </div>
-        <div>
-          <div style={{fontSize:15,fontWeight:800,color:C.text,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:0.5}}>{teamData?.teamName}</div>
-          <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>{comps.length} competiciones</div>
+        <div style={{textAlign:"center",zIndex:1}}>
+          <div style={{fontSize:22,fontWeight:900,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>{teamData?.teamName}</div>
+          <div style={{fontSize:11,color:"rgba(255,255,255,0.65)",fontFamily:"'DM Sans',sans-serif",marginTop:2}}>
+            {comps.length>0?`${comps.length} competicion${comps.length>1?"es":""}  activa${comps.length>1?"s":""}`:""} · {teamData?.presupuesto?`💰 ${teamData.presupuesto}`:""}
+          </div>
         </div>
       </div>
 
-      <div style={{flex:1,padding:"16px",display:"flex",flexDirection:"column",gap:10,overflowY:"auto"}}>
-        <div style={{fontSize:10,fontWeight:700,color:C.textLight,fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.5,marginBottom:4}}>Mis Competiciones</div>
+      {/* Cards */}
+      <div style={{flex:1,padding:"20px 16px",display:"flex",flexDirection:"column",gap:12,overflowY:"auto"}}>
 
         {comps.length===0&&(
-          <div style={{textAlign:"center",color:C.textFaint,fontSize:12,fontFamily:"'DM Sans',sans-serif",padding:"32px 0"}}>
-            El admin aún no asignó tus competiciones
+          <div style={{textAlign:"center",color:C.textFaint,fontSize:12,fontFamily:"'DM Sans',sans-serif",padding:"40px 0"}}>
+            ⚽ El admin aún no asignó tus competiciones
           </div>
+        )}
+
+        {comps.length>0&&(
+          <div style={{fontSize:10,fontWeight:700,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.8,marginBottom:2}}>Mis Competiciones</div>
         )}
 
         {comps.map(comp=>(
           <button key={comp.id} onClick={()=>onSelect(comp)}
-            style={{width:"100%",padding:"18px 20px",borderRadius:14,background:`linear-gradient(135deg,${comp.color},${comp.color}99)`,border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:14,boxShadow:`0 4px 20px ${comp.color}44`,textAlign:"left"}}>
-            <span style={{fontSize:28,flexShrink:0}}>{comp.icon}</span>
-            <div style={{flex:1}}>
-              <div style={{fontSize:16,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:0.5}}>{comp.name}</div>
-              <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",fontFamily:"'DM Sans',sans-serif"}}>Ver alineación →</div>
+            style={{width:"100%",padding:"16px 18px",borderRadius:16,background:`linear-gradient(135deg,${comp.color}ee,${comp.color}88)`,border:`1px solid ${comp.color}`,cursor:"pointer",display:"flex",alignItems:"center",gap:14,boxShadow:`0 4px 24px ${comp.color}33`,textAlign:"left",position:"relative",overflow:"hidden"}}>
+            <div style={{position:"absolute",right:-10,top:-10,fontSize:60,opacity:0.12,lineHeight:1}}>{comp.icon}</div>
+            <div style={{width:44,height:44,borderRadius:12,background:"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              <span style={{fontSize:22}}>{comp.icon}</span>
             </div>
-            <span style={{fontSize:20,color:"rgba(255,255,255,0.5)"}}>›</span>
+            <div style={{flex:1,zIndex:1}}>
+              <div style={{fontSize:17,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:0.5}}>{comp.name}</div>
+              <div style={{fontSize:10,color:"rgba(255,255,255,0.65)",fontFamily:"'DM Sans',sans-serif",marginTop:1}}>Ver mi alineación</div>
+            </div>
+            <span style={{fontSize:18,color:"rgba(255,255,255,0.6)",zIndex:1}}>›</span>
           </button>
         ))}
 
+        <div style={{fontSize:10,fontWeight:700,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.8,marginTop:comps.length>0?8:0,marginBottom:2}}>Más</div>
+
         {/* Mundial */}
         <button onClick={onOpenMundial}
-          style={{width:"100%",padding:"18px 20px",borderRadius:14,background:"linear-gradient(135deg,#4c1d95,#7c3aed)",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:14,boxShadow:"0 4px 20px #7c3aed44",textAlign:"left"}}>
-          <span style={{fontSize:28,flexShrink:0}}>🌍</span>
-          <div style={{flex:1}}>
-            <div style={{fontSize:16,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:0.5}}>Mundial</div>
-            <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",fontFamily:"'DM Sans',sans-serif"}}>Selecciones nacionales →</div>
+          style={{width:"100%",padding:"16px 18px",borderRadius:16,background:"linear-gradient(135deg,#4c1d95ee,#7c3aed88)",border:"1px solid #7c3aed",cursor:"pointer",display:"flex",alignItems:"center",gap:14,boxShadow:"0 4px 24px #7c3aed33",textAlign:"left",position:"relative",overflow:"hidden"}}>
+          <div style={{position:"absolute",right:-10,top:-10,fontSize:60,opacity:0.12,lineHeight:1}}>🌍</div>
+          <div style={{width:44,height:44,borderRadius:12,background:"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <span style={{fontSize:22}}>🌍</span>
           </div>
-          <span style={{fontSize:20,color:"rgba(255,255,255,0.5)"}}>›</span>
+          <div style={{flex:1,zIndex:1}}>
+            <div style={{fontSize:17,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:0.5}}>Mundial</div>
+            <div style={{fontSize:10,color:"rgba(255,255,255,0.65)",fontFamily:"'DM Sans',sans-serif",marginTop:1}}>Selecciones nacionales</div>
+          </div>
+          <span style={{fontSize:18,color:"rgba(255,255,255,0.6)",zIndex:1}}>›</span>
         </button>
 
         {/* Mi Equipo */}
         <button onClick={()=>onSelect(null)}
-          style={{width:"100%",padding:"18px 20px",borderRadius:14,background:`linear-gradient(135deg,${tc.dark},${tc.bg})`,border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:14,boxShadow:`0 4px 20px ${tc.dark}44`,textAlign:"left"}}>
-          <span style={{fontSize:28,flexShrink:0}}>👕</span>
-          <div style={{flex:1}}>
-            <div style={{fontSize:16,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:0.5}}>Mi Equipo</div>
-            <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",fontFamily:"'DM Sans',sans-serif"}}>Campo y plantilla →</div>
+          style={{width:"100%",padding:"16px 18px",borderRadius:16,background:`linear-gradient(135deg,${tc.dark}ee,${tc.bg}88)`,border:`1px solid ${tc.dark}`,cursor:"pointer",display:"flex",alignItems:"center",gap:14,boxShadow:`0 4px 24px ${tc.dark}33`,textAlign:"left",position:"relative",overflow:"hidden"}}>
+          <div style={{position:"absolute",right:-10,top:-10,fontSize:60,opacity:0.12,lineHeight:1}}>👕</div>
+          <div style={{width:44,height:44,borderRadius:12,background:"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <span style={{fontSize:22}}>👕</span>
           </div>
-          <span style={{fontSize:20,color:"rgba(255,255,255,0.5)"}}>›</span>
+          <div style={{flex:1,zIndex:1}}>
+            <div style={{fontSize:17,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:0.5}}>Mi Equipo</div>
+            <div style={{fontSize:10,color:"rgba(255,255,255,0.65)",fontFamily:"'DM Sans',sans-serif",marginTop:1}}>Campo y plantilla</div>
+          </div>
+          <span style={{fontSize:18,color:"rgba(255,255,255,0.6)",zIndex:1}}>›</span>
         </button>
+
       </div>
     </div>
   );
