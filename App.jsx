@@ -1811,7 +1811,6 @@ function MercadoModal({onClose,teamData,saveTeam,allTeams,embedded=false}){
     const base=(mercado[tipo]||[]).map(b=>({name:b.name||"",price:b.price||"",team:b.team||"",transferId:b.transferId||""}));
     while(base.length<max) base.push({name:"",price:"",team:"",transferId:""});
     const lista=base.slice(0,max);
-    // Inyectar pendientes que no estén ya en la lista
     for(const tr of pendingTransfers){
       const esEmisor=tr.fromUid===teamUid;
       const jugadores=tipo==="bajas"
@@ -1820,16 +1819,13 @@ function MercadoModal({onClose,teamData,saveTeam,allTeams,embedded=false}){
       const dinero=tipo==="bajas"
         ?(esEmisor?tr.offeredMoney:tr.requestedMoney)
         :(esEmisor?tr.requestedMoney:tr.offeredMoney);
-      if(!jugadores?.length&&!dinero) continue;
-      const precioM=dinero>0&&jugadores?.length?(dinero/jugadores.length/1000000).toFixed(1):"0";
-      const entries=jugadores?.length
-        ?jugadores.map(p=>({name:p.name,price:precioM,team:"⏳ Pendiente",transferId:tr.id}))
-        :[{name:"💰 Dinero",price:precioM,team:"⏳ Pendiente",transferId:tr.id}];
-      for(const entry of entries){
-        const yaExiste=lista.findIndex(x=>x.transferId===tr.id&&x.name===entry.name);
-        if(yaExiste!==-1) continue; // ya está
+      if(!jugadores?.length) continue; // sin jugadores no hay fila
+      const precioM=dinero>0&&jugadores.length?(dinero/jugadores.length/1000000).toFixed(1):"0";
+      for(const p of jugadores){
+        const yaExiste=lista.findIndex(x=>x.transferId===tr.id&&x.name===p.name);
+        if(yaExiste!==-1) continue;
         const emptyIdx=lista.findIndex(x=>!x.name||x.name.trim()==="");
-        if(emptyIdx!==-1) lista[emptyIdx]=entry;
+        if(emptyIdx!==-1) lista[emptyIdx]={name:p.name,price:precioM,team:"⏳ Pendiente",transferId:tr.id};
       }
     }
     return lista;
@@ -2096,11 +2092,11 @@ function TransferCenter({onClose,user,isAdmin,teamData,allTeams,pool,embedded=fa
   const inbox=transfers.filter(t=>t.toUid===user.uid&&t.status==="pending_acceptance");
   const outbox=transfers.filter(t=>t.fromUid===user.uid&&["pending_acceptance","pending_admin"].includes(t.status));
   const adminQueue=transfers.filter(t=>t.status==="pending_admin");
-  const historial=transfers.filter(t=>(t.fromUid===user.uid||t.toUid===user.uid)&&["approved","rejected"].includes(t.status)).sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
+  const historial=transfers.filter(t=>(t.fromUid===user.uid||t.toUid===user.uid)&&["completed","approved","rejected"].includes(t.status)).sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
   const badge=inbox.length+(isAdmin?adminQueue.length:0);
 
   const addPendienteToMercado=async(teamUid,tData,tipo,jugadores,dinero,transferId)=>{
-    if(!jugadores?.length&&!dinero) return;
+    if(!jugadores?.length) return; // solo procesamos jugadores, no dinero puro
     const tSnap=await getDoc(doc(db,"teams",teamUid));
     if(!tSnap.exists()) return;
     const tInfo=tSnap.data();
@@ -2108,12 +2104,13 @@ function TransferCenter({onClose,user,isAdmin,teamData,allTeams,pool,embedded=fa
     const maxSlots=slots[tipo]||6;
     const mercado=tInfo.mercado||{bajas:Array(maxSlots).fill({name:"",price:"",team:""}),altas:Array(maxSlots).fill({name:"",price:"",team:""}),finalizado:false};
     const lista=[...(mercado[tipo]||[])];
-    const precioM=dinero>0&&jugadores?.length?(dinero/jugadores.length/1000000).toFixed(1):"0";
-    const entries=jugadores?.length?jugadores.map(p=>({name:p.name,price:precioM,team:"⏳ Pendiente",transferId})):[{name:"💰 Dinero",price:precioM,team:"⏳ Pendiente",transferId}];
-    for(const entry of entries){
+    const precioM=dinero>0&&jugadores.length?(dinero/jugadores.length/1000000).toFixed(1):"0";
+    for(const p of jugadores){
+      const yaExiste=lista.findIndex(x=>x.transferId===transferId&&x.name===p.name);
+      if(yaExiste!==-1) continue;
       const emptyIdx=lista.findIndex(x=>!x.name||x.name.trim()==="");
-      if(emptyIdx!==-1) lista[emptyIdx]=entry;
-      else if(lista.length<maxSlots) lista.push(entry);
+      if(emptyIdx!==-1) lista[emptyIdx]={name:p.name,price:precioM,team:"⏳ Pendiente",transferId};
+      else if(lista.length<maxSlots) lista.push({name:p.name,price:precioM,team:"⏳ Pendiente",transferId});
     }
     await updateDoc(doc(db,"teams",teamUid),{mercado:{...mercado,[tipo]:lista}});
   };
@@ -2253,7 +2250,7 @@ function TransferCenter({onClose,user,isAdmin,teamData,allTeams,pool,embedded=fa
     await updateDoc(doc(db,"transfers",tr.id),{status:"rejected",rejectedAt:serverTimestamp(),rejectedBy:"admin"});
   };
 
-  const statusLabel={pending_acceptance:"⏳ Esperando respuesta",pending_admin:"🔐 Esperando admin",completed:"✅ Completada",rejected:"❌ Rechazada"};
+  const statusLabel={pending_acceptance:"⏳ Esperando respuesta",pending_admin:"🔐 Esperando admin",completed:"✅ Aprobada",approved:"✅ Aprobada",rejected:"❌ Rechazada"};
   const statusColor={pending_acceptance:"#f39c12",pending_admin:"#2980b9",completed:"#27ae60",rejected:"#e74c3c"};
 
   const TCard=({tr,mode})=>{
@@ -2375,7 +2372,7 @@ function TransferCenter({onClose,user,isAdmin,teamData,allTeams,pool,embedded=fa
               ?<div style={{textAlign:"center",color:C.textFaint,fontSize:12,padding:"24px 0",fontFamily:"'DM Sans',sans-serif"}}>Sin historial aún</div>
               :historial.map(tr=>{
                 const esEmisor=tr.fromUid===user.uid;
-                const approved=tr.status==="approved";
+                const approved=["approved","completed"].includes(tr.status);
                 return(
                   <div key={tr.id} style={{background:C.inputBg,border:`1px solid ${approved?"#27ae6044":"#e74c3c44"}`,borderRadius:10,padding:"10px 12px",marginBottom:8}}>
                     <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
