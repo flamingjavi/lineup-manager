@@ -2035,6 +2035,7 @@ function TransferCenter({onClose,user,isAdmin,teamData,allTeams,pool,embedded=fa
   const inbox=transfers.filter(t=>t.toUid===user.uid&&t.status==="pending_acceptance");
   const outbox=transfers.filter(t=>t.fromUid===user.uid&&["pending_acceptance","pending_admin"].includes(t.status));
   const adminQueue=transfers.filter(t=>t.status==="pending_admin");
+  const historial=transfers.filter(t=>(t.fromUid===user.uid||t.toUid===user.uid)&&["approved","rejected"].includes(t.status)).sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
   const badge=inbox.length+(isAdmin?adminQueue.length:0);
 
   const sendTransfer=async()=>{
@@ -2216,6 +2217,7 @@ function TransferCenter({onClose,user,isAdmin,teamData,allTeams,pool,embedded=fa
         {tabBtn("inbox","📥 Recibidas",inbox.length)}
         {tabBtn("outbox","📤 Enviadas",0)}
         {tabBtn("new","➕ Nueva",0)}
+        {tabBtn("historial","📋 Historial",0)}
         {isAdmin&&tabBtn("admin","🔐 Admin",adminQueue.length)}
       </div>
       <div style={{flex:1,overflowY:"auto",padding:"12px 14px"}}>
@@ -2232,6 +2234,38 @@ function TransferCenter({onClose,user,isAdmin,teamData,allTeams,pool,embedded=fa
             outbox.length===0
               ?<div style={{textAlign:"center",color:C.textFaint,fontSize:12,padding:"24px 0",fontFamily:"'DM Sans',sans-serif"}}>No tenés propuestas enviadas</div>
               :outbox.map(tr=><TCard key={tr.id} tr={tr} mode="outbox"/>)
+          )}
+
+          {/* HISTORIAL */}
+          {tab==="historial"&&(
+            historial.length===0
+              ?<div style={{textAlign:"center",color:C.textFaint,fontSize:12,padding:"24px 0",fontFamily:"'DM Sans',sans-serif"}}>Sin historial aún</div>
+              :historial.map(tr=>{
+                const esEmisor=tr.fromUid===user.uid;
+                const approved=tr.status==="approved";
+                return(
+                  <div key={tr.id} style={{background:C.inputBg,border:`1px solid ${approved?"#27ae6044":"#e74c3c44"}`,borderRadius:10,padding:"10px 12px",marginBottom:8}}>
+                    <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
+                      <span style={{fontSize:10,fontWeight:800,color:approved?"#27ae60":"#e74c3c",fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase"}}>{approved?"✅ Aprobada":"❌ Rechazada"}</span>
+                      <span style={{fontSize:9,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginLeft:"auto"}}>{tr.createdAt?.toDate?.()?.toLocaleDateString("es-GT")||""}</span>
+                    </div>
+                    <div style={{fontSize:11,color:C.textMid,fontFamily:"'DM Sans',sans-serif",marginBottom:4}}>
+                      <span style={{color:C.text,fontWeight:700}}>{tr.fromName}</span>
+                      <span style={{color:C.textFaint}}> → </span>
+                      <span style={{color:C.text,fontWeight:700}}>{tr.toName}</span>
+                    </div>
+                    {tr.offeredPlayers?.length>0&&<div style={{fontSize:10,color:C.textMid,fontFamily:"'DM Sans',sans-serif"}}>
+                      <span style={{color:C.textFaint}}>Ofrece: </span>{tr.offeredPlayers.map(p=>p.name).join(", ")}
+                    </div>}
+                    {tr.offeredMoney>0&&<div style={{fontSize:10,color:"#27ae60",fontFamily:"'DM Sans',sans-serif",fontWeight:700}}>+${tr.offeredMoney.toLocaleString()}</div>}
+                    {tr.requestedPlayers?.length>0&&<div style={{fontSize:10,color:C.textMid,fontFamily:"'DM Sans',sans-serif"}}>
+                      <span style={{color:C.textFaint}}>Pide: </span>{tr.requestedPlayers.map(p=>p.name).join(", ")}
+                    </div>}
+                    {tr.requestedMoney>0&&<div style={{fontSize:10,color:"#e74c3c",fontFamily:"'DM Sans',sans-serif",fontWeight:700}}>-${tr.requestedMoney.toLocaleString()}</div>}
+                    {tr.note&&<div style={{fontSize:10,color:C.textFaint,fontStyle:"italic",marginTop:2,fontFamily:"'DM Sans',sans-serif"}}>"{tr.note}"</div>}
+                  </div>
+                );
+              })
           )}
 
           {/* ADMIN */}
