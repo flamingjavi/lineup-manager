@@ -1804,6 +1804,8 @@ function MercadoModal({onClose,teamData,saveTeam,allTeams,embedded=false}){
     return unsub;
   },[teamUid]);
 
+  const[ignoredTransferIds,setIgnoredTransferIds]=useState(new Set());
+
   const mercado=teamData?.mercado||{bajas:Array(maxBajas).fill({name:"",price:"",team:""}),altas:Array(maxAltas).fill({name:"",price:"",team:""}),finalizado:false};
 
   // Merge mercado guardado + transferencias pendientes
@@ -1823,6 +1825,7 @@ function MercadoModal({onClose,teamData,saveTeam,allTeams,embedded=false}){
         ?(esEmisor?"→ "+tr.toName:"→ "+tr.fromName)
         :(esEmisor?"← "+tr.toName:"← "+tr.fromName);
       if(!jugadores?.length) continue;
+      if(ignoredTransferIds.has(tr.id)) continue; // usuario borró esta fila manualmente
       const precioM=dinero>0&&jugadores.length?(dinero/jugadores.length/1000000).toFixed(1):"";
       for(const p of jugadores){
         const yaExiste=lista.findIndex(x=>x.transferId===tr.id&&x.name===p.name);
@@ -1898,14 +1901,18 @@ function MercadoModal({onClose,teamData,saveTeam,allTeams,embedded=false}){
 
   const updateBaja=(i,field,val)=>{
     const nb=[...bajas];
-    if(field==="clear") nb[i]={name:"",price:"",team:"",transferId:""};
-    else nb[i]={...nb[i],[field]:val};
+    if(field==="clear"){
+      if(nb[i].transferId) setIgnoredTransferIds(prev=>new Set([...prev,nb[i].transferId]));
+      nb[i]={name:"",price:"",team:"",transferId:""};
+    } else nb[i]={...nb[i],[field]:val};
     setBajas(nb);autosave(nb,altas);
   };
   const updateAlta=(i,field,val)=>{
     const na=[...altas];
-    if(field==="clear") na[i]={name:"",price:"",team:"",transferId:""};
-    else na[i]={...na[i],[field]:val};
+    if(field==="clear"){
+      if(na[i].transferId) setIgnoredTransferIds(prev=>new Set([...prev,na[i].transferId]));
+      na[i]={name:"",price:"",team:"",transferId:""};
+    } else na[i]={...na[i],[field]:val};
     setAltas(na);autosave(bajas,na);
   };
 
