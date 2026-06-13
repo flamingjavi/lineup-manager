@@ -2344,6 +2344,7 @@ function TransferCenter({onClose,user,isAdmin,teamData,allTeams,pool,embedded=fa
             </button>
           </div>
         )}
+        {tr.toUid===user.uid&&tr.status==="pending_acceptance"&&(
           <div style={{display:"flex",gap:6}}>
             <button onClick={()=>accept(tr)} style={{flex:1,padding:"6px",borderRadius:7,background:"#27ae60",color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>✓ Aceptar</button>
             <button onClick={()=>reject(tr)} style={{flex:1,padding:"6px",borderRadius:7,background:"#e74c3c",color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>✕ Rechazar</button>
