@@ -1784,7 +1784,7 @@ function SeleccionesModal({onClose,lockedCountry,isAdmin,allSels:allSelsProp}){
 
 // ─── TRANSFER CENTER ─────────────────────────────────────────────────────────
 // ─── MERCADO CALCULATOR ───────────────────────────────────────────────────────
-function MercadoModal({onClose,teamData,saveTeam,allTeams}){
+function MercadoModal({onClose,teamData,saveTeam,allTeams,embedded=false}){
   const mercado=teamData?.mercado||{bajas:Array(6).fill({name:"",price:"",team:""}),altas:Array(6).fill({name:"",price:"",team:""}),finalizado:false};
   const[bajas,setBajas]=useState(mercado.bajas.map(b=>({name:b.name||"",price:b.price||"",team:b.team||""})));
   const[altas,setAltas]=useState(mercado.altas.map(a=>({name:a.name||"",price:a.price||"",team:a.team||""})));
@@ -1860,19 +1860,18 @@ function MercadoModal({onClose,teamData,saveTeam,allTeams}){
     </select>
   );
 
-  return(
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:2000,display:"flex",alignItems:"stretch",justifyContent:"center",backdropFilter:"blur(8px)"}} onClick={onClose}>
-      <div style={{background:C.card,width:"100%",maxWidth:520,display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 0 60px rgba(0,0,0,0.3)"}} onClick={e=>e.stopPropagation()}>
-        {/* Header */}
-        <div style={{padding:"12px 16px",background:"#1a3a5c",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
-          <span style={{fontSize:14,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>📊 CALCULADORA DE MERCADO</span>
+  const InnerMercado=(
+    <>
+      {/* Header interno solo cuando embedded */}
+      {embedded&&(
+        <div style={{padding:"10px 16px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:8,flexShrink:0,background:C.card}}>
+          <span style={{fontSize:13,fontWeight:800,color:C.text,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>📊 CALCULADORA DE MERCADO</span>
           {done&&<span style={{fontSize:10,background:"#27ae60",color:"#fff",padding:"2px 8px",borderRadius:20,fontFamily:"'DM Sans',sans-serif",fontWeight:700}}>FINALIZADO</span>}
-          <button onClick={onClose} style={{marginLeft:"auto",background:"rgba(255,255,255,0.15)",border:"none",borderRadius:"50%",width:28,height:28,color:"#fff",cursor:"pointer",fontSize:15,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
         </div>
-
-        <div style={{flex:1,overflowY:"auto",padding:"14px 16px",display:"flex",flexDirection:"column",gap:14}}>
-          {/* BAJAS */}
-          <div>
+      )}
+      <div style={{flex:1,overflowY:"auto",padding:"14px 16px",display:"flex",flexDirection:"column",gap:14}}>
+        {/* BAJAS */}
+        <div>
             <div style={{fontSize:11,fontWeight:800,color:"#e74c3c",fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.5,marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <span>📤 Bajas ({bajas.filter(b=>b.name.trim()).length}/6)</span>
               <span style={{fontSize:10,color:C.textFaint}}>Total: +{fmtM(totalBajas)}</span>
@@ -1992,6 +1991,20 @@ function MercadoModal({onClose,teamData,saveTeam,allTeams}){
             </div>
           )}
         </div>
+      </>
+  );
+
+  if(embedded) return <div style={{display:"flex",flexDirection:"column",flex:1,minHeight:0}}>{InnerMercado}</div>;
+
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:2000,display:"flex",alignItems:"stretch",justifyContent:"center",backdropFilter:"blur(8px)"}} onClick={onClose}>
+      <div style={{background:C.card,width:"100%",maxWidth:520,display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 0 60px rgba(0,0,0,0.3)"}} onClick={e=>e.stopPropagation()}>
+        <div style={{padding:"12px 16px",background:"#1a3a5c",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+          <span style={{fontSize:14,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>📊 CALCULADORA DE MERCADO</span>
+          {done&&<span style={{fontSize:10,background:"#27ae60",color:"#fff",padding:"2px 8px",borderRadius:20,fontFamily:"'DM Sans',sans-serif",fontWeight:700}}>FINALIZADO</span>}
+          <button onClick={onClose} style={{marginLeft:"auto",background:"rgba(255,255,255,0.15)",border:"none",borderRadius:"50%",width:28,height:28,color:"#fff",cursor:"pointer",fontSize:15,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+        </div>
+        {InnerMercado}
       </div>
     </div>
   );
