@@ -1861,14 +1861,16 @@ function MercadoModal({onClose,teamData,saveTeam,allTeams,embedded=false}){
     </div>
   );
   const teamSel=(val,onChange,label)=>(
-    <select value={val} onChange={e=>onChange(e.target.value)} disabled={done}
-      style={{flex:1,minWidth:90,padding:"6px 7px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:done?"transparent":C.inputBg,color:val?C.text:C.textFaint,fontSize:10,fontFamily:"'DM Sans',sans-serif",outline:"none",opacity:done?0.7:1}}>
-      <option value="">{label}</option>
-      <option value="LIBRE">🆓 Agente libre</option>
-      {[...allTeams].filter(t=>(t.uid||t.id)!==(teamData?.uid||teamData?.id)).sort((a,b)=>(a.teamName||"").localeCompare(b.teamName||"")).map(t=>(
-        <option key={t.uid||t.id} value={t.teamName}>{t.teamName}</option>
-      ))}
-    </select>
+    val==="⏳ Pendiente"
+      ?<div style={{flex:1,minWidth:90,padding:"6px 7px",borderRadius:7,border:`1px solid #f39c1255`,background:"#f39c1211",color:"#f39c12",fontSize:10,fontFamily:"'DM Sans',sans-serif",fontWeight:700}}>⏳ Pendiente</div>
+      :<select value={val} onChange={e=>onChange(e.target.value)} disabled={done}
+        style={{flex:1,minWidth:90,padding:"6px 7px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:done?"transparent":C.inputBg,color:val?C.text:C.textFaint,fontSize:10,fontFamily:"'DM Sans',sans-serif",outline:"none",opacity:done?0.7:1}}>
+        <option value="">{label}</option>
+        <option value="LIBRE">🆓 Agente libre</option>
+        {[...allTeams].filter(t=>(t.uid||t.id)!==(teamData?.uid||teamData?.id)).sort((a,b)=>(a.teamName||"").localeCompare(b.teamName||"")).map(t=>(
+          <option key={t.uid||t.id} value={t.teamName}>{t.teamName}</option>
+        ))}
+      </select>
   );
 
   const InnerMercado=(
@@ -2053,10 +2055,29 @@ function TransferCenter({onClose,user,isAdmin,teamData,allTeams,pool,embedded=fa
   const historial=transfers.filter(t=>(t.fromUid===user.uid||t.toUid===user.uid)&&["approved","rejected"].includes(t.status)).sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
   const badge=inbox.length+(isAdmin?adminQueue.length:0);
 
+  const addPendienteToMercado=async(teamUid,tData,tipo,jugadores,dinero,transferId)=>{
+    if(!jugadores?.length&&!dinero) return;
+    const tSnap=await getDoc(doc(db,"teams",teamUid));
+    if(!tSnap.exists()) return;
+    const tInfo=tSnap.data();
+    const slots=tInfo.mercadoSlots||{altas:6,bajas:6};
+    const maxSlots=slots[tipo]||6;
+    const mercado=tInfo.mercado||{bajas:Array(maxSlots).fill({name:"",price:"",team:""}),altas:Array(maxSlots).fill({name:"",price:"",team:""}),finalizado:false};
+    const lista=[...(mercado[tipo]||[])];
+    const precioM=dinero>0&&jugadores?.length?(dinero/jugadores.length/1000000).toFixed(1):"0";
+    const entries=jugadores?.length?jugadores.map(p=>({name:p.name,price:precioM,team:"⏳ Pendiente",transferId})):[{name:"💰 Dinero",price:precioM,team:"⏳ Pendiente",transferId}];
+    for(const entry of entries){
+      const emptyIdx=lista.findIndex(x=>!x.name||x.name.trim()==="");
+      if(emptyIdx!==-1) lista[emptyIdx]=entry;
+      else if(lista.length<maxSlots) lista.push(entry);
+    }
+    await updateDoc(doc(db,"teams",teamUid),{mercado:{...mercado,[tipo]:lista}});
+  };
+
   const sendTransfer=async()=>{
     if(!newT.toUid) return;
     setSending(true);
-    await addDoc(collection(db,"transfers"),{
+    const transferRef=await addDoc(collection(db,"transfers"),{
       fromUid:user.uid,
       fromName:teamData.teamName,
       toUid:newT.toUid,
@@ -2069,6 +2090,11 @@ function TransferCenter({onClose,user,isAdmin,teamData,allTeams,pool,embedded=fa
       status:"pending_acceptance",
       createdAt:serverTimestamp(),
     });
+    // Agregar al mercado del emisor como pendiente
+    // jugadores ofrecidos → bajas pendientes para from
+    await addPendienteToMercado(user.uid,teamData,"bajas",newT.offeredPlayers,newT.offeredMoney,transferRef.id);
+    // jugadores pedidos → altas pendientes para from
+    await addPendienteToMercado(user.uid,teamData,"altas",newT.requestedPlayers,newT.requestedMoney,transferRef.id);
     setSending(false);
     setNewT({toUid:"",offeredPlayers:[],requestedPlayers:[],offeredMoney:0,requestedMoney:0,note:""});
     setStep(1);
@@ -2077,6 +2103,12 @@ function TransferCenter({onClose,user,isAdmin,teamData,allTeams,pool,embedded=fa
 
   const accept=async(tr)=>{
     await updateDoc(doc(db,"transfers",tr.id),{status:"pending_admin",acceptedAt:serverTimestamp()});
+    // Agregar al mercado del receptor como pendiente
+    const toTeamData=allTeams.find(t=>(t.uid||t.id)===tr.toUid);
+    // jugadores pedidos (los que from ofreció) → bajas para to
+    await addPendienteToMercado(tr.toUid,toTeamData,"bajas",tr.requestedPlayers,tr.requestedMoney,tr.id);
+    // jugadores ofrecidos → altas para to
+    await addPendienteToMercado(tr.toUid,toTeamData,"altas",tr.offeredPlayers,tr.offeredMoney,tr.id);
   };
 
   const reject=async(tr)=>{
@@ -2136,30 +2168,36 @@ function TransferCenter({onClose,user,isAdmin,teamData,allTeams,pool,embedded=fa
       await setDoc(doc(db,"pool","players"),pd);
 
       // ── Auto-poblar mercado ──────────────────────────────────────────────
-      const addToMercado=async(teamUid,tipo,jugadores,precio)=>{
+      const addToMercado=async(teamUid,tipo,jugadores,precio,transferId)=>{
         const tSnap=await getDoc(doc(db,"teams",teamUid));
         if(!tSnap.exists()) return;
         const mercado=tSnap.data().mercado||{bajas:Array(6).fill({name:"",price:"",team:""}),altas:Array(6).fill({name:"",price:"",team:""}),finalizado:false};
         const lista=[...mercado[tipo]];
         const precioM=precio>0?(precio/1000000).toString():"0";
         for(const p of jugadores){
-          const emptyIdx=lista.findIndex(x=>!x.name||x.name.trim()==="");
-          if(emptyIdx!==-1) lista[emptyIdx]={name:p.name,price:precioM,team:""};
-          else lista.push({name:p.name,price:precioM,team:""});
+          // Primero buscar si hay una fila pendiente de esta transferencia
+          const pendIdx=lista.findIndex(x=>x.transferId===transferId&&x.name===p.name);
+          if(pendIdx!==-1){
+            lista[pendIdx]={name:p.name,price:precioM,team:""};
+          } else {
+            const emptyIdx=lista.findIndex(x=>!x.name||x.name.trim()==="");
+            if(emptyIdx!==-1) lista[emptyIdx]={name:p.name,price:precioM,team:""};
+            else lista.push({name:p.name,price:precioM,team:""});
+          }
         }
         await updateDoc(doc(db,"teams",teamUid),{mercado:{...mercado,[tipo]:lista.slice(0,Math.max(6,lista.length))}});
       };
       // jugadores que from vendió → baja para from, alta para to
       if(tr.offeredPlayers?.length>0){
         const precioPorJugador=tr.offeredMoney>0?Math.round(tr.offeredMoney/tr.offeredPlayers.length):0;
-        await addToMercado(tr.fromUid,"bajas",tr.offeredPlayers,precioPorJugador);
-        await addToMercado(tr.toUid,"altas",tr.offeredPlayers,precioPorJugador);
+        await addToMercado(tr.fromUid,"bajas",tr.offeredPlayers,precioPorJugador,tr.id);
+        await addToMercado(tr.toUid,"altas",tr.offeredPlayers,precioPorJugador,tr.id);
       }
       // jugadores que to cedió → baja para to, alta para from
       if(tr.requestedPlayers?.length>0){
         const precioPorJugador=tr.requestedMoney>0?Math.round(tr.requestedMoney/tr.requestedPlayers.length):0;
-        await addToMercado(tr.toUid,"bajas",tr.requestedPlayers,precioPorJugador);
-        await addToMercado(tr.fromUid,"altas",tr.requestedPlayers,precioPorJugador);
+        await addToMercado(tr.toUid,"bajas",tr.requestedPlayers,precioPorJugador,tr.id);
+        await addToMercado(tr.fromUid,"altas",tr.requestedPlayers,precioPorJugador,tr.id);
       }
       // ────────────────────────────────────────────────────────────────────
 
