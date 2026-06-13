@@ -1997,7 +1997,7 @@ function MercadoModal({onClose,teamData,saveTeam,allTeams}){
   );
 }
 
-function TransferCenter({onClose,user,isAdmin,teamData,allTeams,pool}){
+function TransferCenter({onClose,user,isAdmin,teamData,allTeams,pool,embedded=false}){
   const[tab,setTab]=useState("inbox"); // inbox | outbox | new | admin
   const[transfers,setTransfers]=useState([]);
   const[newT,setNewT]=useState({toUid:"",offeredPlayers:[],requestedPlayers:[],offeredMoney:0,requestedMoney:0,note:""});
@@ -2197,23 +2197,15 @@ function TransferCenter({onClose,user,isAdmin,teamData,allTeams,pool}){
     </button>
   );
 
-  return(
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:2000,display:"flex",alignItems:"stretch",justifyContent:"center",backdropFilter:"blur(8px)"}} onClick={onClose}>
-      <div style={{background:C.card,width:"100%",maxWidth:520,display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 0 60px rgba(0,0,0,0.3)"}} onClick={e=>e.stopPropagation()}>
-        {/* Header */}
-        <div style={{padding:"12px 16px",background:"#1a3a5c",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
-          <span style={{fontSize:14,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>🔄 MERCADO DE TRANSFERENCIAS</span>
-          <button onClick={onClose} style={{marginLeft:"auto",background:"rgba(255,255,255,0.15)",border:"none",borderRadius:"50%",width:28,height:28,color:"#fff",cursor:"pointer",fontSize:15,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
-        </div>
-        {/* Tabs */}
-        <div style={{padding:"10px 14px",borderBottom:`1px solid ${C.border}`,display:"flex",gap:6,flexWrap:"wrap",flexShrink:0}}>
-          {tabBtn("inbox","📥 Recibidas",inbox.length)}
-          {tabBtn("outbox","📤 Enviadas",0)}
-          {tabBtn("new","➕ Nueva",0)}
-          {isAdmin&&tabBtn("admin","🔐 Admin",adminQueue.length)}
-        </div>
-        {/* Content */}
-        <div style={{flex:1,overflowY:"auto",padding:"12px 14px"}}>
+  const InnerContent=(
+    <>
+      <div style={{padding:"10px 14px",borderBottom:`1px solid ${C.border}`,display:"flex",gap:6,flexWrap:"wrap",flexShrink:0}}>
+        {tabBtn("inbox","📥 Recibidas",inbox.length)}
+        {tabBtn("outbox","📤 Enviadas",0)}
+        {tabBtn("new","➕ Nueva",0)}
+        {isAdmin&&tabBtn("admin","🔐 Admin",adminQueue.length)}
+      </div>
+      <div style={{flex:1,overflowY:"auto",padding:"12px 14px"}}>
 
           {/* INBOX */}
           {tab==="inbox"&&(
@@ -2314,8 +2306,26 @@ function TransferCenter({onClose,user,isAdmin,teamData,allTeams,pool}){
             </div>
           )}
         </div>
-      </div>
+      </>
+  );
+
+  if(embedded) return(
+    <div style={{display:"flex",flexDirection:"column",flex:1,minHeight:0}}>
+      {InnerContent}
       {pickerMode&&<PickerModal mode={pickerMode} onClose={()=>setPickerMode(null)}/>}
+    </div>
+  );
+
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:2000,display:"flex",alignItems:"stretch",justifyContent:"center",backdropFilter:"blur(8px)"}} onClick={onClose}>
+      <div style={{background:C.card,width:"100%",maxWidth:520,display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 0 60px rgba(0,0,0,0.3)"}} onClick={e=>e.stopPropagation()}>
+        <div style={{padding:"12px 16px",background:"#1a3a5c",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+          <span style={{fontSize:14,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>🔄 MERCADO DE TRANSFERENCIAS</span>
+          <button onClick={onClose} style={{marginLeft:"auto",background:"rgba(255,255,255,0.15)",border:"none",borderRadius:"50%",width:28,height:28,color:"#fff",cursor:"pointer",fontSize:15,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+        </div>
+        {InnerContent}
+        {pickerMode&&<PickerModal mode={pickerMode} onClose={()=>setPickerMode(null)}/>}
+      </div>
     </div>
   );
 }
