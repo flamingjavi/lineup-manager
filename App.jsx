@@ -1788,17 +1788,61 @@ function MercadoModal({onClose,teamData,saveTeam,allTeams,embedded=false}){
   const slots=teamData?.mercadoSlots||{altas:6,bajas:6};
   const maxAltas=slots.altas||6;
   const maxBajas=slots.bajas||6;
+  const teamUid=teamData?.uid||teamData?.id;
+
+  // Cargar transferencias pendientes en tiempo real
+  const[pendingTransfers,setPendingTransfers]=useState([]);
+  useEffect(()=>{
+    const unsub=onSnapshot(collection(db,"transfers"),snap=>{
+      const all=snap.docs.map(d=>({id:d.id,...d.data()}));
+      const pending=all.filter(t=>
+        (t.fromUid===teamUid||t.toUid===teamUid)&&
+        ["pending_acceptance","pending_admin"].includes(t.status)
+      );
+      setPendingTransfers(pending);
+    });
+    return unsub;
+  },[teamUid]);
+
   const mercado=teamData?.mercado||{bajas:Array(maxBajas).fill({name:"",price:"",team:""}),altas:Array(maxAltas).fill({name:"",price:"",team:""}),finalizado:false};
-  const[bajas,setBajas]=useState(()=>{
-    const base=mercado.bajas.map(b=>({name:b.name||"",price:b.price||"",team:b.team||""}));
-    while(base.length<maxBajas) base.push({name:"",price:"",team:""});
-    return base.slice(0,maxBajas);
-  });
-  const[altas,setAltas]=useState(()=>{
-    const base=mercado.altas.map(a=>({name:a.name||"",price:a.price||"",team:a.team||""}));
-    while(base.length<maxAltas) base.push({name:"",price:"",team:""});
-    return base.slice(0,maxAltas);
-  });
+
+  // Merge mercado guardado + transferencias pendientes
+  const buildLista=(tipo,max)=>{
+    const base=(mercado[tipo]||[]).map(b=>({name:b.name||"",price:b.price||"",team:b.team||"",transferId:b.transferId||""}));
+    while(base.length<max) base.push({name:"",price:"",team:"",transferId:""});
+    const lista=base.slice(0,max);
+    // Inyectar pendientes que no estén ya en la lista
+    for(const tr of pendingTransfers){
+      const esEmisor=tr.fromUid===teamUid;
+      const jugadores=tipo==="bajas"
+        ?(esEmisor?tr.offeredPlayers:tr.requestedPlayers)
+        :(esEmisor?tr.requestedPlayers:tr.offeredPlayers);
+      const dinero=tipo==="bajas"
+        ?(esEmisor?tr.offeredMoney:tr.requestedMoney)
+        :(esEmisor?tr.requestedMoney:tr.offeredMoney);
+      if(!jugadores?.length&&!dinero) continue;
+      const precioM=dinero>0&&jugadores?.length?(dinero/jugadores.length/1000000).toFixed(1):"0";
+      const entries=jugadores?.length
+        ?jugadores.map(p=>({name:p.name,price:precioM,team:"⏳ Pendiente",transferId:tr.id}))
+        :[{name:"💰 Dinero",price:precioM,team:"⏳ Pendiente",transferId:tr.id}];
+      for(const entry of entries){
+        const yaExiste=lista.findIndex(x=>x.transferId===tr.id&&x.name===entry.name);
+        if(yaExiste!==-1) continue; // ya está
+        const emptyIdx=lista.findIndex(x=>!x.name||x.name.trim()==="");
+        if(emptyIdx!==-1) lista[emptyIdx]=entry;
+      }
+    }
+    return lista;
+  };
+
+  const[bajas,setBajas]=useState(()=>buildLista("bajas",maxBajas));
+  const[altas,setAltas]=useState(()=>buildLista("altas",maxAltas));
+
+  // Re-sincronizar cuando llegan transferencias pendientes
+  useEffect(()=>{
+    setBajas(buildLista("bajas",maxBajas));
+    setAltas(buildLista("altas",maxAltas));
+  },[pendingTransfers]);
   const[saving,setSaving]=useState(false);
   const[shareText,setShareText]=useState("");
 
