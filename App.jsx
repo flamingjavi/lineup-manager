@@ -2119,6 +2119,35 @@ function TransferCenter({onClose,user,isAdmin,teamData,allTeams,pool,embedded=fa
         if(fromSnap.exists()) await updateDoc(doc(db,"teams",tr.fromUid),{presupuesto:String((Number(fromSnap.data().presupuesto)||0)+tr.requestedMoney)});
       }
       await setDoc(doc(db,"pool","players"),pd);
+
+      // ── Auto-poblar mercado ──────────────────────────────────────────────
+      const addToMercado=async(teamUid,tipo,jugadores,precio)=>{
+        const tSnap=await getDoc(doc(db,"teams",teamUid));
+        if(!tSnap.exists()) return;
+        const mercado=tSnap.data().mercado||{bajas:Array(6).fill({name:"",price:"",team:""}),altas:Array(6).fill({name:"",price:"",team:""}),finalizado:false};
+        const lista=[...mercado[tipo]];
+        const precioM=precio>0?(precio/1000000).toString():"0";
+        for(const p of jugadores){
+          const emptyIdx=lista.findIndex(x=>!x.name||x.name.trim()==="");
+          if(emptyIdx!==-1) lista[emptyIdx]={name:p.name,price:precioM,team:""};
+          else lista.push({name:p.name,price:precioM,team:""});
+        }
+        await updateDoc(doc(db,"teams",teamUid),{mercado:{...mercado,[tipo]:lista.slice(0,Math.max(6,lista.length))}});
+      };
+      // jugadores que from vendió → baja para from, alta para to
+      if(tr.offeredPlayers?.length>0){
+        const precioPorJugador=tr.offeredMoney>0?Math.round(tr.offeredMoney/tr.offeredPlayers.length):0;
+        await addToMercado(tr.fromUid,"bajas",tr.offeredPlayers,precioPorJugador);
+        await addToMercado(tr.toUid,"altas",tr.offeredPlayers,precioPorJugador);
+      }
+      // jugadores que to cedió → baja para to, alta para from
+      if(tr.requestedPlayers?.length>0){
+        const precioPorJugador=tr.requestedMoney>0?Math.round(tr.requestedMoney/tr.requestedPlayers.length):0;
+        await addToMercado(tr.toUid,"bajas",tr.requestedPlayers,precioPorJugador);
+        await addToMercado(tr.fromUid,"altas",tr.requestedPlayers,precioPorJugador);
+      }
+      // ────────────────────────────────────────────────────────────────────
+
       await updateDoc(doc(db,"transfers",tr.id),{status:"completed",completedAt:serverTimestamp()});
     }catch(e){alert("Error al aprobar: "+e.message);}
   };
@@ -2141,11 +2170,11 @@ function TransferCenter({onClose,user,isAdmin,teamData,allTeams,pool,embedded=fa
         </div>
         <div style={{display:"flex",gap:16,marginBottom:6,flexWrap:"wrap"}}>
           {tr.offeredPlayers?.length>0&&<div style={{fontSize:10,color:C.textMid,fontFamily:"'DM Sans',sans-serif"}}><span style={{color:C.textFaint}}>Ofrece: </span>{tr.offeredPlayers.map(p=>p.name).join(", ")}</div>}
-          {tr.offeredMoney>0&&<div style={{fontSize:10,color:"#27ae60",fontFamily:"'DM Sans',sans-serif",fontWeight:700}}>+${tr.offeredMoney.toLocaleString()}</div>}
+          {tr.offeredMoney>0&&<div style={{fontSize:10,color:"#27ae60",fontFamily:"'DM Sans',sans-serif",fontWeight:700}}>+{(tr.offeredMoney/1000000).toLocaleString()}M</div>}
           {(tr.requestedPlayers?.length>0||tr.requestedMoney>0)&&<div style={{fontSize:10,color:C.textMid,fontFamily:"'DM Sans',sans-serif"}}>
             <span style={{color:C.textFaint}}>Pide: </span>
             {tr.requestedPlayers?.map(p=>p.name).join(", ")}
-            {tr.requestedMoney>0&&` + $${tr.requestedMoney.toLocaleString()}`}
+            {tr.requestedMoney>0&&` + ${(tr.requestedMoney/1000000).toLocaleString()}M`}
           </div>}
         </div>
         {tr.note&&<div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",fontStyle:"italic",marginBottom:6}}>"{tr.note}"</div>}
@@ -2257,11 +2286,11 @@ function TransferCenter({onClose,user,isAdmin,teamData,allTeams,pool,embedded=fa
                     {tr.offeredPlayers?.length>0&&<div style={{fontSize:10,color:C.textMid,fontFamily:"'DM Sans',sans-serif"}}>
                       <span style={{color:C.textFaint}}>Ofrece: </span>{tr.offeredPlayers.map(p=>p.name).join(", ")}
                     </div>}
-                    {tr.offeredMoney>0&&<div style={{fontSize:10,color:"#27ae60",fontFamily:"'DM Sans',sans-serif",fontWeight:700}}>+${tr.offeredMoney.toLocaleString()}</div>}
+                    {tr.offeredMoney>0&&<div style={{fontSize:10,color:"#27ae60",fontFamily:"'DM Sans',sans-serif",fontWeight:700}}>+{(tr.offeredMoney/1000000).toLocaleString()}M</div>}
                     {tr.requestedPlayers?.length>0&&<div style={{fontSize:10,color:C.textMid,fontFamily:"'DM Sans',sans-serif"}}>
                       <span style={{color:C.textFaint}}>Pide: </span>{tr.requestedPlayers.map(p=>p.name).join(", ")}
                     </div>}
-                    {tr.requestedMoney>0&&<div style={{fontSize:10,color:"#e74c3c",fontFamily:"'DM Sans',sans-serif",fontWeight:700}}>-${tr.requestedMoney.toLocaleString()}</div>}
+                    {tr.requestedMoney>0&&<div style={{fontSize:10,color:"#e74c3c",fontFamily:"'DM Sans',sans-serif",fontWeight:700}}>-{(tr.requestedMoney/1000000).toLocaleString()}M</div>}
                     {tr.note&&<div style={{fontSize:10,color:C.textFaint,fontStyle:"italic",marginTop:2,fontFamily:"'DM Sans',sans-serif"}}>"{tr.note}"</div>}
                   </div>
                 );
@@ -2304,8 +2333,9 @@ function TransferCenter({onClose,user,isAdmin,teamData,allTeams,pool,embedded=fa
                   </div>
                   <div style={{display:"flex",alignItems:"center",gap:8}}>
                     <span style={{fontSize:11,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>+ Dinero:</span>
-                    <input type="number" min={0} value={newT.offeredMoney||""} onChange={e=>setNewT(n=>({...n,offeredMoney:e.target.value}))}
-                      placeholder="0" style={{width:100,padding:"5px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"monospace",outline:"none"}}/>
+                    <input type="number" min={0} value={newT.offeredMoney?(newT.offeredMoney/1000000):""} onChange={e=>setNewT(n=>({...n,offeredMoney:Number(e.target.value)*1000000}))}
+                      placeholder="0" style={{width:80,padding:"5px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"monospace",outline:"none"}}/>
+                    <span style={{fontSize:10,color:C.textFaint,fontFamily:"monospace"}}>M</span>
                     <span style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Presupuesto: {Number(teamData?.presupuesto||0).toLocaleString()}</span>
                   </div>
                 </div>
@@ -2323,8 +2353,9 @@ function TransferCenter({onClose,user,isAdmin,teamData,allTeams,pool,embedded=fa
                   </div>
                   <div style={{display:"flex",alignItems:"center",gap:8}}>
                     <span style={{fontSize:11,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>+ Dinero:</span>
-                    <input type="number" min={0} value={newT.requestedMoney||""} onChange={e=>setNewT(n=>({...n,requestedMoney:e.target.value}))}
-                      placeholder="0" style={{width:100,padding:"5px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"monospace",outline:"none"}}/>
+                    <input type="number" min={0} value={newT.requestedMoney?(newT.requestedMoney/1000000):""} onChange={e=>setNewT(n=>({...n,requestedMoney:Number(e.target.value)*1000000}))}
+                      placeholder="0" style={{width:80,padding:"5px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"monospace",outline:"none"}}/>
+                    <span style={{fontSize:10,color:C.textFaint,fontFamily:"monospace"}}>M</span>
                   </div>
                 </div>
 
@@ -2341,7 +2372,7 @@ function TransferCenter({onClose,user,isAdmin,teamData,allTeams,pool,embedded=fa
                   <div style={{fontSize:11,color:C.text,fontFamily:"'DM Sans',sans-serif",lineHeight:1.6}}>
                     <strong>{teamData?.teamName}</strong> ofrece{newT.offeredPlayers.length>0?` a ${newT.offeredPlayers.map(p=>p.name).join(", ")}`:""}
                     {newT.offeredMoney>0?` + $${Number(newT.offeredMoney).toLocaleString()}`:" (solo dinero o sin oferta)"} a cambio de{newT.requestedPlayers.length>0?` ${newT.requestedPlayers.map(p=>p.name).join(", ")}`:""}
-                    {newT.requestedMoney>0?` + $${Number(newT.requestedMoney).toLocaleString()}`:""} de <strong>{toTeam?.teamName}</strong>.
+                    {newT.requestedMoney>0?` + ${(Number(newT.requestedMoney)/1000000).toLocaleString()}M`:""} de <strong>{toTeam?.teamName}</strong>.
                   </div>
                 </div>
 
