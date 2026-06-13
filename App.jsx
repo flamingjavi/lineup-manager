@@ -1878,7 +1878,10 @@ function MercadoModal({onClose,teamData,saveTeam,allTeams,embedded=false}){
   const toVal=p=>(Number(p)||0)*1000000;
   const totalBajas=bajas.reduce((s,b)=>s+toVal(b.price),0);
   const totalAltas=altas.reduce((s,a)=>s+toVal(a.price),0);
-  const saldo=presupuesto+totalBajas-totalAltas;
+  // Saldo solo con filas confirmadas (sin ⏳ pendiente)
+  const totalBajasConfirmadas=bajas.filter(b=>!b.team?.startsWith("⏳")).reduce((s,b)=>s+toVal(b.price),0);
+  const totalAltasConfirmadas=altas.filter(a=>!a.team?.startsWith("⏳")).reduce((s,a)=>s+toVal(a.price),0);
+  const saldo=presupuesto+totalBajasConfirmadas-totalAltasConfirmadas;
 
   const fmtM=n=>{
     const m=n/1000000;
@@ -2224,19 +2227,7 @@ function TransferCenter({onClose,user,isAdmin,teamData,allTeams,pool,embedded=fa
           await updateDoc(doc(db,"teams",tr.fromUid),{squad:sq});
         }
       }
-      // handle money
-      if(tr.offeredMoney>0){
-        const fromSnap=await getDoc(doc(db,"teams",tr.fromUid));
-        const toSnap=await getDoc(doc(db,"teams",tr.toUid));
-        if(fromSnap.exists()) await updateDoc(doc(db,"teams",tr.fromUid),{presupuesto:String(Math.max(0,(Number(fromSnap.data().presupuesto)||0)-tr.offeredMoney))});
-        if(toSnap.exists()) await updateDoc(doc(db,"teams",tr.toUid),{presupuesto:String((Number(toSnap.data().presupuesto)||0)+tr.offeredMoney)});
-      }
-      if(tr.requestedMoney>0){
-        const fromSnap=await getDoc(doc(db,"teams",tr.fromUid));
-        const toSnap=await getDoc(doc(db,"teams",tr.toUid));
-        if(toSnap.exists()) await updateDoc(doc(db,"teams",tr.toUid),{presupuesto:String(Math.max(0,(Number(toSnap.data().presupuesto)||0)-tr.requestedMoney))});
-        if(fromSnap.exists()) await updateDoc(doc(db,"teams",tr.fromUid),{presupuesto:String((Number(fromSnap.data().presupuesto)||0)+tr.requestedMoney)});
-      }
+      // handle money → se mueve al finalizar mercado, no aquí
       await setDoc(doc(db,"pool","players"),pd);
 
       // ── Auto-poblar mercado ──────────────────────────────────────────────
@@ -2245,16 +2236,19 @@ function TransferCenter({onClose,user,isAdmin,teamData,allTeams,pool,embedded=fa
         if(!tSnap.exists()) return;
         const mercado=tSnap.data().mercado||{bajas:Array(6).fill({name:"",price:"",team:""}),altas:Array(6).fill({name:"",price:"",team:""}),finalizado:false};
         const lista=[...mercado[tipo]];
-        const precioM=precio>0?(precio/1000000).toString():"0";
+        const precioM=precio>0?(precio/1000000).toFixed(1):"0";
         for(const p of jugadores){
-          // Primero buscar si hay una fila pendiente de esta transferencia
           const pendIdx=lista.findIndex(x=>x.transferId===transferId&&x.name===p.name);
           if(pendIdx!==-1){
-            lista[pendIdx]={name:p.name,price:precioM,team:""};
+            // Conservar precio editado manualmente si ya tiene uno
+            const precioFinal=lista[pendIdx].price&&lista[pendIdx].price!=="0"?lista[pendIdx].price:precioM;
+            // Extraer nombre del equipo quitando el "⏳ → " o "⏳ ← "
+            const teamClean=(lista[pendIdx].team||"").replace(/^⏳ [→←] /,"").replace(/^⏳ /,"");
+            lista[pendIdx]={name:p.name,price:precioFinal,team:teamClean,transferId:""};
           } else {
             const emptyIdx=lista.findIndex(x=>!x.name||x.name.trim()==="");
-            if(emptyIdx!==-1) lista[emptyIdx]={name:p.name,price:precioM,team:""};
-            else lista.push({name:p.name,price:precioM,team:""});
+            if(emptyIdx!==-1) lista[emptyIdx]={name:p.name,price:precioM,team:"",transferId:""};
+            else lista.push({name:p.name,price:precioM,team:"",transferId:""});
           }
         }
         await updateDoc(doc(db,"teams",teamUid),{mercado:{...mercado,[tipo]:lista.slice(0,Math.max(6,lista.length))}});
