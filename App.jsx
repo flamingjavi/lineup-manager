@@ -1819,13 +1819,19 @@ function MercadoModal({onClose,teamData,saveTeam,allTeams,embedded=false}){
       const dinero=tipo==="bajas"
         ?(esEmisor?tr.offeredMoney:tr.requestedMoney)
         :(esEmisor?tr.requestedMoney:tr.offeredMoney);
-      if(!jugadores?.length) continue; // sin jugadores no hay fila
+      const equipoLabel=tipo==="bajas"
+        ?(esEmisor?"→ "+tr.toName:"→ "+tr.fromName)
+        :(esEmisor?"← "+tr.toName:"← "+tr.fromName);
+      if(!jugadores?.length) continue;
       const precioM=dinero>0&&jugadores.length?(dinero/jugadores.length/1000000).toFixed(1):"";
       for(const p of jugadores){
         const yaExiste=lista.findIndex(x=>x.transferId===tr.id&&x.name===p.name);
-        if(yaExiste!==-1) continue;
+        if(yaExiste!==-1){
+          lista[yaExiste]={...lista[yaExiste],price:precioM||lista[yaExiste].price,team:"⏳ "+equipoLabel};
+          continue;
+        }
         const emptyIdx=lista.findIndex(x=>!x.name||x.name.trim()==="");
-        if(emptyIdx!==-1) lista[emptyIdx]={name:p.name,price:precioM,team:"⏳ Pendiente",transferId:tr.id};
+        if(emptyIdx!==-1) lista[emptyIdx]={name:p.name,price:precioM,team:"⏳ "+equipoLabel,transferId:tr.id};
       }
     }
     return lista;
@@ -1834,10 +1840,29 @@ function MercadoModal({onClose,teamData,saveTeam,allTeams,embedded=false}){
   const[bajas,setBajas]=useState(()=>buildLista("bajas",maxBajas));
   const[altas,setAltas]=useState(()=>buildLista("altas",maxAltas));
 
-  // Re-sincronizar cuando llegan transferencias pendientes
+  // Re-sincronizar cuando llegan transferencias pendientes — sin pisar precios editados manualmente
   useEffect(()=>{
-    setBajas(buildLista("bajas",maxBajas));
-    setAltas(buildLista("altas",maxAltas));
+    setBajas(prev=>{
+      const fresh=buildLista("bajas",maxBajas);
+      return fresh.map((f,i)=>{
+        const existing=prev[i];
+        // Si ya existe la fila y tiene precio editado manualmente, lo conservamos
+        if(existing&&existing.name===f.name&&existing.transferId===f.transferId&&existing.price&&existing.price!==f.price){
+          return {...f,price:existing.price};
+        }
+        return f;
+      });
+    });
+    setAltas(prev=>{
+      const fresh=buildLista("altas",maxAltas);
+      return fresh.map((f,i)=>{
+        const existing=prev[i];
+        if(existing&&existing.name===f.name&&existing.transferId===f.transferId&&existing.price&&existing.price!==f.price){
+          return {...f,price:existing.price};
+        }
+        return f;
+      });
+    });
   },[pendingTransfers]);
   const[saving,setSaving]=useState(false);
   const[shareText,setShareText]=useState("");
@@ -1901,8 +1926,8 @@ function MercadoModal({onClose,teamData,saveTeam,allTeams,embedded=false}){
     </div>
   );
   const teamSel=(val,onChange,label)=>(
-    val==="⏳ Pendiente"
-      ?<div style={{flex:1,minWidth:90,padding:"6px 7px",borderRadius:7,border:`1px solid #f39c1255`,background:"#f39c1211",color:"#f39c12",fontSize:10,fontFamily:"'DM Sans',sans-serif",fontWeight:700}}>⏳ Pendiente</div>
+    val?.startsWith("⏳")
+      ?<div style={{flex:1,minWidth:90,padding:"6px 7px",borderRadius:7,border:"1px solid #f39c1255",background:"#f39c1211",color:"#f39c12",fontSize:10,fontFamily:"'DM Sans',sans-serif",fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{val}</div>
       :<select value={val} onChange={e=>onChange(e.target.value)} disabled={done}
         style={{flex:1,minWidth:90,padding:"6px 7px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:done?"transparent":C.inputBg,color:val?C.text:C.textFaint,fontSize:10,fontFamily:"'DM Sans',sans-serif",outline:"none",opacity:done?0.7:1}}>
         <option value="">{label}</option>
