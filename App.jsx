@@ -2983,8 +2983,8 @@ function ManualResultadoForm({grupos,allSelPlayers,fuzzyMatch,mundial,saveM,setA
 }
 
 // ─── MUNDIAL ──────────────────────────────────────────────────────────────────
-function MundialModal({onClose,user,isAdmin,allSels,pool,teamData}){
-  const[tab,setTab]=useState("tabla");
+function MundialModal({onClose,user,isAdmin,allSels,pool,teamData,initialTab="misel"}){
+  const[tab,setTab]=useState(initialTab);
   const[mundial,setMundial]=useState(null);
   const[uploading,setUploading]=useState(false);
   const[uploadType,setUploadType]=useState(null);
@@ -3213,6 +3213,7 @@ function MundialModal({onClose,user,isAdmin,allSels,pool,teamData}){
 
         {/* Tabs */}
         <div style={{padding:"8px 12px",borderBottom:`1px solid ${C.border}`,display:"flex",gap:5,overflowX:"auto",flexShrink:0}}>
+          {tabBtn("misel","🏴 Mi Sel.")}
           {tabBtn("tabla","📊 Tabla")}
           {tabBtn("goleadores","⚽ Goles")}
           {tabBtn("asistencias","🎯 Asist.")}
@@ -3224,6 +3225,42 @@ function MundialModal({onClose,user,isAdmin,allSels,pool,teamData}){
         {aiMsg&&<div style={{padding:"6px 14px",background:"#f0fdf4",borderBottom:`1px solid #bbf7d0`,fontSize:11,color:"#166534",fontFamily:"'DM Sans',sans-serif"}}>{aiMsg}</div>}
 
         <div style={{flex:1,overflowY:"auto",padding:"12px 14px"}}>
+
+          {/* MI SELECCIÓN */}
+          {tab==="misel"&&(
+            !userSel
+              ?<div style={{textAlign:"center",color:C.textFaint,fontSize:12,padding:24,fontFamily:"'DM Sans',sans-serif"}}>
+                ⚽ No tienes selección asignada. El admin te la asigna desde el panel.
+              </div>
+              :<div>
+                {/* Header selección */}
+                <div style={{background:"linear-gradient(135deg,#4c1d95,#7c3aed)",borderRadius:12,padding:"16px",marginBottom:12,display:"flex",alignItems:"center",gap:12}}>
+                  <span style={{fontSize:36}}>{userSel.flag||"🏴"}</span>
+                  <div>
+                    <div style={{fontSize:18,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>{userSel.country}</div>
+                    <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",fontFamily:"'DM Sans',sans-serif"}}>{(userSel.squad||[]).length} jugadores convocados</div>
+                    {userGrupo&&<div style={{fontSize:10,color:"rgba(255,255,255,0.7)",fontFamily:"'DM Sans',sans-serif"}}>Grupo {userGrupo.nombre}</div>}
+                  </div>
+                  {userGrupo&&userPos&&(
+                    <div style={{marginLeft:"auto",fontSize:22,fontWeight:800,color:"#FFD700",fontFamily:"'Bebas Neue',sans-serif"}}>
+                      {userPos===1?"🥇":userPos===2?"🥈":userPos===3?"🥉":`${userPos}°`}
+                    </div>
+                  )}
+                </div>
+                {/* Convocatoria */}
+                <div style={{fontSize:11,fontWeight:700,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}}>Convocatoria</div>
+                {(userSel.squad||[]).length===0
+                  ?<div style={{textAlign:"center",color:C.textFaint,fontSize:11,padding:16,fontFamily:"'DM Sans',sans-serif"}}>Sin jugadores convocados aún</div>
+                  :(userSel.squad||[]).map((p,i)=>(
+                    <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",borderRadius:8,background:i%2===0?C.inputBg:"transparent",marginBottom:2}}>
+                      <span style={{fontSize:9,fontWeight:700,color:"#7c3aed",background:"#7c3aed22",padding:"2px 5px",borderRadius:4,fontFamily:"monospace",minWidth:24,textAlign:"center"}}>{p.pos||p.primaryPos||"?"}</span>
+                      <span style={{flex:1,fontSize:12,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{p.name}</span>
+                      {p.overall&&<span style={{fontSize:12,fontWeight:800,color:"#7c3aed",fontFamily:"monospace"}}>{p.overall}</span>}
+                    </div>
+                  ))
+                }
+              </div>
+          )}
 
           {/* TABLA POR GRUPOS */}
           {tab==="tabla"&&(
@@ -3643,6 +3680,7 @@ function MainApp({user,isAdmin,onLogout}){
   const[showAdminMenu,setShowAdminMenu]=useState(false);
   const[showMercado,setShowMercado]=useState(false);
   const[showMundial,setShowMundial]=useState(false);
+  const[mundialInitialTab,setMundialInitialTab]=useState("misel");
   const[showHome,setShowHome]=useState(true);
   const[activeComp,setActiveComp]=useState(null); // null = campo libre, comp obj = competencia // {formation, starters, subs, country}
   const[activeLineupId,setActiveLineupId]=useState("a");
@@ -3936,7 +3974,7 @@ function MainApp({user,isAdmin,onLogout}){
           <HomeScreen
             teamData={teamData}
             isAdmin={isAdmin}
-            onOpenMundial={()=>{setShowHome(false);setShowMundial(true);}}
+            onOpenMundial={()=>{setShowHome(false);setMundialInitialTab("misel");setShowMundial(true);}}
             onSelect={comp=>{
               setShowHome(false);
               if(comp===null){setActiveComp(null);return;}
@@ -3996,7 +4034,7 @@ function MainApp({user,isAdmin,onLogout}){
                   🔄 <span>Mercado</span>
                   {(transferBadge>0||teamData?.mercado?.finalizado)&&<span style={{marginLeft:"auto",background:transferBadge>0?"#e74c3c":"#27ae60",color:"#fff",borderRadius:20,padding:"1px 7px",fontSize:9,fontWeight:800}}>{transferBadge>0?transferBadge:"✓"}</span>}
                 </div>
-                <div onClick={()=>{setShowMundial(true);setShowHamburger(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:"#7c3aed"}}>
+                <div onClick={()=>{setMundialInitialTab("tabla");setShowMundial(true);setShowHamburger(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:"#7c3aed"}}>
                   🌍 <span>Mundial</span>
                 </div>
                 <div style={{borderTop:`1px solid ${C.border}`,margin:"4px 0"}}/>
@@ -5003,7 +5041,7 @@ function MainApp({user,isAdmin,onLogout}){
       {showCompetencias&&<CompetenciasModal allTeams={allTeams} onClose={()=>setShowCompetencias(false)}/>}
       {showMiSeleccion&&<SeleccionesModal lockedCountry={teamData?.nationalTeam} allSels={allSels} onClose={()=>setShowMiSeleccion(false)}/>}
       {showMercado&&<MercadoUnificado onClose={()=>setShowMercado(false)} user={user} isAdmin={isAdmin} teamData={teamData} saveTeam={saveTeam} allTeams={allTeams} pool={pool}/>}
-      {showMundial&&<MundialModal onClose={()=>setShowMundial(false)} user={user} isAdmin={isAdmin} allSels={allSels} pool={pool} teamData={teamData}/>}
+      {showMundial&&<MundialModal onClose={()=>setShowMundial(false)} user={user} isAdmin={isAdmin} allSels={allSels} pool={pool} teamData={teamData} initialTab={mundialInitialTab}/>}
       {!showMundial&&<AvisoBanner onOpen={()=>setShowMundial(true)}/>}
 
       {/* SUB MENU MODAL */}
