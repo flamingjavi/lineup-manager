@@ -2955,34 +2955,20 @@ function ManualResultadoForm({grupos,allSelPlayers,fuzzyMatch,mundial,saveM,setA
           <span style={{flex:1,fontSize:11,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif",textAlign:"center"}}>{visitanteNombre}</span>
         </div>
         <div style={{fontSize:10,fontWeight:700,color:"#27ae60",fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase"}}>⚽ Goleadores</div>
-        {goleadores.map((g,i)=>{
-          const selSquad=(allSels.find(s=>s.country===g.equipo)?.squad||[]).map(p=>p.name||"").filter(Boolean);
-          const gOpts=[...new Set(selSquad)].sort();
-          return(<div key={i} style={{display:"flex",gap:5,alignItems:"center",marginBottom:4}}>
-            <select value={g.equipo} onChange={e=>{const n=[...goleadores];n[i]={...n[i],equipo:e.target.value,nombre:""};setGoleadores(n);}} style={{width:80,padding:"6px 4px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:g.equipo?C.text:C.textFaint,fontSize:9,fontFamily:"'DM Sans',sans-serif",outline:"none"}}><option value="">Equipo</option><option value={localNombre}>{localNombre}</option><option value={visitanteNombre}>{visitanteNombre}</option></select>
-            {gOpts.length>0
-              ?<select value={g.nombre} onChange={e=>{const n=[...goleadores];n[i]={...n[i],nombre:e.target.value};setGoleadores(n);}} style={{flex:1,padding:"6px 4px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:g.nombre?C.text:C.textFaint,fontSize:10,fontFamily:"'DM Sans',sans-serif",outline:"none"}}><option value="">— Jugador —</option>{gOpts.map(nm=><option key={nm} value={nm}>{nm}</option>)}</select>
-              :<input value={g.nombre} onChange={e=>{const n=[...goleadores];n[i]={...n[i],nombre:e.target.value};setGoleadores(n);}} placeholder="Nombre" style={{flex:1,padding:"6px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:10,fontFamily:"'DM Sans',sans-serif",outline:"none"}}/>
-            }
-            <input type="number" min="1" value={g.goles} onChange={e=>{const n=[...goleadores];n[i]={...n[i],goles:e.target.value};setGoleadores(n);}} style={{width:38,padding:"6px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:11,fontFamily:"monospace",outline:"none",textAlign:"center"}}/>
-            {goleadores.length>1&&<button onClick={()=>setGoleadores(goleadores.filter((_,j)=>j!==i))} style={{background:"none",border:"none",color:"#e74c3c",cursor:"pointer",fontSize:14,padding:0}}>×</button>}
-          </div>);
-        })}
+        {goleadores.map((g,i)=>(<div key={i} style={{display:"flex",gap:5,alignItems:"center"}}>
+          {inp(g.nombre,v=>{const n=[...goleadores];n[i]={...n[i],nombre:v};setGoleadores(n);},"Nombre")}
+          <select value={g.equipo} onChange={e=>{const n=[...goleadores];n[i]={...n[i],equipo:e.target.value};setGoleadores(n);}} style={{width:80,padding:"6px 4px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:g.equipo?C.text:C.textFaint,fontSize:9,fontFamily:"'DM Sans',sans-serif",outline:"none"}}><option value="">Equipo</option><option value={localNombre}>{localNombre}</option><option value={visitanteNombre}>{visitanteNombre}</option></select>
+          <input type="number" min="1" value={g.goles} onChange={e=>{const n=[...goleadores];n[i]={...n[i],goles:e.target.value};setGoleadores(n);}} style={{width:38,padding:"6px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:11,fontFamily:"monospace",outline:"none",textAlign:"center"}}/>
+          {goleadores.length>1&&<button onClick={()=>setGoleadores(goleadores.filter((_,j)=>j!==i))} style={{background:"none",border:"none",color:"#e74c3c",cursor:"pointer",fontSize:14,padding:0}}>×</button>}
+        </div>))}
         <button onClick={()=>setGoleadores([...goleadores,{nombre:"",equipo:"",goles:1}])} style={{padding:"4px",borderRadius:7,border:`1px dashed #27ae60`,background:"transparent",color:"#27ae60",fontSize:10,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>+ Goleador</button>
         <div style={{fontSize:10,fontWeight:700,color:"#2980b9",fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase"}}>🎯 Asistencias</div>
-        {asistencias.map((a,i)=>{
-          const selSquadA=(allSels.find(s=>s.country===a.equipo)?.squad||[]).map(p=>p.name||"").filter(Boolean);
-          const aOpts=[...new Set(selSquadA)].sort();
-          return(<div key={i} style={{display:"flex",gap:5,alignItems:"center",marginBottom:4}}>
-            <select value={a.equipo} onChange={e=>{const n=[...asistencias];n[i]={...n[i],equipo:e.target.value,nombre:""};setAsistencias(n);}} style={{width:80,padding:"6px 4px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:a.equipo?C.text:C.textFaint,fontSize:9,fontFamily:"'DM Sans',sans-serif",outline:"none"}}><option value="">Equipo</option><option value={localNombre}>{localNombre}</option><option value={visitanteNombre}>{visitanteNombre}</option></select>
-            {aOpts.length>0
-              ?<select value={a.nombre} onChange={e=>{const n=[...asistencias];n[i]={...n[i],nombre:e.target.value};setAsistencias(n);}} style={{flex:1,padding:"6px 4px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:a.nombre?C.text:C.textFaint,fontSize:10,fontFamily:"'DM Sans',sans-serif",outline:"none"}}><option value="">— Jugador —</option>{aOpts.map(nm=><option key={nm} value={nm}>{nm}</option>)}</select>
-              :<input value={a.nombre} onChange={e=>{const n=[...asistencias];n[i]={...n[i],nombre:e.target.value};setAsistencias(n);}} placeholder="Nombre" style={{flex:1,padding:"6px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:10,fontFamily:"'DM Sans',sans-serif",outline:"none"}}/>
-            }
-            <input type="number" min="1" value={a.asistencias} onChange={e=>{const n=[...asistencias];n[i]={...n[i],asistencias:e.target.value};setAsistencias(n);}} style={{width:38,padding:"6px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:11,fontFamily:"monospace",outline:"none",textAlign:"center"}}/>
-            {asistencias.length>1&&<button onClick={()=>setAsistencias(asistencias.filter((_,j)=>j!==i))} style={{background:"none",border:"none",color:"#e74c3c",cursor:"pointer",fontSize:14,padding:0}}>×</button>}
-          </div>);
-        })}
+        {asistencias.map((a,i)=>(<div key={i} style={{display:"flex",gap:5,alignItems:"center"}}>
+          {inp(a.nombre,v=>{const n=[...asistencias];n[i]={...n[i],nombre:v};setAsistencias(n);},"Nombre")}
+          <select value={a.equipo} onChange={e=>{const n=[...asistencias];n[i]={...n[i],equipo:e.target.value};setAsistencias(n);}} style={{width:80,padding:"6px 4px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:a.equipo?C.text:C.textFaint,fontSize:9,fontFamily:"'DM Sans',sans-serif",outline:"none"}}><option value="">Equipo</option><option value={localNombre}>{localNombre}</option><option value={visitanteNombre}>{visitanteNombre}</option></select>
+          <input type="number" min="1" value={a.asistencias} onChange={e=>{const n=[...asistencias];n[i]={...n[i],asistencias:e.target.value};setAsistencias(n);}} style={{width:38,padding:"6px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:11,fontFamily:"monospace",outline:"none",textAlign:"center"}}/>
+          {asistencias.length>1&&<button onClick={()=>setAsistencias(asistencias.filter((_,j)=>j!==i))} style={{background:"none",border:"none",color:"#e74c3c",cursor:"pointer",fontSize:14,padding:0}}>×</button>}
+        </div>))}
 
         <button onClick={save} disabled={saving||golesLocal===""||golesVisitante===""} style={{padding:"10px",borderRadius:9,background:"#1a3a5c",color:"#fff",border:"none",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:saving?0.6:1}}>
           {saving?"Guardando…":"✅ Guardar Resultado"}
