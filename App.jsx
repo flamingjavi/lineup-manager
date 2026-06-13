@@ -2254,7 +2254,6 @@ function TransferCenter({onClose,user,isAdmin,teamData,allTeams,pool,embedded=fa
 
   const statusLabel={pending_acceptance:"⏳ Esperando respuesta",pending_admin:"🔐 Esperando admin",completed:"✅ Aprobada",approved:"✅ Aprobada",rejected:"❌ Rechazada"};
   const statusColor={pending_acceptance:"#f39c12",pending_admin:"#9b59b6",completed:"#27ae60",approved:"#27ae60",rejected:"#e74c3c"};
-  const statusColor={pending_acceptance:"#f39c12",pending_admin:"#2980b9",completed:"#27ae60",rejected:"#e74c3c"};
 
   const TCard=({tr,mode})=>{
     const isFrom=tr.fromUid===user.uid;
