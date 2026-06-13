@@ -1894,12 +1894,16 @@ function MercadoModal({onClose,teamData,saveTeam,allTeams,embedded=false}){
   };
 
   const updateBaja=(i,field,val)=>{
-    const nb=[...bajas];nb[i]={...nb[i],[field]:val};setBajas(nb);
-    autosave(nb,altas);
+    const nb=[...bajas];
+    if(field==="clear") nb[i]={name:"",price:"",team:"",transferId:""};
+    else nb[i]={...nb[i],[field]:val};
+    setBajas(nb);autosave(nb,altas);
   };
   const updateAlta=(i,field,val)=>{
-    const na=[...altas];na[i]={...na[i],[field]:val};setAltas(na);
-    autosave(bajas,na);
+    const na=[...altas];
+    if(field==="clear") na[i]={name:"",price:"",team:"",transferId:""};
+    else na[i]={...na[i],[field]:val};
+    setAltas(na);autosave(bajas,na);
   };
 
   const finalizar=async()=>{
@@ -1956,13 +1960,13 @@ function MercadoModal({onClose,teamData,saveTeam,allTeams,embedded=false}){
             </div>
             {bajas.map((b,i)=>{
               const bloqueado=i>=maxBajas;
-              const esPendiente=b.team==="⏳ Pendiente";
               return(
               <div key={i} style={{...rowStyle,opacity:bloqueado?0.3:1,pointerEvents:bloqueado?"none":"auto"}}>
                 <span style={{fontSize:10,color:C.textFaint,fontFamily:"monospace",width:14,textAlign:"right",flexShrink:0}}>{i+1}.</span>
-                {inp(b.name,v=>updateBaja(i,"name",v),"Jugador",esPendiente)}
+                {inp(b.name,v=>updateBaja(i,"name",v),"Jugador")}
                 {priceInp(b.price,v=>updateBaja(i,"price",v))}
                 {teamSel(b.team,v=>updateBaja(i,"team",v),"→ Destino")}
+                {b.name&&<button onClick={()=>updateBaja(i,"clear","")} style={{background:"none",border:"none",color:"#e74c3c",fontSize:14,cursor:"pointer",flexShrink:0,padding:"0 2px"}}>✕</button>}
               </div>
             );})}
           </div>
@@ -1975,13 +1979,13 @@ function MercadoModal({onClose,teamData,saveTeam,allTeams,embedded=false}){
             </div>
             {altas.map((a,i)=>{
               const bloqueado=i>=maxAltas;
-              const esPendiente=a.team==="⏳ Pendiente";
               return(
               <div key={i} style={{...rowStyle,opacity:bloqueado?0.3:1,pointerEvents:bloqueado?"none":"auto"}}>
                 <span style={{fontSize:10,color:C.textFaint,fontFamily:"monospace",width:14,textAlign:"right",flexShrink:0}}>{i+1}.</span>
-                {inp(a.name,v=>updateAlta(i,"name",v),"Jugador",esPendiente)}
+                {inp(a.name,v=>updateAlta(i,"name",v),"Jugador")}
                 {priceInp(a.price,v=>updateAlta(i,"price",v))}
                 {teamSel(a.team,v=>updateAlta(i,"team",v),"← Origen")}
+                {a.name&&<button onClick={()=>updateAlta(i,"clear","")} style={{background:"none",border:"none",color:"#e74c3c",fontSize:14,cursor:"pointer",flexShrink:0,padding:"0 2px"}}>✕</button>}
               </div>
             );})}
           </div>
