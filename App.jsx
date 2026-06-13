@@ -3131,8 +3131,8 @@ function MundialModal({onClose,user,isAdmin,allSels,pool,teamData,initialTab="mi
 
   // Group position
   const userPos=groupFinished&&userGrupo?([...(userGrupo.tabla||[])].sort((a,b)=>b.pts-a.pts||(b.gf-b.gc)-(a.gf-a.gc)).findIndex(r=>r.sel===userSelName)+1):null;
-  const goleadores=[...stats].sort((a,b)=>b.goles-a.goles).filter(p=>p.goles>0);
-  const asistentes=[...stats].sort((a,b)=>b.asistencias-a.asistencias).filter(p=>p.asistencias>0);
+  const goleadoresStats=[...stats].sort((a,b)=>b.goles-a.goles).filter(p=>p.goles>0);
+  const asistentesStats=[...stats].sort((a,b)=>b.asistencias-a.asistencias).filter(p=>p.asistencias>0);
   const ratings=[...stats].filter(p=>p.ratings?.length>0).sort((a,b)=>{
     const ra=a.ratings.reduce((s,r)=>s+r,0)/a.ratings.length;
     const rb=b.ratings.reduce((s,r)=>s+r,0)/b.ratings.length;
@@ -3291,16 +3291,16 @@ function MundialModal({onClose,user,isAdmin,allSels,pool,teamData,initialTab="mi
 
           {/* GOLEADORES */}
           {tab==="goleadores"&&(
-            goleadores.length===0
+            goleadoresStats.length===0
               ?<div style={{textAlign:"center",color:C.textFaint,fontSize:12,padding:24,fontFamily:"'DM Sans',sans-serif"}}>Sin datos aún</div>
-              :goleadores.map((p,i)=><StatRow key={i} i={i} name={p.name} sel={p.selName} val={p.goles} label="⚽"/>)
+              :goleadoresStats.map((p,i)=><StatRow key={i} i={i} name={p.name} sel={p.selName} val={p.goles} label="⚽"/>)
           )}
 
           {/* ASISTENCIAS */}
           {tab==="asistencias"&&(
-            asistentes.length===0
+            asistentesStats.length===0
               ?<div style={{textAlign:"center",color:C.textFaint,fontSize:12,padding:24,fontFamily:"'DM Sans',sans-serif"}}>Sin datos aún</div>
-              :asistentes.map((p,i)=><StatRow key={i} i={i} name={p.name} sel={p.selName} val={p.asistencias} label="🎯"/>)
+              :asistentesStats.map((p,i)=><StatRow key={i} i={i} name={p.name} sel={p.selName} val={p.asistencias} label="🎯"/>)
           )}
 
           {/* RATINGS */}
@@ -3684,7 +3684,7 @@ function MainApp({user,isAdmin,onLogout}){
   const[showAdminMenu,setShowAdminMenu]=useState(false);
   const[showMercado,setShowMercado]=useState(false);
   const[showMundial,setShowMundial]=useState(false);
-  const[mundialInitialTab,setMundialInitialTab]=useState("misel");
+  const[mundialInitialTab,setMundialInitialTab]=useState("tabla");
   const[showHome,setShowHome]=useState(true);
   const[activeComp,setActiveComp]=useState(null); // null = campo libre, comp obj = competencia // {formation, starters, subs, country}
   const[activeLineupId,setActiveLineupId]=useState("a");
