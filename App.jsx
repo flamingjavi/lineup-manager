@@ -2321,6 +2321,115 @@ function TransferCenter({onClose,user,isAdmin,teamData,allTeams,pool}){
 }
 
 // ─── AVISO BANNER ─────────────────────────────────────────────────────────────
+// ─── MERCADO UNIFICADO ────────────────────────────────────────────────────────
+function MercadoUnificado({onClose,user,isAdmin,teamData,saveTeam,allTeams,pool}){
+  const[tab,setTab]=useState("fichajes"); // fichajes | ofertas | admin
+  const[slotTeam,setSlotTeam]=useState(null);
+  const[slotAltas,setSlotAltas]=useState("");
+  const[slotBajas,setSlotBajas]=useState("");
+  const[savingSlots,setSavingSlots]=useState(false);
+  const[clearing,setClearing]=useState(false);
+
+  const saveSlots=async()=>{
+    if(!slotTeam) return;
+    setSavingSlots(true);
+    await updateDoc(doc(db,"teams",slotTeam.uid||slotTeam.id),{
+      mercadoSlots:{altas:Number(slotAltas)||0,bajas:Number(slotBajas)||0}
+    });
+    setSavingSlots(false);
+    setSlotTeam(null);
+  };
+
+  const clearMercado=async()=>{
+    if(!window.confirm("¿Limpiar todo el mercado? Esto borra slots y ofertas pendientes.")) return;
+    setClearing(true);
+    // Limpiar slots de todos los equipos
+    await Promise.all(allTeams.map(t=>updateDoc(doc(db,"teams",t.uid||t.id),{mercadoSlots:{altas:0,bajas:0},mercado:{bajas:Array(6).fill({name:"",price:"",team:""}),altas:Array(6).fill({name:"",price:"",team:""}),finalizado:false}})));
+    setClearing(false);
+  };
+
+  const TABS=[
+    {id:"fichajes",label:"🏷️ Fichajes"},
+    {id:"ofertas",label:"🔄 Ofertas"},
+    ...(isAdmin?[{id:"admin",label:"⚙️ Admin"}]:[]),
+  ];
+
+  return(
+    <div style={{position:"fixed",inset:0,zIndex:500,background:C.bg,display:"flex",flexDirection:"column"}}>
+      {/* Header */}
+      <div style={{padding:"12px 16px",background:C.card,borderBottom:`2px solid ${C.border}`,display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+        <button onClick={onClose} style={{background:"none",border:"none",color:C.textMid,fontSize:20,cursor:"pointer",padding:"0 4px"}}>←</button>
+        <span style={{fontSize:16,fontWeight:800,color:C.text,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1,flex:1}}>MERCADO</span>
+      </div>
+
+      {/* Tabs */}
+      <div style={{display:"flex",borderBottom:`1px solid ${C.border}`,background:C.card,flexShrink:0}}>
+        {TABS.map(t=>(
+          <button key={t.id} onClick={()=>setTab(t.id)}
+            style={{flex:1,padding:"10px 4px",border:"none",background:"none",color:tab===t.id?C.accent:C.textFaint,fontFamily:"'DM Sans',sans-serif",fontSize:11,fontWeight:700,cursor:"pointer",borderBottom:`2px solid ${tab===t.id?C.accent:"transparent"}`,transition:"all 0.15s"}}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Content */}
+      <div style={{flex:1,overflowY:"auto"}}>
+        {tab==="fichajes"&&<MercadoModal onClose={onClose} teamData={teamData} saveTeam={saveTeam} allTeams={allTeams} embedded/>}
+        {tab==="ofertas"&&<TransferCenter onClose={onClose} user={user} isAdmin={isAdmin} teamData={teamData} allTeams={allTeams} pool={pool} embedded/>}
+        {tab==="admin"&&isAdmin&&(
+          <div style={{padding:16,display:"flex",flexDirection:"column",gap:12}}>
+            <div style={{fontSize:11,fontWeight:700,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.8}}>Asignar slots por equipo</div>
+            {allTeams.map(t=>{
+              const slots=t.mercadoSlots||{altas:0,bajas:0};
+              const isEditing=slotTeam&&(slotTeam.uid||slotTeam.id)===(t.uid||t.id);
+              return(
+                <div key={t.uid||t.id} style={{background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 12px"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <div style={{width:10,height:10,borderRadius:"50%",background:getTeamColor(t.teamColor||"blue").bg,flexShrink:0}}/>
+                    <span style={{flex:1,fontSize:13,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{t.teamName}</span>
+                    <span style={{fontSize:10,color:"#27ae60",fontFamily:"'DM Sans',sans-serif"}}>↑{slots.altas}</span>
+                    <span style={{fontSize:10,color:"#e74c3c",fontFamily:"'DM Sans',sans-serif"}}>↓{slots.bajas}</span>
+                    <button onClick={()=>{setSlotTeam(t);setSlotAltas(String(slots.altas));setSlotBajas(String(slots.bajas));}}
+                      style={{padding:"3px 8px",borderRadius:6,border:`1px solid ${C.borderDark}`,background:"none",color:C.textMid,fontSize:10,cursor:"pointer"}}>✏️</button>
+                  </div>
+                  {isEditing&&(
+                    <div style={{display:"flex",gap:8,marginTop:8,alignItems:"center"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:4,flex:1}}>
+                        <span style={{fontSize:10,color:"#27ae60",fontFamily:"'DM Sans',sans-serif",flexShrink:0}}>↑ Altas</span>
+                        <input type="number" min="0" max="20" value={slotAltas} onChange={e=>setSlotAltas(e.target.value)}
+                          style={{width:48,padding:"4px 6px",borderRadius:6,border:`1px solid #27ae60`,background:C.inputBg,color:C.text,fontSize:12,textAlign:"center"}}/>
+                      </div>
+                      <div style={{display:"flex",alignItems:"center",gap:4,flex:1}}>
+                        <span style={{fontSize:10,color:"#e74c3c",fontFamily:"'DM Sans',sans-serif",flexShrink:0}}>↓ Bajas</span>
+                        <input type="number" min="0" max="20" value={slotBajas} onChange={e=>setSlotBajas(e.target.value)}
+                          style={{width:48,padding:"4px 6px",borderRadius:6,border:`1px solid #e74c3c`,background:C.inputBg,color:C.text,fontSize:12,textAlign:"center"}}/>
+                      </div>
+                      <button onClick={saveSlots} disabled={savingSlots}
+                        style={{padding:"5px 10px",borderRadius:7,background:C.accent,color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                        {savingSlots?"…":"✓"}
+                      </button>
+                      <button onClick={()=>setSlotTeam(null)}
+                        style={{padding:"5px 8px",borderRadius:7,background:C.inputBg,color:C.textMid,border:`1px solid ${C.border}`,fontSize:11,cursor:"pointer"}}>✕</button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            <div style={{borderTop:`1px solid ${C.border}`,marginTop:8,paddingTop:12}}>
+              <div style={{fontSize:11,fontWeight:700,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.8,marginBottom:10}}>Gestión de ventana</div>
+              <button onClick={clearMercado} disabled={clearing}
+                style={{width:"100%",padding:"12px",borderRadius:10,background:"#fff5f5",border:"1px solid #ffcccc",color:"#c0392b",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                {clearing?"Limpiando…":"🗑️ Limpiar mercado para nueva ventana"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function CountdownTimer({endsAt}){
   const[remaining,setRemaining]=useState(Math.max(0,endsAt-Date.now()));
   useEffect(()=>{
@@ -3259,7 +3368,6 @@ function MainApp({user,isAdmin,onLogout}){
   const[showMiSeleccion,setShowMiSeleccion]=useState(false);
   const[allSels,setAllSels]=useState([]);
   const[selNacional,setSelNacional]=useState(null);
-  const[showTransfers,setShowTransfers]=useState(false);
   const[transferBadge,setTransferBadge]=useState(0);
   const[showHamburger,setShowHamburger]=useState(false);
   const[showAdminMenu,setShowAdminMenu]=useState(false);
@@ -3614,13 +3722,9 @@ function MainApp({user,isAdmin,onLogout}){
                 {teamData?.nationalTeam&&<div onClick={()=>{setShowMiSeleccion(true);setShowHamburger(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:"#2980b9"}}>
                   🏳️ <span>Mi Selección</span>
                 </div>}
-                <div onClick={()=>{setShowTransfers(true);setShowHamburger(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:C.text,position:"relative"}}>
-                  🔄 <span>Transferencias</span>
-                  {transferBadge>0&&<span style={{marginLeft:"auto",background:"#e74c3c",color:"#fff",borderRadius:20,padding:"1px 7px",fontSize:9,fontWeight:800}}>{transferBadge}</span>}
-                </div>
-                <div onClick={()=>{setShowMercado(true);setShowHamburger(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:C.text}}>
-                  📊 <span>Mercado</span>
-                  {teamData?.mercado?.finalizado&&<span style={{marginLeft:"auto",fontSize:9,background:"#27ae60",color:"#fff",borderRadius:20,padding:"1px 7px",fontWeight:800}}>✓</span>}
+                <div onClick={()=>{setShowMercado(true);setShowHamburger(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:C.text,position:"relative"}}>
+                  🔄 <span>Mercado</span>
+                  {(transferBadge>0||teamData?.mercado?.finalizado)&&<span style={{marginLeft:"auto",background:transferBadge>0?"#e74c3c":"#27ae60",color:"#fff",borderRadius:20,padding:"1px 7px",fontSize:9,fontWeight:800}}>{transferBadge>0?transferBadge:"✓"}</span>}
                 </div>
                 <div onClick={()=>{setShowMundial(true);setShowHamburger(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:"#7c3aed"}}>
                   🌍 <span>Mundial</span>
@@ -4628,8 +4732,7 @@ function MainApp({user,isAdmin,onLogout}){
       {showSelecciones&&<SeleccionesModal isAdmin={true} allSels={allSels} onClose={()=>setShowSelecciones(false)}/>}
       {showCompetencias&&<CompetenciasModal allTeams={allTeams} onClose={()=>setShowCompetencias(false)}/>}
       {showMiSeleccion&&<SeleccionesModal lockedCountry={teamData?.nationalTeam} allSels={allSels} onClose={()=>setShowMiSeleccion(false)}/>}
-      {showTransfers&&<TransferCenter onClose={()=>setShowTransfers(false)} user={user} isAdmin={isAdmin} teamData={teamData} allTeams={allTeams} pool={pool}/>}
-      {showMercado&&<MercadoModal onClose={()=>setShowMercado(false)} teamData={teamData} saveTeam={saveTeam} allTeams={allTeams}/>}
+      {showMercado&&<MercadoUnificado onClose={()=>setShowMercado(false)} user={user} isAdmin={isAdmin} teamData={teamData} saveTeam={saveTeam} allTeams={allTeams} pool={pool}/>}
       {showMundial&&<MundialModal onClose={()=>setShowMundial(false)} user={user} isAdmin={isAdmin} allSels={allSels} pool={pool} teamData={teamData}/>}
       {!showMundial&&<AvisoBanner onOpen={()=>setShowMundial(true)}/>}
 
