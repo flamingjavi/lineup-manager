@@ -2343,7 +2343,7 @@ function TransferCenter({onClose,user,isAdmin,teamData,allTeams,pool,embedded=fa
                     <input type="number" min={0} value={newT.offeredMoney>0?(newT.offeredMoney/1000000):""} onChange={e=>{const v=parseFloat(e.target.value);setNewT(n=>({...n,offeredMoney:isNaN(v)?0:v*1000000}));}}
                       placeholder="0" style={{width:80,padding:"5px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"monospace",outline:"none"}}/>
                     <span style={{fontSize:10,color:C.textFaint,fontFamily:"monospace"}}>M</span>
-                    <span style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Presupuesto: {Number(teamData?.presupuesto||0).toLocaleString()}</span>
+                    <span style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Presupuesto: {teamData?.presupuesto||"—"}</span>
                   </div>
                 </div>
 
@@ -2374,11 +2374,11 @@ function TransferCenter({onClose,user,isAdmin,teamData,allTeams,pool,embedded=fa
                 </div>
 
                 {/* Resumen */}
-                <div style={{background:"#f8f9fa",border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 13px"}}>
+                <div style={{background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 13px"}}>
                   <div style={{fontSize:10,fontWeight:700,color:C.textLight,fontFamily:"'DM Sans',sans-serif",marginBottom:6,textTransform:"uppercase",letterSpacing:0.5}}>Resumen de la propuesta</div>
                   <div style={{fontSize:11,color:C.text,fontFamily:"'DM Sans',sans-serif",lineHeight:1.6}}>
                     <strong>{teamData?.teamName}</strong> ofrece{newT.offeredPlayers.length>0?` a ${newT.offeredPlayers.map(p=>p.name).join(", ")}`:""}
-                    {newT.offeredMoney>0?` + $${Number(newT.offeredMoney).toLocaleString()}`:" (solo dinero o sin oferta)"} a cambio de{newT.requestedPlayers.length>0?` ${newT.requestedPlayers.map(p=>p.name).join(", ")}`:""}
+                    {newT.offeredMoney>0?` + ${(newT.offeredMoney/1000000).toLocaleString()}M`:" (solo dinero o sin oferta)"} a cambio de{newT.requestedPlayers.length>0?` ${newT.requestedPlayers.map(p=>p.name).join(", ")}`:""}
                     {newT.requestedMoney>0?` + ${(Number(newT.requestedMoney)/1000000).toLocaleString()}M`:""} de <strong>{toTeam?.teamName}</strong>.
                   </div>
                 </div>
