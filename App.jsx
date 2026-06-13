@@ -2159,24 +2159,32 @@ function TransferCenter({onClose,user,isAdmin,teamData,allTeams,pool,embedded=fa
   const sendTransfer=async()=>{
     if(!newT.toUid) return;
     setSending(true);
-    const transferRef=await addDoc(collection(db,"transfers"),{
-      fromUid:user.uid,
-      fromName:teamData.teamName,
-      toUid:newT.toUid,
-      toName:toTeam?.teamName||"",
-      offeredPlayers:newT.offeredPlayers,
-      requestedPlayers:newT.requestedPlayers,
-      offeredMoney:Number(newT.offeredMoney)||0,
-      requestedMoney:Number(newT.requestedMoney)||0,
-      note:newT.note,
-      status:"pending_acceptance",
-      createdAt:serverTimestamp(),
-    });
-    // Agregar al mercado del emisor como pendiente
-    // jugadores ofrecidos → bajas pendientes para from
-    await addPendienteToMercado(user.uid,teamData,"bajas",newT.offeredPlayers,newT.offeredMoney,transferRef.id);
-    // jugadores pedidos → altas pendientes para from
-    await addPendienteToMercado(user.uid,teamData,"altas",newT.requestedPlayers,newT.requestedMoney,transferRef.id);
+    if(newT.editingId){
+      await updateDoc(doc(db,"transfers",newT.editingId),{
+        offeredPlayers:newT.offeredPlayers,
+        requestedPlayers:newT.requestedPlayers,
+        offeredMoney:Number(newT.offeredMoney)||0,
+        requestedMoney:Number(newT.requestedMoney)||0,
+        note:newT.note,
+        editedAt:serverTimestamp(),
+      });
+    } else {
+      const transferRef=await addDoc(collection(db,"transfers"),{
+        fromUid:user.uid,
+        fromName:teamData.teamName,
+        toUid:newT.toUid,
+        toName:toTeam?.teamName||"",
+        offeredPlayers:newT.offeredPlayers,
+        requestedPlayers:newT.requestedPlayers,
+        offeredMoney:Number(newT.offeredMoney)||0,
+        requestedMoney:Number(newT.requestedMoney)||0,
+        note:newT.note,
+        status:"pending_acceptance",
+        createdAt:serverTimestamp(),
+      });
+      await addPendienteToMercado(user.uid,teamData,"bajas",newT.offeredPlayers,newT.offeredMoney,transferRef.id);
+      await addPendienteToMercado(user.uid,teamData,"altas",newT.requestedPlayers,newT.requestedMoney,transferRef.id);
+    }
     setSending(false);
     setNewT({toUid:"",offeredPlayers:[],requestedPlayers:[],offeredMoney:0,requestedMoney:0,note:""});
     setStep(1);
@@ -2311,7 +2319,31 @@ function TransferCenter({onClose,user,isAdmin,teamData,allTeams,pool,embedded=fa
           </div>}
         </div>
         {tr.note&&<div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",fontStyle:"italic",marginBottom:6}}>"{tr.note}"</div>}
-        {mode==="inbox"&&tr.status==="pending_acceptance"&&(
+        {mode==="outbox"&&tr.status==="pending_acceptance"&&(
+          <div style={{display:"flex",gap:6,marginTop:4}}>
+            <button onClick={()=>{
+              setNewT({
+                toUid:tr.toUid,
+                offeredPlayers:tr.offeredPlayers||[],
+                requestedPlayers:tr.requestedPlayers||[],
+                offeredMoney:tr.offeredMoney||0,
+                requestedMoney:tr.requestedMoney||0,
+                note:tr.note||"",
+                editingId:tr.id,
+              });
+              setStep(2);
+              setTab("new");
+            }} style={{flex:1,padding:"6px",borderRadius:7,background:C.inputBg,color:C.textMid,border:`1px solid ${C.borderDark}`,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+              ✏️ Editar
+            </button>
+            <button onClick={async()=>{
+              if(!window.confirm("¿Eliminar esta oferta?")) return;
+              await updateDoc(doc(db,"transfers",tr.id),{status:"rejected",rejectedAt:serverTimestamp(),rejectedBy:"sender"});
+            }} style={{flex:1,padding:"6px",borderRadius:7,background:"#fff5f5",color:"#e74c3c",border:"1px solid #ffcccc",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+              🗑️ Eliminar
+            </button>
+          </div>
+        )}
           <div style={{display:"flex",gap:6}}>
             <button onClick={()=>accept(tr)} style={{flex:1,padding:"6px",borderRadius:7,background:"#27ae60",color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>✓ Aceptar</button>
             <button onClick={()=>reject(tr)} style={{flex:1,padding:"6px",borderRadius:7,background:"#e74c3c",color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>✕ Rechazar</button>
@@ -2529,7 +2561,7 @@ function TransferCenter({onClose,user,isAdmin,teamData,allTeams,pool,embedded=fa
 
                 <button onClick={sendTransfer} disabled={sending||(!newT.offeredPlayers.length&&!newT.offeredMoney&&!newT.requestedPlayers.length&&!newT.requestedMoney)}
                   style={{width:"100%",padding:"10px",borderRadius:10,background:"#1a3a5c",color:"#fff",border:"none",fontSize:13,fontWeight:800,cursor:"pointer",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1,opacity:sending?0.6:1}}>
-                  {sending?"Enviando…":"📤 Enviar propuesta"}
+                  {sending?"Enviando…":newT.editingId?"✏️ Actualizar oferta":"📤 Enviar propuesta"}
                 </button>
               </>)}
             </div>
