@@ -1785,9 +1785,20 @@ function SeleccionesModal({onClose,lockedCountry,isAdmin,allSels:allSelsProp}){
 // ─── TRANSFER CENTER ─────────────────────────────────────────────────────────
 // ─── MERCADO CALCULATOR ───────────────────────────────────────────────────────
 function MercadoModal({onClose,teamData,saveTeam,allTeams,embedded=false}){
-  const mercado=teamData?.mercado||{bajas:Array(6).fill({name:"",price:"",team:""}),altas:Array(6).fill({name:"",price:"",team:""}),finalizado:false};
-  const[bajas,setBajas]=useState(mercado.bajas.map(b=>({name:b.name||"",price:b.price||"",team:b.team||""})));
-  const[altas,setAltas]=useState(mercado.altas.map(a=>({name:a.name||"",price:a.price||"",team:a.team||""})));
+  const slots=teamData?.mercadoSlots||{altas:6,bajas:6};
+  const maxAltas=slots.altas||6;
+  const maxBajas=slots.bajas||6;
+  const mercado=teamData?.mercado||{bajas:Array(maxBajas).fill({name:"",price:"",team:""}),altas:Array(maxAltas).fill({name:"",price:"",team:""}),finalizado:false};
+  const[bajas,setBajas]=useState(()=>{
+    const base=mercado.bajas.map(b=>({name:b.name||"",price:b.price||"",team:b.team||""}));
+    while(base.length<maxBajas) base.push({name:"",price:"",team:""});
+    return base.slice(0,maxBajas);
+  });
+  const[altas,setAltas]=useState(()=>{
+    const base=mercado.altas.map(a=>({name:a.name||"",price:a.price||"",team:a.team||""}));
+    while(base.length<maxAltas) base.push({name:"",price:"",team:""});
+    return base.slice(0,maxAltas);
+  });
   const[saving,setSaving]=useState(false);
   const[shareText,setShareText]=useState("");
 
@@ -1873,33 +1884,37 @@ function MercadoModal({onClose,teamData,saveTeam,allTeams,embedded=false}){
         {/* BAJAS */}
         <div>
             <div style={{fontSize:11,fontWeight:800,color:"#e74c3c",fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.5,marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <span>📤 Bajas ({bajas.filter(b=>b.name.trim()).length}/6)</span>
+              <span>📤 Bajas ({bajas.filter(b=>b.name.trim()).length}/{maxBajas})</span>
               <span style={{fontSize:10,color:C.textFaint}}>Total: +{fmtM(totalBajas)}</span>
             </div>
-            {bajas.map((b,i)=>(
-              <div key={i} style={rowStyle}>
+            {bajas.map((b,i)=>{
+              const bloqueado=i>=maxBajas;
+              return(
+              <div key={i} style={{...rowStyle,opacity:bloqueado?0.3:1,pointerEvents:bloqueado?"none":"auto"}}>
                 <span style={{fontSize:10,color:C.textFaint,fontFamily:"monospace",width:14,textAlign:"right",flexShrink:0}}>{i+1}.</span>
                 {inp(b.name,v=>updateBaja(i,"name",v),"Jugador")}
                 {priceInp(b.price,v=>updateBaja(i,"price",v))}
                 {teamSel(b.team,v=>updateBaja(i,"team",v),"→ Destino")}
               </div>
-            ))}
+            );})}
           </div>
 
           {/* ALTAS */}
           <div>
             <div style={{fontSize:11,fontWeight:800,color:"#27ae60",fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.5,marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <span>📥 Altas ({altas.filter(a=>a.name.trim()).length}/6)</span>
+              <span>📥 Altas ({altas.filter(a=>a.name.trim()).length}/{maxAltas})</span>
               <span style={{fontSize:10,color:C.textFaint}}>Total: -{fmtM(totalAltas)}</span>
             </div>
-            {altas.map((a,i)=>(
-              <div key={i} style={rowStyle}>
+            {altas.map((a,i)=>{
+              const bloqueado=i>=maxAltas;
+              return(
+              <div key={i} style={{...rowStyle,opacity:bloqueado?0.3:1,pointerEvents:bloqueado?"none":"auto"}}>
                 <span style={{fontSize:10,color:C.textFaint,fontFamily:"monospace",width:14,textAlign:"right",flexShrink:0}}>{i+1}.</span>
                 {inp(a.name,v=>updateAlta(i,"name",v),"Jugador")}
                 {priceInp(a.price,v=>updateAlta(i,"price",v))}
                 {teamSel(a.team,v=>updateAlta(i,"team",v),"← Origen")}
               </div>
-            ))}
+            );})}
           </div>
 
           {/* Saldo */}
