@@ -2165,8 +2165,15 @@ function TransferCenter({onClose,user,isAdmin,teamData,allTeams,pool,embedded=fa
     return(
       <div style={{background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 13px",marginBottom:8}}>
         <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
-          <span style={{fontSize:11,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif",flex:1}}>{isFrom?"→":"←"} {other}</span>
-          <span style={{fontSize:9,fontWeight:700,color:statusColor[tr.status],background:statusColor[tr.status]+"22",padding:"2px 7px",borderRadius:20,fontFamily:"'DM Sans',sans-serif"}}>{statusLabel[tr.status]}</span>
+          <div style={{flex:1}}>
+            <div style={{fontSize:11,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>
+              <span style={{color:C.textFaint,fontWeight:400}}>De: </span>{tr.fromName}
+            </div>
+            <div style={{fontSize:11,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>
+              <span style={{color:C.textFaint,fontWeight:400}}>A: </span>{tr.toName}
+            </div>
+          </div>
+          <span style={{fontSize:9,fontWeight:700,color:statusColor[tr.status],background:statusColor[tr.status]+"22",padding:"2px 7px",borderRadius:20,fontFamily:"'DM Sans',sans-serif",flexShrink:0}}>{statusLabel[tr.status]}</span>
         </div>
         <div style={{display:"flex",gap:16,marginBottom:6,flexWrap:"wrap"}}>
           {tr.offeredPlayers?.length>0&&<div style={{fontSize:10,color:C.textMid,fontFamily:"'DM Sans',sans-serif"}}><span style={{color:C.textFaint}}>Ofrece: </span>{tr.offeredPlayers.map(p=>p.name).join(", ")}</div>}
