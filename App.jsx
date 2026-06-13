@@ -2959,10 +2959,8 @@ function ManualResultadoForm({grupos,allSelPlayers,fuzzyMatch,mundial,saveM,setA
           const gPlayers=(allSels.find(s=>s.country===g.equipo)?.squad||[]).map(p=>p.name||"").filter(Boolean).sort();
           return(<div key={i} style={{display:"flex",gap:5,alignItems:"center",marginBottom:3}}>
             <select value={g.equipo} onChange={e=>{const n=[...goleadores];n[i]={...n[i],equipo:e.target.value,nombre:""};setGoleadores(n);}} style={{width:80,padding:"6px 4px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:g.equipo?C.text:C.textFaint,fontSize:9,fontFamily:"'DM Sans',sans-serif",outline:"none"}}><option value="">Equipo</option><option value={localNombre}>{localNombre}</option><option value={visitanteNombre}>{visitanteNombre}</option></select>
-            {gPlayers.length>0
-              ?<PlayerSelect value={g.nombre} onChange={v=>{const n=[...goleadores];n[i]={...n[i],nombre:v};setGoleadores(n);}} players={gPlayers}/>
-              :{inp(g.nombre,v=>{const n=[...goleadores];n[i]={...n[i],nombre:v};setGoleadores(n);},"Nombre")}
-            }
+            {gPlayers.length>0&&<PlayerSelect value={g.nombre} onChange={v=>{const n=[...goleadores];n[i]={...n[i],nombre:v};setGoleadores(n);}} players={gPlayers}/>}
+            {gPlayers.length===0&&inp(g.nombre,v=>{const n=[...goleadores];n[i]={...n[i],nombre:v};setGoleadores(n);},"Nombre")}
             <input type="number" min="1" value={g.goles} onChange={e=>{const n=[...goleadores];n[i]={...n[i],goles:e.target.value};setGoleadores(n);}} style={{width:38,padding:"6px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:11,fontFamily:"monospace",outline:"none",textAlign:"center"}}/>
             {goleadores.length>1&&<button onClick={()=>setGoleadores(goleadores.filter((_,j)=>j!==i))} style={{background:"none",border:"none",color:"#e74c3c",cursor:"pointer",fontSize:14,padding:0}}>×</button>}
           </div>);
@@ -2973,10 +2971,8 @@ function ManualResultadoForm({grupos,allSelPlayers,fuzzyMatch,mundial,saveM,setA
           const aPlayers=(allSels.find(s=>s.country===a.equipo)?.squad||[]).map(p=>p.name||"").filter(Boolean).sort();
           return(<div key={i} style={{display:"flex",gap:5,alignItems:"center",marginBottom:3}}>
             <select value={a.equipo} onChange={e=>{const n=[...asistencias];n[i]={...n[i],equipo:e.target.value,nombre:""};setAsistencias(n);}} style={{width:80,padding:"6px 4px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:a.equipo?C.text:C.textFaint,fontSize:9,fontFamily:"'DM Sans',sans-serif",outline:"none"}}><option value="">Equipo</option><option value={localNombre}>{localNombre}</option><option value={visitanteNombre}>{visitanteNombre}</option></select>
-            {aPlayers.length>0
-              ?<PlayerSelect value={a.nombre} onChange={v=>{const n=[...asistencias];n[i]={...n[i],nombre:v};setAsistencias(n);}} players={aPlayers}/>
-              :{inp(a.nombre,v=>{const n=[...asistencias];n[i]={...n[i],nombre:v};setAsistencias(n);},"Nombre")}
-            }
+            {aPlayers.length>0&&<PlayerSelect value={a.nombre} onChange={v=>{const n=[...asistencias];n[i]={...n[i],nombre:v};setAsistencias(n);}} players={aPlayers}/>}
+            {aPlayers.length===0&&inp(a.nombre,v=>{const n=[...asistencias];n[i]={...n[i],nombre:v};setAsistencias(n);},"Nombre")}
             <input type="number" min="1" value={a.asistencias} onChange={e=>{const n=[...asistencias];n[i]={...n[i],asistencias:e.target.value};setAsistencias(n);}} style={{width:38,padding:"6px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:11,fontFamily:"monospace",outline:"none",textAlign:"center"}}/>
             {asistencias.length>1&&<button onClick={()=>setAsistencias(asistencias.filter((_,j)=>j!==i))} style={{background:"none",border:"none",color:"#e74c3c",cursor:"pointer",fontSize:14,padding:0}}>×</button>}
           </div>);
