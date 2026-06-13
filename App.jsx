@@ -2029,7 +2029,7 @@ function TransferCenter({onClose,user,isAdmin,teamData,allTeams,pool,embedded=fa
 
   const mySquad=teamData?.squad||[];
   const toTeam=allTeams.find(t=>(t.uid||t.id)===newT.toUid);
-  const toSquad=Object.values(pool).filter(p=>p.teamUid===newT.toUid);
+  const toSquad=toTeam?(toTeam.squad||[]).map(p=>({...p,teamUid:newT.toUid,teamName:toTeam.teamName})):[];
 
   // filtered
   const inbox=transfers.filter(t=>t.toUid===user.uid&&t.status==="pending_acceptance");
@@ -2340,7 +2340,7 @@ function TransferCenter({onClose,user,isAdmin,teamData,allTeams,pool,embedded=fa
                   </div>
                   <div style={{display:"flex",alignItems:"center",gap:8}}>
                     <span style={{fontSize:11,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>+ Dinero:</span>
-                    <input type="number" min={0} value={newT.offeredMoney?(newT.offeredMoney/1000000):""} onChange={e=>setNewT(n=>({...n,offeredMoney:Number(e.target.value)*1000000}))}
+                    <input type="number" min={0} value={newT.offeredMoney>0?(newT.offeredMoney/1000000):""} onChange={e=>{const v=parseFloat(e.target.value);setNewT(n=>({...n,offeredMoney:isNaN(v)?0:v*1000000}));}}
                       placeholder="0" style={{width:80,padding:"5px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"monospace",outline:"none"}}/>
                     <span style={{fontSize:10,color:C.textFaint,fontFamily:"monospace"}}>M</span>
                     <span style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Presupuesto: {Number(teamData?.presupuesto||0).toLocaleString()}</span>
@@ -2360,7 +2360,7 @@ function TransferCenter({onClose,user,isAdmin,teamData,allTeams,pool,embedded=fa
                   </div>
                   <div style={{display:"flex",alignItems:"center",gap:8}}>
                     <span style={{fontSize:11,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>+ Dinero:</span>
-                    <input type="number" min={0} value={newT.requestedMoney?(newT.requestedMoney/1000000):""} onChange={e=>setNewT(n=>({...n,requestedMoney:Number(e.target.value)*1000000}))}
+                    <input type="number" min={0} value={newT.requestedMoney>0?(newT.requestedMoney/1000000):""} onChange={e=>{const v=parseFloat(e.target.value);setNewT(n=>({...n,requestedMoney:isNaN(v)?0:v*1000000}));}}
                       placeholder="0" style={{width:80,padding:"5px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"monospace",outline:"none"}}/>
                     <span style={{fontSize:10,color:C.textFaint,fontFamily:"monospace"}}>M</span>
                   </div>
