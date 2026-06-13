@@ -1820,7 +1820,7 @@ function MercadoModal({onClose,teamData,saveTeam,allTeams,embedded=false}){
         ?(esEmisor?tr.offeredMoney:tr.requestedMoney)
         :(esEmisor?tr.requestedMoney:tr.offeredMoney);
       if(!jugadores?.length) continue; // sin jugadores no hay fila
-      const precioM=dinero>0&&jugadores.length?(dinero/jugadores.length/1000000).toFixed(1):"0";
+      const precioM=dinero>0&&jugadores.length?(dinero/jugadores.length/1000000).toFixed(1):"";
       for(const p of jugadores){
         const yaExiste=lista.findIndex(x=>x.transferId===tr.id&&x.name===p.name);
         if(yaExiste!==-1) continue;
@@ -1889,9 +1889,9 @@ function MercadoModal({onClose,teamData,saveTeam,allTeams,embedded=false}){
   const done=mercado.finalizado;
 
   const rowStyle={display:"flex",gap:6,marginBottom:5,alignItems:"center",flexWrap:"wrap"};
-  const inp=(val,onChange,placeholder)=>(
-    <input value={val} onChange={e=>onChange(e.target.value)} placeholder={placeholder} disabled={done}
-      style={{flex:1,minWidth:100,padding:"6px 9px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:done?"transparent":C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif",outline:"none",opacity:done?0.7:1}}/>
+  const inp=(val,onChange,placeholder,readonly=false)=>(
+    <input value={val} onChange={e=>onChange(e.target.value)} placeholder={placeholder} disabled={done||readonly}
+      style={{flex:1,minWidth:100,padding:"6px 9px",borderRadius:7,border:`1px solid ${readonly?"#f39c1244":C.borderDark}`,background:done||readonly?"transparent":C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif",outline:"none",opacity:done?0.7:1}}/>
   );
   const priceInp=(val,onChange)=>(
     <div style={{display:"flex",alignItems:"center",gap:3,flexShrink:0}}>
@@ -1931,10 +1931,11 @@ function MercadoModal({onClose,teamData,saveTeam,allTeams,embedded=false}){
             </div>
             {bajas.map((b,i)=>{
               const bloqueado=i>=maxBajas;
+              const esPendiente=b.team==="⏳ Pendiente";
               return(
               <div key={i} style={{...rowStyle,opacity:bloqueado?0.3:1,pointerEvents:bloqueado?"none":"auto"}}>
                 <span style={{fontSize:10,color:C.textFaint,fontFamily:"monospace",width:14,textAlign:"right",flexShrink:0}}>{i+1}.</span>
-                {inp(b.name,v=>updateBaja(i,"name",v),"Jugador")}
+                {inp(b.name,v=>updateBaja(i,"name",v),"Jugador",esPendiente)}
                 {priceInp(b.price,v=>updateBaja(i,"price",v))}
                 {teamSel(b.team,v=>updateBaja(i,"team",v),"→ Destino")}
               </div>
@@ -1949,10 +1950,11 @@ function MercadoModal({onClose,teamData,saveTeam,allTeams,embedded=false}){
             </div>
             {altas.map((a,i)=>{
               const bloqueado=i>=maxAltas;
+              const esPendiente=a.team==="⏳ Pendiente";
               return(
               <div key={i} style={{...rowStyle,opacity:bloqueado?0.3:1,pointerEvents:bloqueado?"none":"auto"}}>
                 <span style={{fontSize:10,color:C.textFaint,fontFamily:"monospace",width:14,textAlign:"right",flexShrink:0}}>{i+1}.</span>
-                {inp(a.name,v=>updateAlta(i,"name",v),"Jugador")}
+                {inp(a.name,v=>updateAlta(i,"name",v),"Jugador",esPendiente)}
                 {priceInp(a.price,v=>updateAlta(i,"price",v))}
                 {teamSel(a.team,v=>updateAlta(i,"team",v),"← Origen")}
               </div>
@@ -2092,7 +2094,7 @@ function TransferCenter({onClose,user,isAdmin,teamData,allTeams,pool,embedded=fa
   const inbox=transfers.filter(t=>t.toUid===user.uid&&t.status==="pending_acceptance");
   const outbox=transfers.filter(t=>t.fromUid===user.uid&&["pending_acceptance","pending_admin"].includes(t.status));
   const adminQueue=transfers.filter(t=>t.status==="pending_admin");
-  const historial=transfers.filter(t=>(t.fromUid===user.uid||t.toUid===user.uid)&&["completed","approved","rejected"].includes(t.status)).sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
+  const historial=transfers.filter(t=>t.fromUid===user.uid||t.toUid===user.uid).sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
   const badge=inbox.length+(isAdmin?adminQueue.length:0);
 
   const addPendienteToMercado=async(teamUid,tData,tipo,jugadores,dinero,transferId)=>{
@@ -2251,6 +2253,7 @@ function TransferCenter({onClose,user,isAdmin,teamData,allTeams,pool,embedded=fa
   };
 
   const statusLabel={pending_acceptance:"⏳ Esperando respuesta",pending_admin:"🔐 Esperando admin",completed:"✅ Aprobada",approved:"✅ Aprobada",rejected:"❌ Rechazada"};
+  const statusColor={pending_acceptance:"#f39c12",pending_admin:"#9b59b6",completed:"#27ae60",approved:"#27ae60",rejected:"#e74c3c"};
   const statusColor={pending_acceptance:"#f39c12",pending_admin:"#2980b9",completed:"#27ae60",rejected:"#e74c3c"};
 
   const TCard=({tr,mode})=>{
@@ -2372,27 +2375,45 @@ function TransferCenter({onClose,user,isAdmin,teamData,allTeams,pool,embedded=fa
               ?<div style={{textAlign:"center",color:C.textFaint,fontSize:12,padding:"24px 0",fontFamily:"'DM Sans',sans-serif"}}>Sin historial aún</div>
               :historial.map(tr=>{
                 const esEmisor=tr.fromUid===user.uid;
-                const approved=["approved","completed"].includes(tr.status);
+                const sc=statusColor[tr.status]||"#888";
+                const sl=statusLabel[tr.status]||tr.status;
                 return(
-                  <div key={tr.id} style={{background:C.inputBg,border:`1px solid ${approved?"#27ae6044":"#e74c3c44"}`,borderRadius:10,padding:"10px 12px",marginBottom:8}}>
-                    <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
-                      <span style={{fontSize:10,fontWeight:800,color:approved?"#27ae60":"#e74c3c",fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase"}}>{approved?"✅ Aprobada":"❌ Rechazada"}</span>
+                  <div key={tr.id} style={{background:C.inputBg,border:`1px solid ${sc}44`,borderRadius:10,padding:"10px 12px",marginBottom:8}}>
+                    {/* Header: status + fecha */}
+                    <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:5}}>
+                      <span style={{fontSize:10,fontWeight:800,color:sc,fontFamily:"'DM Sans',sans-serif",background:sc+"18",padding:"2px 8px",borderRadius:20}}>{sl}</span>
                       <span style={{fontSize:9,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginLeft:"auto"}}>{tr.createdAt?.toDate?.()?.toLocaleDateString("es-GT")||""}</span>
                     </div>
-                    <div style={{fontSize:11,color:C.textMid,fontFamily:"'DM Sans',sans-serif",marginBottom:4}}>
-                      <span style={{color:C.text,fontWeight:700}}>{tr.fromName}</span>
-                      <span style={{color:C.textFaint}}> → </span>
-                      <span style={{color:C.text,fontWeight:700}}>{tr.toName}</span>
+                    {/* Equipos */}
+                    <div style={{fontSize:12,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif",marginBottom:5}}>
+                      {tr.fromName} <span style={{color:C.textFaint,fontWeight:400}}>→</span> {tr.toName}
                     </div>
-                    {tr.offeredPlayers?.length>0&&<div style={{fontSize:10,color:C.textMid,fontFamily:"'DM Sans',sans-serif"}}>
-                      <span style={{color:C.textFaint}}>Ofrece: </span>{tr.offeredPlayers.map(p=>p.name).join(", ")}
-                    </div>}
-                    {tr.offeredMoney>0&&<div style={{fontSize:10,color:"#27ae60",fontFamily:"'DM Sans',sans-serif",fontWeight:700}}>+{(tr.offeredMoney/1000000).toLocaleString()}M</div>}
-                    {tr.requestedPlayers?.length>0&&<div style={{fontSize:10,color:C.textMid,fontFamily:"'DM Sans',sans-serif"}}>
-                      <span style={{color:C.textFaint}}>Pide: </span>{tr.requestedPlayers.map(p=>p.name).join(", ")}
-                    </div>}
-                    {tr.requestedMoney>0&&<div style={{fontSize:10,color:"#e74c3c",fontFamily:"'DM Sans',sans-serif",fontWeight:700}}>-{(tr.requestedMoney/1000000).toLocaleString()}M</div>}
-                    {tr.note&&<div style={{fontSize:10,color:C.textFaint,fontStyle:"italic",marginTop:2,fontFamily:"'DM Sans',sans-serif"}}>"{tr.note}"</div>}
+                    {/* Lo que ofrece from */}
+                    {(tr.offeredPlayers?.length>0||tr.offeredMoney>0)&&(
+                      <div style={{fontSize:10,color:C.textMid,fontFamily:"'DM Sans',sans-serif",marginBottom:2}}>
+                        <span style={{color:C.textFaint}}>Ofrece: </span>
+                        {tr.offeredPlayers?.map(p=>p.name).join(", ")}
+                        {tr.offeredMoney>0&&<span style={{color:"#27ae60",fontWeight:700}}>{tr.offeredPlayers?.length>0?" + ":""}{(tr.offeredMoney/1000000).toLocaleString()}M</span>}
+                      </div>
+                    )}
+                    {/* Lo que pide from */}
+                    {(tr.requestedPlayers?.length>0||tr.requestedMoney>0)&&(
+                      <div style={{fontSize:10,color:C.textMid,fontFamily:"'DM Sans',sans-serif",marginBottom:2}}>
+                        <span style={{color:C.textFaint}}>A cambio: </span>
+                        {tr.requestedPlayers?.map(p=>p.name).join(", ")}
+                        {tr.requestedMoney>0&&<span style={{color:"#e74c3c",fontWeight:700}}>{tr.requestedPlayers?.length>0?" + ":""}{(tr.requestedMoney/1000000).toLocaleString()}M</span>}
+                      </div>
+                    )}
+                    {tr.note&&<div style={{fontSize:10,color:C.textFaint,fontStyle:"italic",marginTop:3,fontFamily:"'DM Sans',sans-serif"}}>"{tr.note}"</div>}
+                    {/* Estado detallado */}
+                    <div style={{marginTop:5,display:"flex",gap:6,flexWrap:"wrap"}}>
+                      <span style={{fontSize:9,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",background:C.card,padding:"2px 6px",borderRadius:6}}>
+                        {tr.status==="pending_acceptance"?"⏳ Esperando que acepte "+tr.toName:
+                         tr.status==="pending_admin"?"✅ "+tr.toName+" aceptó · 🔐 Esperando admin":
+                         tr.status==="completed"||tr.status==="approved"?"✅ Admin aprobó":
+                         tr.status==="rejected"?`❌ Rechazada${tr.rejectedBy==="admin"?" por admin":" por "+tr.toName}`:""}
+                      </span>
+                    </div>
                   </div>
                 );
               })
