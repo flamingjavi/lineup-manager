@@ -1881,10 +1881,8 @@ function MercadoModal({onClose,teamData,saveTeam,allTeams,embedded=false}){
   const toVal=p=>(Number(p)||0)*1000000;
   const totalBajas=bajas.reduce((s,b)=>s+toVal(b.price),0);
   const totalAltas=altas.reduce((s,a)=>s+toVal(a.price),0);
-  // Saldo solo con filas confirmadas (sin ⏳ pendiente)
-  const totalBajasConfirmadas=bajas.filter(b=>!b.team?.startsWith("⏳")).reduce((s,b)=>s+toVal(b.price),0);
-  const totalAltasConfirmadas=altas.filter(a=>!a.team?.startsWith("⏳")).reduce((s,a)=>s+toVal(a.price),0);
-  const saldo=presupuesto+totalBajasConfirmadas-totalAltasConfirmadas;
+  // Saldo usa todos los precios ingresados (pendientes incluidos — el usuario los decidió)
+  const saldo=presupuesto+totalBajas-totalAltas;
 
   const fmtM=n=>{
     const m=n/1000000;
