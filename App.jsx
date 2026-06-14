@@ -2989,11 +2989,27 @@ function ManualResultadoForm({grupos,allSelPlayers,fuzzyMatch,mundial,saveM,setA
 // ─── MUNDIAL ──────────────────────────────────────────────────────────────────
 // ─── PLAYER SELECT ────────────────────────────────────────────────────────────
 function PlayerSelect({value,onChange,players,placeholder}){
+  const[customMode,setCustomMode]=useState(value&&!players.includes(value));
+
+  if(customMode){
+    return(
+      <div style={{flex:1,display:"flex",gap:3}}>
+        <input value={value} onChange={e=>onChange(e.target.value)} placeholder="Nombre del jugador" autoFocus
+          style={{flex:1,padding:"6px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:10,fontFamily:"'DM Sans',sans-serif",outline:"none"}}/>
+        <button onClick={()=>{setCustomMode(false);onChange("");}} style={{background:"none",border:"none",color:C.textFaint,fontSize:13,cursor:"pointer",padding:"0 2px"}}>↩</button>
+      </div>
+    );
+  }
+
   return(
-    <select value={value} onChange={e=>onChange(e.target.value)}
+    <select value={value} onChange={e=>{
+      if(e.target.value==="__custom__"){setCustomMode(true);onChange("");}
+      else onChange(e.target.value);
+    }}
       style={{flex:1,padding:"6px 4px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:value?C.text:C.textFaint,fontSize:10,fontFamily:"'DM Sans',sans-serif",outline:"none"}}>
       <option value="">{placeholder||"— Jugador —"}</option>
       {players.map(nm=><option key={nm} value={nm}>{nm}</option>)}
+      <option value="__custom__">➕ Agregar jugador…</option>
     </select>
   );
 }
