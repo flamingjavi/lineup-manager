@@ -1408,6 +1408,27 @@ function MaintenanceToggle(){
   );
 }
 
+function MercadoToggle(){
+  const[open,setOpen]=useState(true);
+  useEffect(()=>{
+    const unsub=onSnapshot(doc(db,"config","settings"),snap=>{
+      setOpen(!(snap.exists()&&snap.data().mercadoAbierto===false));
+    });
+    return unsub;
+  },[]);
+  const toggle=async()=>{
+    const next=!open;
+    if(!next&&!window.confirm("¿Cerrar el mercado? Los equipos no podrán acceder hasta que lo reabras.")) return;
+    await setDoc(doc(db,"config","settings"),{mercadoAbierto:next},{merge:true});
+  };
+  return(
+    <button onClick={toggle}
+      style={{padding:"5px 10px",borderRadius:8,border:`1px solid ${open?"#27ae60":"#c0392b"}`,background:open?"#f0fff4":"#fff5f5",color:open?"#27ae60":"#c0392b",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",flexShrink:0}}>
+      {open?"🟢 Mercado ON":"🔴 Mercado OFF"}
+    </button>
+  );
+}
+
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 function PublicPoolModal({pool,allTeams,onClose,setPoolPlayer}){
   const[tab,setTab]=useState("pool"); // pool | clubs
@@ -3758,6 +3779,13 @@ function MainApp({user,isAdmin,onLogout}){
   const[showHamburger,setShowHamburger]=useState(false);
   const[showAdminMenu,setShowAdminMenu]=useState(false);
   const[showMercado,setShowMercado]=useState(false);
+  const[mercadoAbierto,setMercadoAbierto]=useState(true);
+  useEffect(()=>{
+    const unsub=onSnapshot(doc(db,"config","settings"),snap=>{
+      setMercadoAbierto(!(snap.exists()&&snap.data().mercadoAbierto===false));
+    });
+    return unsub;
+  },[]);
   const[showMundial,setShowMundial]=useState(false);
   const[mundialInitialTab,setMundialInitialTab]=useState("tabla");
   const[showHome,setShowHome]=useState(true);
@@ -4170,9 +4198,13 @@ function MainApp({user,isAdmin,onLogout}){
                 {teamData?.nationalTeam&&<div onClick={()=>{setShowMiSeleccion(true);setShowHamburger(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:"#2980b9"}}>
                   🏳️ <span>Mi Selección</span>
                 </div>}
-                <div onClick={()=>{setShowMercado(true);setShowHamburger(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:C.text,position:"relative"}}>
-                  🔄 <span>Mercado</span>
-                  {(transferBadge>0||teamData?.mercado?.finalizado)&&<span style={{marginLeft:"auto",background:transferBadge>0?"#e74c3c":"#27ae60",color:"#fff",borderRadius:20,padding:"1px 7px",fontSize:9,fontWeight:800}}>{transferBadge>0?transferBadge:"✓"}</span>}
+                <div onClick={()=>{
+                    if(!mercadoAbierto&&!isAdmin){alert("🔒 No es momento de mercado. El admin habilitará el acceso próximamente.");return;}
+                    setShowMercado(true);setShowHamburger(false);
+                  }} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:(!mercadoAbierto&&!isAdmin)?C.textFaint:C.text,position:"relative"}}>
+                  {(!mercadoAbierto&&!isAdmin)?"🔒":"🔄"} <span>Mercado</span>
+                  {!mercadoAbierto&&!isAdmin&&<span style={{marginLeft:"auto",fontSize:9,color:"#c0392b",fontWeight:700}}>Cerrado</span>}
+                  {mercadoAbierto&&(transferBadge>0||teamData?.mercado?.finalizado)&&<span style={{marginLeft:"auto",background:transferBadge>0?"#e74c3c":"#27ae60",color:"#fff",borderRadius:20,padding:"1px 7px",fontSize:9,fontWeight:800}}>{transferBadge>0?transferBadge:"✓"}</span>}
                 </div>
                 <div onClick={()=>{setMundialInitialTab("tabla");setShowMundial(true);setShowHamburger(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:"#7c3aed"}}>
                   🌍 <span>Mundial</span>
@@ -4219,7 +4251,8 @@ function MainApp({user,isAdmin,onLogout}){
 
       {/* MAINTENANCE STRIP - admin only */}
       {isAdmin&&(
-        <div style={{width:"100%",background:TA.accentLight,borderBottom:`1px solid ${TA.accent}33`,padding:"4px 16px",display:"flex",alignItems:"center",justifyContent:"flex-end"}}>
+        <div style={{width:"100%",background:TA.accentLight,borderBottom:`1px solid ${TA.accent}33`,padding:"4px 16px",display:"flex",alignItems:"center",justifyContent:"flex-end",gap:8}}>
+          <MercadoToggle/>
           <MaintenanceToggle/>
         </div>
       )}
