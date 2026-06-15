@@ -4376,10 +4376,10 @@ function MainApp({user,isAdmin,onLogout}){
               <span style={{fontSize:16}}>🌍</span>
               <div style={{flex:1}}>
                 <div style={{fontSize:10,fontWeight:600,color:C.textLight,textTransform:"uppercase",letterSpacing:0.5,marginBottom:4,fontFamily:"'DM Sans',sans-serif"}}>País del equipo</div>
-                <input value={teamData.pais||""} onChange={e=>saveTeam({pais:e.target.value})} placeholder="Ej: Italia"
-                  style={{width:"100%",background:C.inputBg,border:`1px solid ${C.borderDark}`,borderRadius:9,padding:"8px 12px",color:C.text,fontSize:13,fontWeight:600,outline:"none",fontFamily:"'DM Sans',sans-serif"}}
-                  onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.borderDark}/>
-                <div style={{fontSize:9,color:C.textFaint,marginTop:4,fontFamily:"'DM Sans',sans-serif"}}>Se usa para validar jugadores "nacionales" en las alineaciones</div>
+                <div style={{width:"100%",background:C.inputBg,border:`1px solid ${C.borderDark}`,borderRadius:9,padding:"8px 12px",color:teamData.pais?C.text:C.textFaint,fontSize:13,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>
+                  {teamData.pais||"No asignado"}
+                </div>
+                <div style={{fontSize:9,color:C.textFaint,marginTop:4,fontFamily:"'DM Sans',sans-serif"}}>Asignado por el admin · se usa para validar jugadores "nacionales"</div>
               </div>
             </div>
             {/* Director Técnico */}
