@@ -4386,6 +4386,186 @@ function CompetenciaResultadoSetup({compId,compColor,formato,setAiMsg}){
   );
 }
 
+// ─── COMPETENCIA: FIXTURE (calendario por imagen) ────────────────────────────
+function CompetenciaFixtureSetup({compId,compColor,setAiMsg}){
+  const[grupos,setGrupos]=useState([]);
+  const[fixture,setFixture]=useState({}); // {jornadaKey:[{local,visitante}]}
+  const[uploading,setUploading]=useState(false);
+  const[preview,setPreview]=useState(null); // {jornada, partidos:[{local,visitante}]}
+  const fileRef=useRef(null);
+
+  useEffect(()=>{
+    const unsub=onSnapshot(doc(db,"config","competenciaData"),snap=>{
+      const all=snap.exists()?snap.data():{};
+      const d=all[compId]||{};
+      setGrupos(d.grupos||[]);
+      setFixture(d.fixture||{});
+    });
+    return unsub;
+  },[compId]);
+
+  const todosEquipos=[...new Set(grupos.flatMap(g=>g.equipos||[]))];
+
+  const saveFixture=async(nuevo)=>{
+    const ref=doc(db,"config","competenciaData");
+    const snap=await getDoc(ref).catch(()=>null);
+    const current=snap?.exists()?snap.data():{};
+    const compData=current[compId]||{};
+    await setDoc(ref,{...current,[compId]:{...compData,fixture:nuevo}},{merge:true});
+  };
+
+  const processImage=async(file)=>{
+    setUploading(true);
+    setAiMsg("Leyendo imagen…");
+    try{
+      const b64=await new Promise((res,rej)=>{
+        const r=new FileReader();
+        r.onload=()=>res(r.result.split(",")[1]);
+        r.onerror=()=>rej(new Error("FileReader error"));
+        r.readAsDataURL(file);
+      });
+      setAiMsg("Conectando con Gemini…");
+      const listaEquipos=todosEquipos.join(", ");
+      const prompt=`Analiza esta captura del fixture/calendario de partidos de FC26. Los equipos posibles son: ${listaEquipos}. Identifica el número o nombre de la jornada (ej "Jornada 1") y la lista de partidos (local vs visitante, usa EXACTAMENTE los nombres de la lista que mejor coincidan). Si hay varias jornadas en la imagen, incluye solo la primera. Responde SOLO con JSON sin markdown, sin texto adicional: {"jornada":"Jornada 1","partidos":[{"local":"","visitante":""}]}`;
+      const GEMINI_KEY="AIzaSyAGlxjD12k38Xu9L-8K165iJma1ZwR7tyY";
+      const GEMINI_URL=`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`;
+      const body=JSON.stringify({contents:[{parts:[{inline_data:{mime_type:file.type||"image/jpeg",data:b64}},{text:prompt}]}],generationConfig:{temperature:0,maxOutputTokens:1500}});
+      const resp=await fetch(GEMINI_URL,{method:"POST",headers:{"Content-Type":"application/json"},body});
+      if(!resp.ok){
+        const errTxt=await resp.text().catch(()=>"");
+        throw new Error(`HTTP ${resp.status} ${errTxt.slice(0,200)}`);
+      }
+      const respData=await resp.json();
+      if(respData.error) throw new Error(respData.error.message);
+      const raw=respData.candidates?.[0]?.content?.parts?.[0]?.text;
+      if(!raw) throw new Error("Respuesta vacía de Gemini");
+      const cleaned=raw.replace(/```json|```/g,"").trim();
+      let parsed;
+      try{ parsed=JSON.parse(cleaned); }
+      catch{ throw new Error("No se pudo interpretar el JSON: "+cleaned.slice(0,150)); }
+      const partidos=(parsed.partidos||[]).map(p=>({local:p.local||"",visitante:p.visitante||""}));
+      if(partidos.length===0) throw new Error("No se detectaron partidos en la imagen");
+      setPreview({jornada:parsed.jornada||"Jornada 1",partidos});
+      setAiMsg(`✅ ${partidos.length} partidos leídos — revisa y confirma abajo`);
+    }catch(e){
+      setAiMsg("❌ "+e.message);
+    }
+    setUploading(false);
+  };
+
+  const confirmPreview=async()=>{
+    if(!preview) return;
+    if(!preview.jornada.trim()){setAiMsg("❌ Define el nombre de la jornada");return;}
+    const jKey=preview.jornada.trim().replace(/\s+/g,"_");
+    const nuevo={...fixture,[jKey]:preview.partidos.filter(p=>p.local&&p.visitante)};
+    await saveFixture(nuevo);
+    setAiMsg(`✅ ${preview.jornada} guardada (${preview.partidos.length} partidos)`);
+    setPreview(null);
+  };
+
+  const updatePreviewPartido=(pi,field,val)=>{
+    const partidos=[...preview.partidos];
+    partidos[pi]={...partidos[pi],[field]:val};
+    setPreview({...preview,partidos});
+  };
+
+  const addPreviewPartido=()=>{
+    setPreview({...preview,partidos:[...preview.partidos,{local:"",visitante:""}]});
+  };
+
+  const removePreviewPartido=(pi)=>{
+    setPreview({...preview,partidos:preview.partidos.filter((_,i)=>i!==pi)});
+  };
+
+  const removeJornada=async(jKey)=>{
+    if(!window.confirm(`¿Eliminar ${jKey.replace(/_/g," ")} del fixture?`)) return;
+    const nuevo={...fixture};
+    delete nuevo[jKey];
+    await saveFixture(nuevo);
+    setAiMsg(`✅ Jornada eliminada`);
+  };
+
+  const jornadas=Object.keys(fixture).sort();
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+      <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>
+        Sube una foto del fixture/calendario (una jornada a la vez). La IA detectará los enfrentamientos y podrás corregirlos antes de guardar.
+      </div>
+
+      {/* Jornadas guardadas */}
+      {jornadas.length>0&&(
+        <div style={{display:"flex",flexDirection:"column",gap:6}}>
+          {jornadas.map(jKey=>(
+            <div key={jKey} style={{background:C.card,borderRadius:9,padding:"8px 12px",border:`1px solid ${C.border}`}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
+                <span style={{fontSize:11,fontWeight:800,color:compColor,fontFamily:"'DM Sans',sans-serif"}}>{jKey.replace(/_/g," ")}</span>
+                <button onClick={()=>removeJornada(jKey)} style={{background:"transparent",border:"none",color:"#c0392b",fontSize:11,cursor:"pointer"}}>🗑️</button>
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:3}}>
+                {(fixture[jKey]||[]).map((p,pi)=>(
+                  <div key={pi} style={{fontSize:10,color:C.textMid,fontFamily:"'DM Sans',sans-serif"}}>{p.local} <span style={{color:C.textFaint}}>vs</span> {p.visitante}</div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Subir imagen */}
+      <div style={{background:C.card,borderRadius:9,padding:"10px 12px",border:`1.5px solid ${C.border}`}}>
+        <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}}
+          onChange={e=>{const f=e.target.files?.[0];if(f)processImage(f);e.target.value="";}}/>
+        <button onClick={()=>fileRef.current?.click()} disabled={uploading||todosEquipos.length===0}
+          style={{width:"100%",padding:"8px",borderRadius:7,background:"transparent",border:`1.5px dashed ${compColor}`,color:compColor,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:(uploading||todosEquipos.length===0)?0.5:1}}>
+          {uploading?"Leyendo…":todosEquipos.length===0?"Primero configura equipos en Tabla":"📷 Subir foto de jornada"}
+        </button>
+
+        {/* Vista previa editable */}
+        {preview&&(
+          <div style={{marginTop:8,padding:8,borderRadius:8,border:`1.5px solid #f0ad4e`,background:"#fff3cd"}}>
+            <div style={{fontSize:10,fontWeight:800,color:"#856404",marginBottom:6,fontFamily:"'DM Sans',sans-serif"}}>🔎 Vista previa — corrige si algo está mal antes de confirmar</div>
+            <input value={preview.jornada} onChange={e=>setPreview({...preview,jornada:e.target.value})} placeholder="Nombre de la jornada"
+              style={{width:"100%",padding:"6px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:11,fontWeight:700,fontFamily:"'DM Sans',sans-serif",marginBottom:6}}/>
+            <div style={{display:"flex",flexDirection:"column",gap:4,maxHeight:240,overflowY:"auto"}}>
+              {preview.partidos.map((p,pi)=>(
+                <div key={pi} style={{display:"flex",gap:4,alignItems:"center"}}>
+                  <select value={p.local} onChange={e=>updatePreviewPartido(pi,"local",e.target.value)}
+                    style={{flex:1,padding:"4px 6px",borderRadius:6,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:9,fontFamily:"'DM Sans',sans-serif"}}>
+                    <option value="">— Local —</option>
+                    {todosEquipos.map(eq=><option key={eq} value={eq}>{eq}</option>)}
+                  </select>
+                  <span style={{fontSize:9,color:C.textFaint}}>vs</span>
+                  <select value={p.visitante} onChange={e=>updatePreviewPartido(pi,"visitante",e.target.value)}
+                    style={{flex:1,padding:"4px 6px",borderRadius:6,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:9,fontFamily:"'DM Sans',sans-serif"}}>
+                    <option value="">— Visitante —</option>
+                    {todosEquipos.map(eq=><option key={eq} value={eq}>{eq}</option>)}
+                  </select>
+                  <button onClick={()=>removePreviewPartido(pi)} style={{background:"transparent",border:"none",color:"#c0392b",fontSize:11,cursor:"pointer"}}>✕</button>
+                </div>
+              ))}
+            </div>
+            <div style={{display:"flex",gap:6,marginTop:6}}>
+              <button onClick={addPreviewPartido}
+                style={{padding:"5px 10px",borderRadius:7,background:"transparent",border:`1px dashed ${compColor}`,color:compColor,fontSize:9,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                + Partido
+              </button>
+              <button onClick={confirmPreview}
+                style={{flex:1,padding:"6px",borderRadius:7,background:"#27ae60",color:"#fff",border:"none",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                ✅ Confirmar y guardar
+              </button>
+              <button onClick={()=>setPreview(null)}
+                style={{padding:"6px 12px",borderRadius:7,background:C.inputBg,color:C.textMid,border:`1px solid ${C.border}`,fontSize:10,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── COMPETENCIAS MODAL ───────────────────────────────────────────────────────
 function CompetenciasModal({allTeams,onClose}){
   const[comps,setComps]=useState(()=>COMPETENCIAS_AVAILABLE.map(c=>({...c})));
@@ -4497,6 +4677,10 @@ function CompetenciasModal({allTeams,onClose}){
                 style={{flex:1,padding:"7px",borderRadius:8,border:`1.5px solid ${subTab==="resultado"?activeComp.color:C.border}`,background:subTab==="resultado"?activeComp.color:C.inputBg,color:subTab==="resultado"?"#fff":C.textMid,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
                 🎯 Resultado
               </button>
+              <button onClick={()=>setSubTab("fixture")}
+                style={{flex:1,padding:"7px",borderRadius:8,border:`1.5px solid ${subTab==="fixture"?activeComp.color:C.border}`,background:subTab==="fixture"?activeComp.color:C.inputBg,color:subTab==="fixture"?"#fff":C.textMid,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                📅 Fixture
+              </button>
             </div>
           )}
 
@@ -4530,6 +4714,11 @@ function CompetenciasModal({allTeams,onClose}){
           {/* Vista: resultado de partido (actualiza tabla) */}
           {selected&&subTab==="resultado"&&(
             <CompetenciaResultadoSetup compId={selected} compColor={activeComp.color} formato={activeComp.formato} setAiMsg={setAiMsg}/>
+          )}
+
+          {/* Vista: fixture / calendario */}
+          {selected&&subTab==="fixture"&&(
+            <CompetenciaFixtureSetup compId={selected} compColor={activeComp.color} setAiMsg={setAiMsg}/>
           )}
         </div>
       </div>
