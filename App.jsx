@@ -755,6 +755,64 @@ function AdminTeamEditor({teamData,pool,allTeamsRef}){
   const lineup=allLineups.find(l=>l.id===activeAdminLineupId)||allLineups[0]||{formation:"4-3-3",starters:{},subs:Array(7).fill(null)};
   const squad=localData.squad||[];
   const positions=FORMATIONS[lineup.formation]||FORMATIONS["4-3-3"];
+  const[showAdminRequisitos,setShowAdminRequisitos]=useState(false);
+
+  // ─── Validación de alineación (Liga / Copa) — vista admin ────────────────
+  const validarAlineacionAdmin=()=>{
+    const lineupName=lineup.name;
+    if(lineupName!=="Liga"&&lineupName!=="Copa") return [];
+    const starters11=Object.values(lineup.starters||{}).filter(Boolean);
+    if(starters11.length<11) return [];
+    const teamPais=(localData.pais||"").trim().toLowerCase();
+    const getFullPlayer=base=>squad.find(s=>s.name===base?.name)||base||{};
+    const apellido=full=>{
+      const partes=(full.name||"").trim().split(/\s+/);
+      return partes[partes.length-1]||full.name||"";
+    };
+    const reqs=[];
+
+    const nacionales=starters11.filter(p=>{
+      const full=getFullPlayer(p);
+      return teamPais&&(full.country||"").trim().toLowerCase()===teamPais;
+    });
+    reqs.push({
+      texto:`Jugadores nacionales (${localData.pais||"país no configurado"})`,
+      cumplido:nacionales.length>=2,
+      detalle:`${nacionales.length}/2`
+    });
+
+    if(lineupName==="Copa"){
+      const sub20=starters11.filter(p=>{
+        const full=getFullPlayer(p);
+        return full.age&&Number(full.age)<=20;
+      });
+      reqs.push({
+        texto:"Jugadores Sub-20",
+        cumplido:sub20.length>=2,
+        detalle:`${sub20.length}/2`
+      });
+
+      const banca=(lineup.subs||[]).filter(Boolean);
+      const convocados=[...starters11,...banca];
+      const top10Names=[...convocados].map(p=>getFullPlayer(p)).filter(p=>p.overall&&p.name)
+        .sort((a,b)=>(b.overall||0)-(a.overall||0)).slice(0,10).map(p=>p.name);
+      const enTitular=starters11.filter(p=>top10Names.includes(p.name));
+      const cumpleTop10=enTitular.length<=2;
+      let detalleTop10=`${enTitular.length}/2 máx`;
+      if(!cumpleTop10){
+        const sobran=enTitular.slice(2).map(p=>apellido(getFullPlayer(p)));
+        detalleTop10+=` — sobran: ${sobran.join(", ")}`;
+      }
+      reqs.push({
+        texto:"Jugadores del Top 10 de su plantilla en el 11 titular (máx. 2)",
+        cumplido:cumpleTop10,
+        detalle:detalleTop10
+      });
+    }
+
+    return reqs;
+  };
+  const erroresAlineacionAdmin=validarAlineacionAdmin();
 
   const updateLineup=async fn=>{
     const nl=allLineups.map(l=>l.id===lineup.id?{...l,...fn(l)}:l);
@@ -880,6 +938,31 @@ function AdminTeamEditor({teamData,pool,allTeamsRef}){
             onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.borderDark}/>
           <button onClick={addAdminLineup} style={{padding:"3px 8px",borderRadius:7,background:C.accent,color:"#fff",border:"none",cursor:"pointer",fontSize:10,fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>+ Crear</button>
         </div>
+        {/* 🏆 Requisitos del desafío (Liga/Copa) — vista admin */}
+        {erroresAlineacionAdmin.length>0&&(
+          <div style={{border:`1px solid ${C.borderDark}`,borderRadius:8,background:C.inputBg}}>
+            <button onClick={()=>setShowAdminRequisitos(v=>!v)}
+              style={{width:"100%",padding:"5px 10px",display:"flex",alignItems:"center",justifyContent:"space-between",background:"transparent",border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+              <span style={{fontSize:10,fontWeight:800,color:erroresAlineacionAdmin.every(r=>r.cumplido)?"#27ae60":"#e67e22"}}>
+                {erroresAlineacionAdmin.every(r=>r.cumplido)?"✅":"⚠️"} Requisitos {lineup.name} ({erroresAlineacionAdmin.filter(r=>r.cumplido).length}/{erroresAlineacionAdmin.length})
+              </span>
+              <span style={{fontSize:10,color:C.textLight}}>{showAdminRequisitos?"▲":"▼"}</span>
+            </button>
+            {showAdminRequisitos&&(
+              <div style={{padding:"2px 10px 8px 10px",display:"flex",flexDirection:"column",gap:5}}>
+                {erroresAlineacionAdmin.map((r,i)=>(
+                  <div key={i} style={{display:"flex",alignItems:"flex-start",gap:6}}>
+                    <span style={{fontSize:11,flexShrink:0,marginTop:1}}>{r.cumplido?"✅":"⬜"}</span>
+                    <div>
+                      <div style={{fontSize:10,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{r.texto}</div>
+                      <div style={{fontSize:9,color:r.cumplido?"#27ae60":"#e67e22",fontFamily:"'DM Sans',sans-serif"}}>{r.detalle}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         {/* Formation selector */}
         <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
           {Object.keys(FORMATIONS).map(f=>(
@@ -3681,6 +3764,7 @@ function MainApp({user,isAdmin,onLogout}){
   const[activeComp,setActiveComp]=useState(null); // null = campo libre, comp obj = competencia // {formation, starters, subs, country}
   const[activeLineupId,setActiveLineupId]=useState("a");
   const[showLineupPanel,setShowLineupPanel]=useState(false);
+  const[showRequisitos,setShowRequisitos]=useState(false);
   const[showFormations,setShowFormations]=useState(false);
   const[showSettings,setShowSettings]=useState(false);
   const[showSquadManager,setShowSquadManager]=useState(false);
@@ -3854,6 +3938,7 @@ function MainApp({user,isAdmin,onLogout}){
   const filled=Object.values(activeLineup?.starters||{}).filter(Boolean).length;
 
   // ─── Validación de alineación (Liga / Copa) ──────────────────────────────
+  // Devuelve array de requisitos: {texto, cumplido, detalle}
   const validarAlineacion=()=>{
     if(!activeLineup||isSel) return [];
     const lineupName=activeLineup.name;
@@ -3862,54 +3947,55 @@ function MainApp({user,isAdmin,onLogout}){
     if(starters11.length<11) return []; // aún no completa, no validar
     const teamPais=(teamData.pais||"").trim().toLowerCase();
     const getFullPlayer=base=>squad.find(s=>s.name===base?.name)||base||{};
-    const errores=[];
+    const apellido=full=>{
+      const partes=(full.name||"").trim().split(/\s+/);
+      return partes[partes.length-1]||full.name||"";
+    };
+    const reqs=[];
 
-    if(lineupName==="Liga"){
-      const nacionales=starters11.filter(p=>{
-        const full=getFullPlayer(p);
-        return teamPais&&(full.country||"").trim().toLowerCase()===teamPais;
-      });
-      if(nacionales.length<2) errores.push(`Necesita 2 jugadores nacionales (${teamData.pais||"país no configurado"}) — tiene ${nacionales.length}`);
-    }
+    const nacionales=starters11.filter(p=>{
+      const full=getFullPlayer(p);
+      return teamPais&&(full.country||"").trim().toLowerCase()===teamPais;
+    });
+    reqs.push({
+      texto:`Jugadores nacionales (${teamData.pais||"país no configurado"})`,
+      cumplido:nacionales.length>=2,
+      detalle:`${nacionales.length}/2`
+    });
 
     if(lineupName==="Copa"){
-      const nacionales=starters11.filter(p=>{
-        const full=getFullPlayer(p);
-        return teamPais&&(full.country||"").trim().toLowerCase()===teamPais;
-      });
-      if(nacionales.length<2) errores.push(`Necesita 2 jugadores nacionales (${teamData.pais||"país no configurado"}) — tiene ${nacionales.length}`);
-
       const sub20=starters11.filter(p=>{
         const full=getFullPlayer(p);
         return full.age&&Number(full.age)<=20;
       });
-      if(sub20.length<2) errores.push(`Necesita 2 jugadores Sub-20 — tiene ${sub20.length}`);
+      reqs.push({
+        texto:"Jugadores Sub-20",
+        cumplido:sub20.length>=2,
+        detalle:`${sub20.length}/2`
+      });
 
       // Top 10 por overall, de toda la convocatoria (titulares + banca)
       const banca=(activeLineup.subs||[]).filter(Boolean);
       const convocados=[...starters11,...banca];
-      const top10Names=[...convocados].map(p=>getFullPlayer(p)).filter(p=>p.overall).sort((a,b)=>(b.overall||0)-(a.overall||0)).slice(0,10).map(p=>p.name);
-      // Selección manual del equipo (2 elegidos dentro del Top 10)
-      const elegidos=(activeLineup.copaTop2||[]).filter(n=>top10Names.includes(n));
-      const topPlayers=starters11.filter(p=>elegidos.includes(p.name));
-      if(elegidos.length<2) errores.push(`Falta elegir 2 jugadores del Top 10 de tu plantilla (titulares+banca) en la pestaña de Copa`);
-      else if(topPlayers.length<2) errores.push(`Los 2 jugadores elegidos del Top 10 deben estar en el 11 titular — tiene ${topPlayers.length}`);
+      const top10Names=[...convocados].map(p=>getFullPlayer(p)).filter(p=>p.overall&&p.name)
+        .sort((a,b)=>(b.overall||0)-(a.overall||0)).slice(0,10).map(p=>p.name);
+      const enTitular=starters11.filter(p=>top10Names.includes(p.name));
+      const cumpleTop10=enTitular.length<=2;
+      let detalleTop10=`${enTitular.length}/2 máx`;
+      if(!cumpleTop10){
+        const sobran=enTitular.slice(2).map(p=>apellido(getFullPlayer(p)));
+        detalleTop10+=` — sobran: ${sobran.join(", ")}`;
+      }
+      reqs.push({
+        texto:"Jugadores del Top 10 de tu plantilla en el 11 titular (máx. 2)",
+        cumplido:cumpleTop10,
+        detalle:detalleTop10
+      });
     }
 
-    return errores;
+    return reqs;
   };
   const erroresAlineacion=validarAlineacion();
-
-  // Top 10 por overall (titulares + banca) — para el selector de Copa
-  const getCopaTop10=()=>{
-    if(!activeLineup) return [];
-    const getFullPlayer=base=>squad.find(s=>s.name===base?.name)||base||{};
-    const starters11=Object.values(activeLineup.starters||{}).filter(Boolean);
-    const banca=(activeLineup.subs||[]).filter(Boolean);
-    const convocados=[...starters11,...banca];
-    return [...convocados].map(p=>getFullPlayer(p)).filter(p=>p.overall&&p.name)
-      .sort((a,b)=>(b.overall||0)-(a.overall||0)).slice(0,10);
-  };
 
   const updateActive=async fn=>{
     const targetId=activeLineup?.id||activeLineupId;
@@ -4105,13 +4191,29 @@ function MainApp({user,isAdmin,onLogout}){
         </div>
       </div>
 
-      {/* ⚠️ Banner de advertencia de alineación */}
+      {/* 🏆 Requisitos del desafío (Liga/Copa) */}
       {erroresAlineacion.length>0&&(
-        <div style={{background:"#fff3cd",borderBottom:"2px solid #f0ad4e",padding:"8px 16px",display:"flex",flexDirection:"column",gap:2}}>
-          <div style={{fontSize:11,fontWeight:800,color:"#856404",fontFamily:"'DM Sans',sans-serif"}}>⚠️ No cumple con:</div>
-          {erroresAlineacion.map((e,i)=>(
-            <div key={i} style={{fontSize:10,color:"#856404",fontFamily:"'DM Sans',sans-serif"}}>• {e}</div>
-          ))}
+        <div style={{position:"relative",borderBottom:`1px solid ${C.border}`,background:C.card}}>
+          <button onClick={()=>setShowRequisitos(v=>!v)}
+            style={{width:"100%",padding:"8px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",background:"transparent",border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+            <span style={{fontSize:11,fontWeight:800,color:erroresAlineacion.every(r=>r.cumplido)?"#27ae60":"#e67e22"}}>
+              {erroresAlineacion.every(r=>r.cumplido)?"✅":"⚠️"} Requisitos {activeLineup?.name} ({erroresAlineacion.filter(r=>r.cumplido).length}/{erroresAlineacion.length})
+            </span>
+            <span style={{fontSize:11,color:C.textLight}}>{showRequisitos?"▲":"▼"}</span>
+          </button>
+          {showRequisitos&&(
+            <div style={{padding:"4px 16px 10px 16px",display:"flex",flexDirection:"column",gap:6}}>
+              {erroresAlineacion.map((r,i)=>(
+                <div key={i} style={{display:"flex",alignItems:"flex-start",gap:8}}>
+                  <span style={{fontSize:13,flexShrink:0,marginTop:1}}>{r.cumplido?"✅":"⬜"}</span>
+                  <div>
+                    <div style={{fontSize:11,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{r.texto}</div>
+                    <div style={{fontSize:10,color:r.cumplido?"#27ae60":"#e67e22",fontFamily:"'DM Sans',sans-serif"}}>{r.detalle}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -4306,39 +4408,6 @@ function MainApp({user,isAdmin,onLogout}){
                 </button>
               </div>
             )}
-            {/* Selector Top 10 — solo en Copa */}
-            {activeLineup?.name==="Copa"&&!isSel&&(()=>{
-              const top10=getCopaTop10();
-              const elegidos=activeLineup.copaTop2||[];
-              return(
-                <div style={{marginBottom:9,padding:10,borderRadius:9,border:`1px solid ${C.borderDark}`,background:C.inputBg}}>
-                  <div style={{fontSize:11,fontWeight:800,color:C.text,marginBottom:6,fontFamily:"'DM Sans',sans-serif"}}>🏅 Elige 2 del Top 10 de tu plantilla</div>
-                  {top10.length===0?(
-                    <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Completa el 11 titular y la banca para ver el Top 10.</div>
-                  ):(
-                    <div style={{display:"flex",flexDirection:"column",gap:4}}>
-                      {top10.map(p=>{
-                        const checked=elegidos.includes(p.name);
-                        return(
-                          <label key={p.name} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 8px",borderRadius:7,background:checked?TA.accentLight:"transparent",cursor:"pointer"}}>
-                            <input type="checkbox" checked={checked} onChange={()=>{
-                              let next=[...elegidos];
-                              if(checked) next=next.filter(n=>n!==p.name);
-                              else{
-                                if(next.length>=2) next=next.slice(1);
-                                next=[...next,p.name];
-                              }
-                              updateActive(()=>({copaTop2:next}));
-                            }}/>
-                            <span style={{fontSize:11,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif",flex:1}}>{p.name}</span>
-                            <span style={{fontSize:10,fontWeight:800,color:"#2980b9",fontFamily:"monospace"}}>{p.overall}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  )}
-                  <div style={{fontSize:9,color:C.textFaint,marginTop:6,fontFamily:"'DM Sans',sans-serif"}}>Elegidos: {elegidos.length}/2</div>
-                </div>
               );
             })()}
             <div style={{fontSize:10,color:C.textLight,marginBottom:9,fontFamily:"'DM Sans',sans-serif"}}>Todas usan los mismos {squad.length} jugadores de la plantilla.</div>
