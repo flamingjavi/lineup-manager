@@ -4245,6 +4245,147 @@ function CompetenciaGoleadoresSetup({compId,compColor,setAiMsg}){
   );
 }
 
+// ─── COMPETENCIA: RESULTADO DE PARTIDO (por imagen, actualiza tabla) ─────────
+function CompetenciaResultadoSetup({compId,compColor,formato,setAiMsg}){
+  const[grupos,setGrupos]=useState([]);
+  const[uploading,setUploading]=useState(false);
+  const[preview,setPreview]=useState(null); // {local,golesLocal,visitante,golesVisitante}
+  const fileRef=useRef(null);
+
+  useEffect(()=>{
+    const unsub=onSnapshot(doc(db,"config","competenciaData"),snap=>{
+      const all=snap.exists()?snap.data():{};
+      const d=all[compId]||{grupos:[]};
+      setGrupos(d.grupos||[]);
+    });
+    return unsub;
+  },[compId]);
+
+  // Lista de todos los equipos disponibles en esta competencia (de todos los grupos)
+  const todosEquipos=[...new Set(grupos.flatMap(g=>g.equipos||[]))];
+
+  const processImage=async(file)=>{
+    setUploading(true);
+    setAiMsg("Leyendo imagen…");
+    try{
+      const b64=await new Promise((res,rej)=>{
+        const r=new FileReader();
+        r.onload=()=>res(r.result.split(",")[1]);
+        r.onerror=()=>rej(new Error("FileReader error"));
+        r.readAsDataURL(file);
+      });
+      setAiMsg("Conectando con Gemini…");
+      const listaEquipos=todosEquipos.join(", ");
+      const prompt=`Analiza esta captura de un resultado de partido de FC26. Los equipos posibles son: ${listaEquipos}. Identifica el equipo local, el equipo visitante (usa EXACTAMENTE uno de los nombres de la lista que mejor coincida) y el marcador de cada uno. Responde SOLO con JSON sin markdown, sin texto adicional: {"local":"","golesLocal":0,"visitante":"","golesVisitante":0}`;
+      const GEMINI_KEY="AIzaSyAGlxjD12k38Xu9L-8K165iJma1ZwR7tyY";
+      const GEMINI_URL=`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`;
+      const body=JSON.stringify({contents:[{parts:[{inline_data:{mime_type:file.type||"image/jpeg",data:b64}},{text:prompt}]}],generationConfig:{temperature:0,maxOutputTokens:500}});
+      const resp=await fetch(GEMINI_URL,{method:"POST",headers:{"Content-Type":"application/json"},body});
+      if(!resp.ok){
+        const errTxt=await resp.text().catch(()=>"");
+        throw new Error(`HTTP ${resp.status} ${errTxt.slice(0,200)}`);
+      }
+      const respData=await resp.json();
+      if(respData.error) throw new Error(respData.error.message);
+      const raw=respData.candidates?.[0]?.content?.parts?.[0]?.text;
+      if(!raw) throw new Error("Respuesta vacía de Gemini");
+      const cleaned=raw.replace(/```json|```/g,"").trim();
+      let parsed;
+      try{ parsed=JSON.parse(cleaned); }
+      catch{ throw new Error("No se pudo interpretar el JSON: "+cleaned.slice(0,150)); }
+      setPreview({
+        local:parsed.local||"",golesLocal:Number(parsed.golesLocal)||0,
+        visitante:parsed.visitante||"",golesVisitante:Number(parsed.golesVisitante)||0
+      });
+      setAiMsg("✅ Resultado leído — revisa y confirma abajo");
+    }catch(e){
+      setAiMsg("❌ "+e.message);
+    }
+    setUploading(false);
+  };
+
+  const confirmPreview=async()=>{
+    if(!preview) return;
+    if(!preview.local||!preview.visitante){setAiMsg("❌ Define ambos equipos");return;}
+    if(preview.local===preview.visitante){setAiMsg("❌ Los equipos no pueden ser el mismo");return;}
+    const gl=Number(preview.golesLocal)||0,gv=Number(preview.golesVisitante)||0;
+    const updTabla=(g,sel,gf,gc)=>{
+      const tabla=[...(g.tabla||[])];
+      const idx=tabla.findIndex(r=>r.equipo===sel);
+      if(idx===-1) return g;
+      const row={...tabla[idx]};
+      row.pj=(row.pj||0)+1;row.gf=(row.gf||0)+gf;row.gc=(row.gc||0)+gc;
+      row.pg=(row.pg||0)+(gf>gc?1:0);row.pe=(row.pe||0)+(gf===gc?1:0);row.pp=(row.pp||0)+(gf<gc?1:0);
+      row.pts=(row.pts||0)+(gf>gc?3:gf===gc?1:0);
+      tabla[idx]=row;
+      return {...g,tabla};
+    };
+    let nuevosGrupos=grupos.map(g=>{
+      let ng=g;
+      if((g.equipos||[]).includes(preview.local)) ng=updTabla(ng,preview.local,gl,gv);
+      if((g.equipos||[]).includes(preview.visitante)) ng=updTabla(ng,preview.visitante,gv,gl);
+      return ng;
+    });
+    const ref=doc(db,"config","competenciaData");
+    const snap=await getDoc(ref).catch(()=>null);
+    const current=snap?.exists()?snap.data():{};
+    const compData=current[compId]||{};
+    await setDoc(ref,{...current,[compId]:{...compData,grupos:nuevosGrupos}},{merge:true});
+    setAiMsg(`✅ ${preview.local} ${gl} - ${gv} ${preview.visitante} aplicado a la tabla`);
+    setPreview(null);
+  };
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+      <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>
+        Sube una foto del resultado de un partido. La IA leerá el marcador y actualizará automáticamente PJ/PG/PE/PP/GF/GC/Pts de ambos equipos en la tabla.
+      </div>
+      <div style={{background:C.card,borderRadius:9,padding:"10px 12px",border:`1.5px solid ${C.border}`}}>
+        <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}}
+          onChange={e=>{const f=e.target.files?.[0];if(f)processImage(f);e.target.value="";}}/>
+        <button onClick={()=>fileRef.current?.click()} disabled={uploading||todosEquipos.length===0}
+          style={{width:"100%",padding:"8px",borderRadius:7,background:"transparent",border:`1.5px dashed ${compColor}`,color:compColor,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:(uploading||todosEquipos.length===0)?0.5:1}}>
+          {uploading?"Leyendo…":todosEquipos.length===0?"Primero configura equipos en Tabla":"📷 Subir foto del resultado"}
+        </button>
+        {preview&&(
+          <div style={{marginTop:8,padding:8,borderRadius:8,border:`1.5px solid #f0ad4e`,background:"#fff3cd"}}>
+            <div style={{fontSize:10,fontWeight:800,color:"#856404",marginBottom:6,fontFamily:"'DM Sans',sans-serif"}}>🔎 Vista previa — corrige si algo está mal antes de confirmar</div>
+            <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:6}}>
+              <select value={preview.local} onChange={e=>setPreview({...preview,local:e.target.value})}
+                style={{flex:1,padding:"6px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif"}}>
+                <option value="">— Local —</option>
+                {todosEquipos.map(eq=><option key={eq} value={eq}>{eq}</option>)}
+              </select>
+              <input type="number" value={preview.golesLocal} onChange={e=>setPreview({...preview,golesLocal:Number(e.target.value)||0})}
+                style={{width:48,padding:"6px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:13,fontWeight:800,textAlign:"center",fontFamily:"monospace"}}/>
+            </div>
+            <div style={{textAlign:"center",fontSize:9,color:C.textFaint,marginBottom:6,fontFamily:"'DM Sans',sans-serif"}}>VS</div>
+            <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:8}}>
+              <select value={preview.visitante} onChange={e=>setPreview({...preview,visitante:e.target.value})}
+                style={{flex:1,padding:"6px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif"}}>
+                <option value="">— Visitante —</option>
+                {todosEquipos.map(eq=><option key={eq} value={eq}>{eq}</option>)}
+              </select>
+              <input type="number" value={preview.golesVisitante} onChange={e=>setPreview({...preview,golesVisitante:Number(e.target.value)||0})}
+                style={{width:48,padding:"6px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:13,fontWeight:800,textAlign:"center",fontFamily:"monospace"}}/>
+            </div>
+            <div style={{display:"flex",gap:6}}>
+              <button onClick={confirmPreview}
+                style={{flex:1,padding:"7px",borderRadius:7,background:"#27ae60",color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                ✅ Confirmar y aplicar a la tabla
+              </button>
+              <button onClick={()=>setPreview(null)}
+                style={{padding:"7px 12px",borderRadius:7,background:C.inputBg,color:C.textMid,border:`1px solid ${C.border}`,fontSize:11,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── COMPETENCIAS MODAL ───────────────────────────────────────────────────────
 function CompetenciasModal({allTeams,onClose}){
   const[comps,setComps]=useState(()=>COMPETENCIAS_AVAILABLE.map(c=>({...c})));
@@ -4352,6 +4493,10 @@ function CompetenciasModal({allTeams,onClose}){
                 style={{flex:1,padding:"7px",borderRadius:8,border:`1.5px solid ${subTab==="goleadores"?activeComp.color:C.border}`,background:subTab==="goleadores"?activeComp.color:C.inputBg,color:subTab==="goleadores"?"#fff":C.textMid,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
                 ⚽ Goles
               </button>
+              <button onClick={()=>setSubTab("resultado")}
+                style={{flex:1,padding:"7px",borderRadius:8,border:`1.5px solid ${subTab==="resultado"?activeComp.color:C.border}`,background:subTab==="resultado"?activeComp.color:C.inputBg,color:subTab==="resultado"?"#fff":C.textMid,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                🎯 Resultado
+              </button>
             </div>
           )}
 
@@ -4380,6 +4525,11 @@ function CompetenciasModal({allTeams,onClose}){
           {/* Vista: goleadores y asistencias */}
           {selected&&subTab==="goleadores"&&(
             <CompetenciaGoleadoresSetup compId={selected} compColor={activeComp.color} setAiMsg={setAiMsg}/>
+          )}
+
+          {/* Vista: resultado de partido (actualiza tabla) */}
+          {selected&&subTab==="resultado"&&(
+            <CompetenciaResultadoSetup compId={selected} compColor={activeComp.color} formato={activeComp.formato} setAiMsg={setAiMsg}/>
           )}
         </div>
       </div>
