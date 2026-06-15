@@ -3736,11 +3736,251 @@ function HomeScreen({teamData,onSelect,isAdmin,onOpenMundial}){
   );
 }
 
+// ─── COMPETENCIA: GRUPOS Y TABLA (genérico, editable por temporada) ──────────
+function CompetenciaGruposSetup({compId,compColor,allTeams,setAiMsg}){
+  const[data,setData]=useState(null); // {grupos:[{nombre,equipos:[...],tabla:[...]}]}
+  const[local,setLocal]=useState([]); // working copy
+  const[saving,setSaving]=useState(false);
+  const[uploadingIdx,setUploadingIdx]=useState(null);
+  const[preview,setPreview]=useState(null); // {grupoIdx, filas:[{equipo,pj,pg,pe,pp,gf,gc,pts}]}
+  const fileRef=useRef({});
+
+  const eligibles=allTeams.filter(t=>(t.competencias||[]).includes(compId));
+
+  useEffect(()=>{
+    const unsub=onSnapshot(doc(db,"config","competenciaData"),snap=>{
+      const all=snap.exists()?snap.data():{};
+      const d=all[compId]||{grupos:[]};
+      setData(d);
+      setLocal(d.grupos||[]);
+    });
+    return unsub;
+  },[compId]);
+
+  const saveAll=async(grupos)=>{
+    setSaving(true);
+    const ref=doc(db,"config","competenciaData");
+    const snap=await getDoc(ref).catch(()=>null);
+    const current=snap?.exists()?snap.data():{};
+    await setDoc(ref,{...current,[compId]:{grupos}},{merge:true});
+    setSaving(false);
+  };
+
+  const addGrupo=()=>{
+    const letra=String.fromCharCode(65+local.length);
+    setLocal([...local,{nombre:`GRUPO ${letra}`,equipos:[],tabla:[]}]);
+  };
+
+  const removeGrupo=(gi)=>{
+    setLocal(local.filter((_,i)=>i!==gi));
+  };
+
+  const toggleEquipoEnGrupo=(gi,teamName)=>{
+    const g={...local[gi]};
+    const equipos=[...(g.equipos||[])];
+    const idx=equipos.indexOf(teamName);
+    if(idx>=0) equipos.splice(idx,1);
+    else equipos.push(teamName);
+    g.equipos=equipos;
+    g.tabla=equipos.map(e=>{
+      const existing=(g.tabla||[]).find(r=>r.equipo===e);
+      return existing||{equipo:e,pj:0,pg:0,pe:0,pp:0,gf:0,gc:0,pts:0};
+    });
+    const next=[...local];next[gi]=g;setLocal(next);
+  };
+
+  const saveGrupo=async(gi)=>{
+    const g=local[gi];
+    if(!g.equipos||g.equipos.length<2){setAiMsg("❌ El grupo necesita al menos 2 equipos");return;}
+    const nuevosLocal=[...local];
+    await saveAll(nuevosLocal);
+    setAiMsg(`✅ ${g.nombre} guardado (${g.equipos.length} equipos)`);
+  };
+
+  // ─── Procesar imagen de tabla de clasificación ──────────────────────────
+  const processTableImage=async(file,gi)=>{
+    setUploadingIdx(gi);
+    setAiMsg("Leyendo imagen…");
+    try{
+      const b64=await new Promise((res,rej)=>{
+        const r=new FileReader();
+        r.onload=()=>res(r.result.split(",")[1]);
+        r.onerror=()=>rej(new Error("FileReader error"));
+        r.readAsDataURL(file);
+      });
+      setAiMsg("Conectando con Gemini…");
+      const equiposGrupo=(local[gi]?.equipos||[]).join(", ");
+      const prompt=`Analiza esta captura de una tabla de clasificación de FC26. Los equipos posibles son: ${equiposGrupo}. Para cada fila de la tabla, extrae el nombre del equipo (usa EXACTAMENTE uno de los nombres de la lista que mejor coincida) y sus estadísticas. Responde SOLO con JSON sin markdown, sin texto adicional: {"filas":[{"equipo":"NOMBRE_EXACTO_DE_LA_LISTA","pj":0,"pg":0,"pe":0,"pp":0,"gf":0,"gc":0,"pts":0}]}`;
+      const GEMINI_KEY="AIzaSyAGlxjD12k38Xu9L-8K165iJma1ZwR7tyY";
+      const GEMINI_URL=`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`;
+      const body=JSON.stringify({contents:[{parts:[{inline_data:{mime_type:file.type||"image/jpeg",data:b64}},{text:prompt}]}],generationConfig:{temperature:0,maxOutputTokens:2000}});
+      const resp=await fetch(GEMINI_URL,{method:"POST",headers:{"Content-Type":"application/json"},body});
+      if(!resp.ok){
+        const errTxt=await resp.text().catch(()=>"");
+        throw new Error(`HTTP ${resp.status} ${errTxt.slice(0,200)}`);
+      }
+      const data=await resp.json();
+      if(data.error) throw new Error(data.error.message);
+      const raw=data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if(!raw) throw new Error("Respuesta vacía de Gemini");
+      const cleaned=raw.replace(/```json|```/g,"").trim();
+      let parsed;
+      try{ parsed=JSON.parse(cleaned); }
+      catch{ throw new Error("No se pudo interpretar el JSON: "+cleaned.slice(0,150)); }
+      const filas=(parsed.filas||[]).map(f=>({
+        equipo:f.equipo||"",
+        pj:Number(f.pj)||0,pg:Number(f.pg)||0,pe:Number(f.pe)||0,pp:Number(f.pp)||0,
+        gf:Number(f.gf)||0,gc:Number(f.gc)||0,pts:Number(f.pts)||0
+      }));
+      if(filas.length===0) throw new Error("No se detectaron filas en la imagen");
+      setPreview({grupoIdx:gi,filas});
+      setAiMsg(`✅ ${filas.length} filas leídas — revisa y confirma abajo`);
+    }catch(e){
+      setAiMsg("❌ "+e.message);
+    }
+    setUploadingIdx(null);
+  };
+
+  const confirmPreview=async()=>{
+    if(!preview) return;
+    const gi=preview.grupoIdx;
+    const g={...local[gi]};
+    // Actualiza tabla: solo equipos que coinciden con los del grupo
+    const tabla=(g.equipos||[]).map(eq=>{
+      const fila=preview.filas.find(f=>f.equipo===eq);
+      return fila?{...fila}:(g.tabla||[]).find(r=>r.equipo===eq)||{equipo:eq,pj:0,pg:0,pe:0,pp:0,gf:0,gc:0,pts:0};
+    });
+    g.tabla=tabla;
+    const next=[...local];next[gi]=g;
+    setLocal(next);
+    await saveAll(next);
+    setAiMsg(`✅ Tabla de ${g.nombre} actualizada`);
+    setPreview(null);
+  };
+
+  const updatePreviewCell=(fi,field,val)=>{
+    const filas=[...preview.filas];
+    filas[fi]={...filas[fi],[field]:field==="equipo"?val:Number(val)||0};
+    setPreview({...preview,filas});
+  };
+
+  if(!data) return <div style={{fontSize:11,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Cargando…</div>;
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+      <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>
+        Define los grupos de esta temporada y asigna equipos. Luego puedes subir una foto de la tabla de FC26 para actualizar PJ/PG/PE/PP/GF/GC/Pts automáticamente.
+      </div>
+      {local.map((g,gi)=>(
+        <div key={gi} style={{background:C.card,borderRadius:9,padding:"10px 12px",border:`1.5px solid ${(g.tabla||[]).length>0?compColor:C.border}`}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+            <span style={{fontSize:11,fontWeight:800,color:compColor,fontFamily:"'DM Sans',sans-serif"}}>{g.nombre}</span>
+            <button onClick={()=>removeGrupo(gi)} style={{background:"transparent",border:"none",color:"#c0392b",fontSize:11,cursor:"pointer"}}>🗑️</button>
+          </div>
+          {/* Selector de equipos */}
+          <div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:8}}>
+            {eligibles.map(t=>{
+              const name=t.teamName;
+              const active=(g.equipos||[]).includes(name);
+              return(
+                <button key={t.uid||t.id} onClick={()=>toggleEquipoEnGrupo(gi,name)}
+                  style={{padding:"4px 9px",borderRadius:20,border:`1.5px solid ${active?compColor:C.borderDark}`,background:active?compColor+"22":C.inputBg,color:active?compColor:C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                  {name}
+                </button>
+              );
+            })}
+          </div>
+          <button onClick={()=>saveGrupo(gi)} disabled={saving}
+            style={{width:"100%",padding:"6px",borderRadius:7,background:compColor,color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:saving?0.6:1,marginBottom:8}}>
+            {saving?"Guardando…":`Guardar ${g.nombre} (${(g.equipos||[]).length} equipos)`}
+          </button>
+          {/* Tabla actual */}
+          {(g.tabla||[]).length>0&&(
+            <div style={{overflowX:"auto",marginBottom:8}}>
+              <table style={{width:"100%",fontSize:9,fontFamily:"'DM Sans',sans-serif",borderCollapse:"collapse"}}>
+                <thead>
+                  <tr style={{color:C.textFaint}}>
+                    <th style={{textAlign:"left",padding:"3px 4px"}}>Equipo</th>
+                    <th style={{padding:"3px 4px"}}>PJ</th><th style={{padding:"3px 4px"}}>PG</th><th style={{padding:"3px 4px"}}>PE</th><th style={{padding:"3px 4px"}}>PP</th><th style={{padding:"3px 4px"}}>GF</th><th style={{padding:"3px 4px"}}>GC</th><th style={{padding:"3px 4px",fontWeight:800}}>Pts</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...(g.tabla||[])].sort((a,b)=>b.pts-a.pts).map((r,ri)=>(
+                    <tr key={ri} style={{borderTop:`1px solid ${C.border}`}}>
+                      <td style={{padding:"3px 4px",fontWeight:700,color:C.text}}>{r.equipo}</td>
+                      <td style={{padding:"3px 4px",textAlign:"center"}}>{r.pj}</td>
+                      <td style={{padding:"3px 4px",textAlign:"center"}}>{r.pg}</td>
+                      <td style={{padding:"3px 4px",textAlign:"center"}}>{r.pe}</td>
+                      <td style={{padding:"3px 4px",textAlign:"center"}}>{r.pp}</td>
+                      <td style={{padding:"3px 4px",textAlign:"center"}}>{r.gf}</td>
+                      <td style={{padding:"3px 4px",textAlign:"center"}}>{r.gc}</td>
+                      <td style={{padding:"3px 4px",textAlign:"center",fontWeight:800,color:compColor}}>{r.pts}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {/* Subir imagen */}
+          {(g.equipos||[]).length>=2&&(
+            <>
+              <input ref={el=>{if(el)fileRef.current[gi]=el;}} type="file" accept="image/*" style={{display:"none"}}
+                onChange={e=>{const f=e.target.files?.[0];if(f)processTableImage(f,gi);e.target.value="";}}/>
+              <button onClick={()=>fileRef.current?.[gi]?.click()} disabled={uploadingIdx===gi}
+                style={{width:"100%",padding:"6px",borderRadius:7,background:"transparent",border:`1px dashed ${compColor}`,color:compColor,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:uploadingIdx===gi?0.5:1}}>
+                {uploadingIdx===gi?"Leyendo…":"📷 Subir foto de tabla FC26"}
+              </button>
+            </>
+          )}
+          {/* Vista previa editable */}
+          {preview?.grupoIdx===gi&&(
+            <div style={{marginTop:8,padding:8,borderRadius:8,border:`1.5px solid #f0ad4e`,background:"#fff3cd"}}>
+              <div style={{fontSize:10,fontWeight:800,color:"#856404",marginBottom:6,fontFamily:"'DM Sans',sans-serif"}}>🔎 Vista previa — corrige si algo está mal antes de confirmar</div>
+              <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                {preview.filas.map((f,fi)=>(
+                  <div key={fi} style={{display:"flex",gap:4,alignItems:"center"}}>
+                    <select value={f.equipo} onChange={e=>updatePreviewCell(fi,"equipo",e.target.value)}
+                      style={{flex:2,padding:"3px 5px",borderRadius:6,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:9,fontFamily:"'DM Sans',sans-serif"}}>
+                      <option value="">—</option>
+                      {(g.equipos||[]).map(eq=><option key={eq} value={eq}>{eq}</option>)}
+                    </select>
+                    {["pj","pg","pe","pp","gf","gc","pts"].map(field=>(
+                      <input key={field} type="number" value={f[field]} onChange={e=>updatePreviewCell(fi,field,e.target.value)}
+                        style={{width:32,padding:"3px 2px",borderRadius:6,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:9,textAlign:"center",fontFamily:"monospace"}}/>
+                    ))}
+                  </div>
+                ))}
+              </div>
+              <div style={{display:"flex",gap:6,marginTop:6}}>
+                <button onClick={confirmPreview}
+                  style={{flex:1,padding:"6px",borderRadius:7,background:"#27ae60",color:"#fff",border:"none",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                  ✅ Confirmar y guardar
+                </button>
+                <button onClick={()=>setPreview(null)}
+                  style={{padding:"6px 12px",borderRadius:7,background:C.inputBg,color:C.textMid,border:`1px solid ${C.border}`,fontSize:10,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      ))}
+      <button onClick={addGrupo}
+        style={{padding:"8px",borderRadius:8,background:"transparent",border:`1.5px dashed ${compColor}`,color:compColor,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+        + Agregar grupo
+      </button>
+    </div>
+  );
+}
+
 // ─── COMPETENCIAS MODAL ───────────────────────────────────────────────────────
 function CompetenciasModal({allTeams,onClose}){
   const[comps,setComps]=useState(()=>COMPETENCIAS_AVAILABLE.map(c=>({...c})));
+
   const[selected,setSelected]=useState(null); // id de la comp activa
+  const[subTab,setSubTab]=useState("equipos"); // equipos | grupos
   const[editingName,setEditingName]=useState(null); // id de la que se está renombrando
+  const[aiMsg,setAiMsg]=useState("");
   const[editValue,setEditValue]=useState("");
   const[saving,setSaving]=useState(false);
 
@@ -3825,8 +4065,24 @@ function CompetenciasModal({allTeams,onClose}){
             </div>
           ))}
 
+          {/* Sub-tabs: Equipos / Grupos y Tabla */}
+          {selected&&(
+            <div style={{display:"flex",gap:6,marginBottom:6}}>
+              <button onClick={()=>setSubTab("equipos")}
+                style={{flex:1,padding:"7px",borderRadius:8,border:`1.5px solid ${subTab==="equipos"?activeComp.color:C.border}`,background:subTab==="equipos"?activeComp.color:C.inputBg,color:subTab==="equipos"?"#fff":C.textMid,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                👥 Equipos
+              </button>
+              <button onClick={()=>setSubTab("grupos")}
+                style={{flex:1,padding:"7px",borderRadius:8,border:`1.5px solid ${subTab==="grupos"?activeComp.color:C.border}`,background:subTab==="grupos"?activeComp.color:C.inputBg,color:subTab==="grupos"?"#fff":C.textMid,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                📊 Grupos y Tabla
+              </button>
+            </div>
+          )}
+
+          {aiMsg&&<div style={{padding:"6px 10px",borderRadius:8,background:"#f0fdf4",border:"1px solid #bbf7d0",fontSize:10,color:"#166534",fontFamily:"'DM Sans',sans-serif"}}>{aiMsg}</div>}
+
           {/* Vista: equipos de una competencia */}
-          {selected&&allTeams.map(team=>{
+          {selected&&subTab==="equipos"&&allTeams.map(team=>{
             const active=(team.competencias||[]).includes(selected);
             return(
               <button key={team.uid||team.id} onClick={()=>toggleTeam(team)}
@@ -3837,6 +4093,11 @@ function CompetenciasModal({allTeams,onClose}){
               </button>
             );
           })}
+
+          {/* Vista: grupos y tabla de clasificación */}
+          {selected&&subTab==="grupos"&&(
+            <CompetenciaGruposSetup compId={selected} compColor={activeComp.color} allTeams={allTeams} setAiMsg={setAiMsg}/>
+          )}
         </div>
       </div>
     </div>
