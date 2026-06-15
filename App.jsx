@@ -4069,6 +4069,182 @@ function CompetenciaGruposSetup({compId,compColor,formato,allTeams,setAiMsg}){
   );
 }
 
+// ─── COMPETENCIA: GOLEADORES Y ASISTENCIAS (tabla general por imagen) ────────
+function CompetenciaGoleadoresSetup({compId,compColor,setAiMsg}){
+  const[data,setData]=useState(null); // {goleadores:[{nombre,equipo,goles}], asistencias:[{nombre,equipo,asistencias}]}
+  const[uploading,setUploading]=useState(null); // "goleadores" | "asistencias" | null
+  const[preview,setPreview]=useState(null); // {tipo, filas:[...]}
+  const fileRefGol=useRef(null);
+  const fileRefAsist=useRef(null);
+
+  useEffect(()=>{
+    const unsub=onSnapshot(doc(db,"config","competenciaData"),snap=>{
+      const all=snap.exists()?snap.data():{};
+      const d=all[compId]||{};
+      setData({goleadores:d.goleadores||[],asistencias:d.asistencias||[]});
+    });
+    return unsub;
+  },[compId]);
+
+  const saveTabla=async(tipo,filas)=>{
+    const ref=doc(db,"config","competenciaData");
+    const snap=await getDoc(ref).catch(()=>null);
+    const current=snap?.exists()?snap.data():{};
+    const compData=current[compId]||{};
+    await setDoc(ref,{...current,[compId]:{...compData,[tipo]:filas}},{merge:true});
+  };
+
+  const processImage=async(file,tipo)=>{
+    setUploading(tipo);
+    setAiMsg("Leyendo imagen…");
+    try{
+      const b64=await new Promise((res,rej)=>{
+        const r=new FileReader();
+        r.onload=()=>res(r.result.split(",")[1]);
+        r.onerror=()=>rej(new Error("FileReader error"));
+        r.readAsDataURL(file);
+      });
+      setAiMsg("Conectando con Gemini…");
+      const campo=tipo==="goleadores"?"goles":"asistencias";
+      const prompt=tipo==="goleadores"
+        ?`Analiza esta captura de la tabla de máximos goleadores de FC26. Para cada fila extrae el nombre del jugador, el equipo y el número de goles. Responde SOLO con JSON sin markdown, sin texto adicional: {"filas":[{"nombre":"","equipo":"","goles":0}]}`
+        :`Analiza esta captura de la tabla de máximos asistentes de FC26. Para cada fila extrae el nombre del jugador, el equipo y el número de asistencias. Responde SOLO con JSON sin markdown, sin texto adicional: {"filas":[{"nombre":"","equipo":"","asistencias":0}]}`;
+      const GEMINI_KEY="AIzaSyAGlxjD12k38Xu9L-8K165iJma1ZwR7tyY";
+      const GEMINI_URL=`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`;
+      const body=JSON.stringify({contents:[{parts:[{inline_data:{mime_type:file.type||"image/jpeg",data:b64}},{text:prompt}]}],generationConfig:{temperature:0,maxOutputTokens:2000}});
+      const resp=await fetch(GEMINI_URL,{method:"POST",headers:{"Content-Type":"application/json"},body});
+      if(!resp.ok){
+        const errTxt=await resp.text().catch(()=>"");
+        throw new Error(`HTTP ${resp.status} ${errTxt.slice(0,200)}`);
+      }
+      const respData=await resp.json();
+      if(respData.error) throw new Error(respData.error.message);
+      const raw=respData.candidates?.[0]?.content?.parts?.[0]?.text;
+      if(!raw) throw new Error("Respuesta vacía de Gemini");
+      const cleaned=raw.replace(/```json|```/g,"").trim();
+      let parsed;
+      try{ parsed=JSON.parse(cleaned); }
+      catch{ throw new Error("No se pudo interpretar el JSON: "+cleaned.slice(0,150)); }
+      const filas=(parsed.filas||[]).map(f=>({
+        nombre:f.nombre||"",
+        equipo:f.equipo||"",
+        [campo]:Number(f[campo])||0
+      }));
+      if(filas.length===0) throw new Error("No se detectaron filas en la imagen");
+      setPreview({tipo,filas});
+      setAiMsg(`✅ ${filas.length} filas leídas — revisa y confirma abajo`);
+    }catch(e){
+      setAiMsg("❌ "+e.message);
+    }
+    setUploading(null);
+  };
+
+  const confirmPreview=async()=>{
+    if(!preview) return;
+    await saveTabla(preview.tipo,preview.filas);
+    setAiMsg(`✅ Tabla de ${preview.tipo} actualizada`);
+    setPreview(null);
+  };
+
+  const updatePreviewCell=(fi,field,val)=>{
+    const filas=[...preview.filas];
+    const campo=preview.tipo==="goleadores"?"goles":"asistencias";
+    filas[fi]={...filas[fi],[field]:field===campo?Number(val)||0:val};
+    setPreview({...preview,filas});
+  };
+
+  const addPreviewRow=()=>{
+    const campo=preview.tipo==="goleadores"?"goles":"asistencias";
+    setPreview({...preview,filas:[...preview.filas,{nombre:"",equipo:"",[campo]:0}]});
+  };
+
+  const removePreviewRow=(fi)=>{
+    setPreview({...preview,filas:preview.filas.filter((_,i)=>i!==fi)});
+  };
+
+  if(!data) return <div style={{fontSize:11,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Cargando…</div>;
+
+  const renderTabla=(tipo,titulo,emoji,filas,fileRef)=>{
+    const campo=tipo==="goleadores"?"goles":"asistencias";
+    return(
+      <div style={{background:C.card,borderRadius:9,padding:"10px 12px",border:`1.5px solid ${filas.length>0?compColor:C.border}`}}>
+        <div style={{fontSize:11,fontWeight:800,color:compColor,fontFamily:"'DM Sans',sans-serif",marginBottom:6}}>{emoji} {titulo}</div>
+        {filas.length>0&&(
+          <div style={{overflowX:"auto",marginBottom:8}}>
+            <table style={{width:"100%",fontSize:9,fontFamily:"'DM Sans',sans-serif",borderCollapse:"collapse"}}>
+              <thead>
+                <tr style={{color:C.textFaint}}>
+                  <th style={{textAlign:"left",padding:"3px 4px"}}>Jugador</th>
+                  <th style={{textAlign:"left",padding:"3px 4px"}}>Equipo</th>
+                  <th style={{padding:"3px 4px",fontWeight:800}}>{campo==="goles"?"Goles":"Asist."}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...filas].sort((a,b)=>(b[campo]||0)-(a[campo]||0)).map((r,ri)=>(
+                  <tr key={ri} style={{borderTop:`1px solid ${C.border}`}}>
+                    <td style={{padding:"3px 4px",fontWeight:700,color:C.text}}>{r.nombre}</td>
+                    <td style={{padding:"3px 4px",color:C.textFaint}}>{r.equipo}</td>
+                    <td style={{padding:"3px 4px",textAlign:"center",fontWeight:800,color:compColor}}>{r[campo]}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}}
+          onChange={e=>{const f=e.target.files?.[0];if(f)processImage(f,tipo);e.target.value="";}}/>
+        <button onClick={()=>fileRef.current?.click()} disabled={uploading===tipo}
+          style={{width:"100%",padding:"6px",borderRadius:7,background:"transparent",border:`1px dashed ${compColor}`,color:compColor,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:uploading===tipo?0.5:1}}>
+          {uploading===tipo?"Leyendo…":`📷 Subir foto de ${titulo.toLowerCase()}`}
+        </button>
+        {/* Vista previa editable */}
+        {preview?.tipo===tipo&&(
+          <div style={{marginTop:8,padding:8,borderRadius:8,border:`1.5px solid #f0ad4e`,background:"#fff3cd"}}>
+            <div style={{fontSize:10,fontWeight:800,color:"#856404",marginBottom:6,fontFamily:"'DM Sans',sans-serif"}}>🔎 Vista previa — corrige si algo está mal antes de confirmar</div>
+            <div style={{display:"flex",flexDirection:"column",gap:4,maxHeight:240,overflowY:"auto"}}>
+              {preview.filas.map((f,fi)=>(
+                <div key={fi} style={{display:"flex",gap:4,alignItems:"center"}}>
+                  <input value={f.nombre} onChange={e=>updatePreviewCell(fi,"nombre",e.target.value)} placeholder="Jugador"
+                    style={{flex:2,padding:"3px 5px",borderRadius:6,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:9,fontFamily:"'DM Sans',sans-serif"}}/>
+                  <input value={f.equipo} onChange={e=>updatePreviewCell(fi,"equipo",e.target.value)} placeholder="Equipo"
+                    style={{flex:2,padding:"3px 5px",borderRadius:6,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:9,fontFamily:"'DM Sans',sans-serif"}}/>
+                  <input type="number" value={f[campo]} onChange={e=>updatePreviewCell(fi,campo,e.target.value)}
+                    style={{width:40,padding:"3px 2px",borderRadius:6,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:9,textAlign:"center",fontFamily:"monospace"}}/>
+                  <button onClick={()=>removePreviewRow(fi)} style={{background:"transparent",border:"none",color:"#c0392b",fontSize:11,cursor:"pointer"}}>✕</button>
+                </div>
+              ))}
+            </div>
+            <div style={{display:"flex",gap:6,marginTop:6}}>
+              <button onClick={addPreviewRow}
+                style={{padding:"5px 10px",borderRadius:7,background:"transparent",border:`1px dashed ${compColor}`,color:compColor,fontSize:9,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                + Fila
+              </button>
+              <button onClick={confirmPreview}
+                style={{flex:1,padding:"6px",borderRadius:7,background:"#27ae60",color:"#fff",border:"none",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                ✅ Confirmar y guardar
+              </button>
+              <button onClick={()=>setPreview(null)}
+                style={{padding:"6px 12px",borderRadius:7,background:C.inputBg,color:C.textMid,border:`1px solid ${C.border}`,fontSize:10,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+      <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>
+        Sube una foto de la tabla general de goleadores o asistencias de FC26 para esta competencia. La IA leerá los datos y podrás corregirlos antes de guardar.
+      </div>
+      {renderTabla("goleadores","Goleadores","⚽",data.goleadores,fileRefGol)}
+      {renderTabla("asistencias","Asistencias","🎯",data.asistencias,fileRefAsist)}
+    </div>
+  );
+}
+
 // ─── COMPETENCIAS MODAL ───────────────────────────────────────────────────────
 function CompetenciasModal({allTeams,onClose}){
   const[comps,setComps]=useState(()=>COMPETENCIAS_AVAILABLE.map(c=>({...c})));
@@ -4161,7 +4337,7 @@ function CompetenciasModal({allTeams,onClose}){
             </div>
           ))}
 
-          {/* Sub-tabs: Equipos / Grupos y Tabla */}
+          {/* Sub-tabs: Equipos / Grupos y Tabla / Goleadores */}
           {selected&&activeComp.formato!=="final"&&(
             <div style={{display:"flex",gap:6,marginBottom:6}}>
               <button onClick={()=>setSubTab("equipos")}
@@ -4170,7 +4346,11 @@ function CompetenciasModal({allTeams,onClose}){
               </button>
               <button onClick={()=>setSubTab("grupos")}
                 style={{flex:1,padding:"7px",borderRadius:8,border:`1.5px solid ${subTab==="grupos"?activeComp.color:C.border}`,background:subTab==="grupos"?activeComp.color:C.inputBg,color:subTab==="grupos"?"#fff":C.textMid,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
-                📊 Grupos y Tabla
+                📊 Tabla
+              </button>
+              <button onClick={()=>setSubTab("goleadores")}
+                style={{flex:1,padding:"7px",borderRadius:8,border:`1.5px solid ${subTab==="goleadores"?activeComp.color:C.border}`,background:subTab==="goleadores"?activeComp.color:C.inputBg,color:subTab==="goleadores"?"#fff":C.textMid,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                ⚽ Goles
               </button>
             </div>
           )}
@@ -4195,6 +4375,11 @@ function CompetenciasModal({allTeams,onClose}){
             activeComp.formato==="final"
               ?<SuperCopaSetup compColor={activeComp.color} setAiMsg={setAiMsg}/>
               :<CompetenciaGruposSetup compId={selected} compColor={activeComp.color} formato={activeComp.formato} allTeams={allTeams} setAiMsg={setAiMsg}/>
+          )}
+
+          {/* Vista: goleadores y asistencias */}
+          {selected&&subTab==="goleadores"&&(
+            <CompetenciaGoleadoresSetup compId={selected} compColor={activeComp.color} setAiMsg={setAiMsg}/>
           )}
         </div>
       </div>
