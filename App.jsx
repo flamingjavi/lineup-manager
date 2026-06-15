@@ -3637,13 +3637,13 @@ function MundialModal({onClose,user,isAdmin,allSels,pool,teamData,initialTab="mi
 
 // ─── COMPETENCIAS ─────────────────────────────────────────────────────────────
 const COMPETENCIAS_AVAILABLE=[
-  {id:"liga1",    name:"Neo League",           icon:"🏆", color:"#1a3a5c", lineupName:"Liga"},
-  {id:"liga2",    name:"Europe Championship",  icon:"🌍", color:"#27ae60", lineupName:"Liga"},
-  {id:"copa",     name:"Copa",                 icon:"🏅", color:"#8e44ad", lineupName:"Copa"},
-  {id:"champions",name:"Champions",            icon:"⭐", color:"#f39c12", lineupName:"Champions"},
-  {id:"europa",   name:"Europa League",        icon:"🟠", color:"#e67e22", lineupName:"Europa League"},
-  {id:"conference",name:"Conference",          icon:"🟣", color:"#9b59b6", lineupName:"Conference"},
-  {id:"supercopa",name:"SuperCopa",            icon:"👑", color:"#c0392b", lineupName:"SuperCopa"},
+  {id:"liga1",    name:"Neo League",           icon:"🏆", color:"#1a3a5c", lineupName:"Liga", formato:"liga"},
+  {id:"liga2",    name:"Europe Championship",  icon:"🌍", color:"#27ae60", lineupName:"Liga", formato:"liga"},
+  {id:"copa",     name:"Copa",                 icon:"🏅", color:"#8e44ad", lineupName:"Copa", formato:"grupos"},
+  {id:"champions",name:"Champions",            icon:"⭐", color:"#f39c12", lineupName:"Champions", formato:"grupos"},
+  {id:"europa",   name:"Europa League",        icon:"🟠", color:"#e67e22", lineupName:"Europa League", formato:"grupos"},
+  {id:"conference",name:"Conference",          icon:"🟣", color:"#9b59b6", lineupName:"Conference", formato:"grupos"},
+  {id:"supercopa",name:"SuperCopa",            icon:"👑", color:"#c0392b", lineupName:"SuperCopa", formato:"final"},
 ];
 
 function HomeScreen({teamData,onSelect,isAdmin,onOpenMundial}){
@@ -3736,8 +3736,83 @@ function HomeScreen({teamData,onSelect,isAdmin,onOpenMundial}){
   );
 }
 
+// ─── SUPERCOPA: Campeón Neo vs Campeón EC (un solo partido) ──────────────────
+function SuperCopaSetup({compColor,setAiMsg}){
+  const[allData,setAllData]=useState(null);
+  const[local,setLocal]=useState(null); // {equipoA,equipoB,golesA,golesB,jugado}
+  const[saving,setSaving]=useState(false);
+
+  useEffect(()=>{
+    const unsub=onSnapshot(doc(db,"config","competenciaData"),snap=>{
+      const all=snap.exists()?snap.data():{};
+      setAllData(all);
+      const campeonNeo=(all.liga1?.grupos?.[0]?.tabla||[]).slice().sort((a,b)=>b.pts-a.pts)[0]?.equipo||"";
+      const campeonEC=(all.liga2?.grupos?.[0]?.tabla||[]).slice().sort((a,b)=>b.pts-a.pts)[0]?.equipo||"";
+      const existing=all.supercopa?.partido;
+      setLocal({
+        equipoA:existing?.equipoA||campeonNeo,
+        equipoB:existing?.equipoB||campeonEC,
+        golesA:existing?.golesA??"",
+        golesB:existing?.golesB??"",
+        jugado:!!existing
+      });
+    });
+    return unsub;
+  },[]);
+
+  const save=async()=>{
+    if(!local.equipoA.trim()||!local.equipoB.trim()){setAiMsg("❌ Define ambos finalistas");return;}
+    setSaving(true);
+    const ref=doc(db,"config","competenciaData");
+    const snap=await getDoc(ref).catch(()=>null);
+    const current=snap?.exists()?snap.data():{};
+    await setDoc(ref,{...current,supercopa:{partido:{
+      equipoA:local.equipoA.trim(),equipoB:local.equipoB.trim(),
+      golesA:Number(local.golesA)||0,golesB:Number(local.golesB)||0
+    }}},{merge:true});
+    setSaving(false);
+    setAiMsg("✅ SuperCopa guardada");
+  };
+
+  if(!local) return <div style={{fontSize:11,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Cargando…</div>;
+
+  const campeonNeo=(allData?.liga1?.grupos?.[0]?.tabla||[]).slice().sort((a,b)=>b.pts-a.pts)[0]?.equipo;
+  const campeonEC=(allData?.liga2?.grupos?.[0]?.tabla||[]).slice().sort((a,b)=>b.pts-a.pts)[0]?.equipo;
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+      <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>
+        La SuperCopa enfrenta al campeón de Neo League contra el campeón de Europe Championship en un único partido.
+        {campeonNeo&&campeonEC&&<div style={{marginTop:4}}>Sugerido: <b>{campeonNeo}</b> (Neo) vs <b>{campeonEC}</b> (EC)</div>}
+      </div>
+      <div style={{background:C.card,borderRadius:9,padding:"10px 12px",border:`1.5px solid ${compColor}`,display:"flex",flexDirection:"column",gap:8}}>
+        <div style={{display:"flex",gap:6,alignItems:"center"}}>
+          <input value={local.equipoA} onChange={e=>setLocal({...local,equipoA:e.target.value})} placeholder="Campeón Neo League"
+            style={{flex:1,padding:"7px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:12,fontFamily:"'DM Sans',sans-serif"}}/>
+          <input type="number" value={local.golesA} onChange={e=>setLocal({...local,golesA:e.target.value})} placeholder="0"
+            style={{width:48,padding:"7px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:13,fontWeight:800,textAlign:"center",fontFamily:"monospace"}}/>
+        </div>
+        <div style={{textAlign:"center",fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>VS</div>
+        <div style={{display:"flex",gap:6,alignItems:"center"}}>
+          <input value={local.equipoB} onChange={e=>setLocal({...local,equipoB:e.target.value})} placeholder="Campeón Europe Championship"
+            style={{flex:1,padding:"7px 10px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:12,fontFamily:"'DM Sans',sans-serif"}}/>
+          <input type="number" value={local.golesB} onChange={e=>setLocal({...local,golesB:e.target.value})} placeholder="0"
+            style={{width:48,padding:"7px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:13,fontWeight:800,textAlign:"center",fontFamily:"monospace"}}/>
+        </div>
+        <button onClick={save} disabled={saving}
+          style={{padding:"8px",borderRadius:8,background:compColor,color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:saving?0.6:1}}>
+          {saving?"Guardando…":"💾 Guardar resultado"}
+        </button>
+        {local.jugado&&<div style={{fontSize:10,color:"#27ae60",fontFamily:"'DM Sans',sans-serif",textAlign:"center"}}>
+          🏆 {(Number(local.golesA)>Number(local.golesB))?local.equipoA:(Number(local.golesB)>Number(local.golesA))?local.equipoB:"Empate"}
+        </div>}
+      </div>
+    </div>
+  );
+}
+
 // ─── COMPETENCIA: GRUPOS Y TABLA (genérico, editable por temporada) ──────────
-function CompetenciaGruposSetup({compId,compColor,allTeams,setAiMsg}){
+function CompetenciaGruposSetup({compId,compColor,formato,allTeams,setAiMsg}){
   const[data,setData]=useState(null); // {grupos:[{nombre,equipos:[...],tabla:[...]}]}
   const[local,setLocal]=useState([]); // working copy
   const[saving,setSaving]=useState(false);
@@ -3752,10 +3827,20 @@ function CompetenciaGruposSetup({compId,compColor,allTeams,setAiMsg}){
       const all=snap.exists()?snap.data():{};
       const d=all[compId]||{grupos:[]};
       setData(d);
-      setLocal(d.grupos||[]);
+      if(formato==="liga"){
+        const eqNames=eligibles.map(t=>t.teamName);
+        const existing=(d.grupos||[])[0];
+        const tabla=eqNames.map(eq=>{
+          const found=(existing?.tabla||[]).find(r=>r.equipo===eq);
+          return found||{equipo:eq,pj:0,pg:0,pe:0,pp:0,gf:0,gc:0,pts:0};
+        });
+        setLocal([{nombre:"Tabla General",equipos:eqNames,tabla}]);
+      }else{
+        setLocal(d.grupos||[]);
+      }
     });
     return unsub;
-  },[compId]);
+  },[compId,formato,eligibles.map(t=>t.teamName).join(",")]);
 
   const saveAll=async(grupos)=>{
     setSaving(true);
@@ -3875,25 +3960,34 @@ function CompetenciaGruposSetup({compId,compColor,allTeams,setAiMsg}){
         <div key={gi} style={{background:C.card,borderRadius:9,padding:"10px 12px",border:`1.5px solid ${(g.tabla||[]).length>0?compColor:C.border}`}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
             <span style={{fontSize:11,fontWeight:800,color:compColor,fontFamily:"'DM Sans',sans-serif"}}>{g.nombre}</span>
-            <button onClick={()=>removeGrupo(gi)} style={{background:"transparent",border:"none",color:"#c0392b",fontSize:11,cursor:"pointer"}}>🗑️</button>
+            {formato!=="liga"&&<button onClick={()=>removeGrupo(gi)} style={{background:"transparent",border:"none",color:"#c0392b",fontSize:11,cursor:"pointer"}}>🗑️</button>}
           </div>
-          {/* Selector de equipos */}
-          <div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:8}}>
-            {eligibles.map(t=>{
-              const name=t.teamName;
-              const active=(g.equipos||[]).includes(name);
-              return(
-                <button key={t.uid||t.id} onClick={()=>toggleEquipoEnGrupo(gi,name)}
-                  style={{padding:"4px 9px",borderRadius:20,border:`1.5px solid ${active?compColor:C.borderDark}`,background:active?compColor+"22":C.inputBg,color:active?compColor:C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
-                  {name}
-                </button>
-              );
-            })}
-          </div>
-          <button onClick={()=>saveGrupo(gi)} disabled={saving}
-            style={{width:"100%",padding:"6px",borderRadius:7,background:compColor,color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:saving?0.6:1,marginBottom:8}}>
-            {saving?"Guardando…":`Guardar ${g.nombre} (${(g.equipos||[]).length} equipos)`}
-          </button>
+          {/* Selector de equipos (solo formato grupos) */}
+          {formato!=="liga"&&(
+            <div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:8}}>
+              {eligibles.map(t=>{
+                const name=t.teamName;
+                const active=(g.equipos||[]).includes(name);
+                return(
+                  <button key={t.uid||t.id} onClick={()=>toggleEquipoEnGrupo(gi,name)}
+                    style={{padding:"4px 9px",borderRadius:20,border:`1.5px solid ${active?compColor:C.borderDark}`,background:active?compColor+"22":C.inputBg,color:active?compColor:C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                    {name}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          {formato!=="liga"&&(
+            <button onClick={()=>saveGrupo(gi)} disabled={saving}
+              style={{width:"100%",padding:"6px",borderRadius:7,background:compColor,color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:saving?0.6:1,marginBottom:8}}>
+              {saving?"Guardando…":`Guardar ${g.nombre} (${(g.equipos||[]).length} equipos)`}
+            </button>
+          )}
+          {formato==="liga"&&(
+            <div style={{fontSize:9,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginBottom:8}}>
+              {g.equipos.length} equipos inscritos (se actualiza automáticamente desde "Equipos")
+            </div>
+          )}
           {/* Tabla actual */}
           {(g.tabla||[]).length>0&&(
             <div style={{overflowX:"auto",marginBottom:8}}>
@@ -3965,10 +4059,12 @@ function CompetenciaGruposSetup({compId,compColor,allTeams,setAiMsg}){
           )}
         </div>
       ))}
-      <button onClick={addGrupo}
-        style={{padding:"8px",borderRadius:8,background:"transparent",border:`1.5px dashed ${compColor}`,color:compColor,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
-        + Agregar grupo
-      </button>
+      {formato!=="liga"&&(
+        <button onClick={addGrupo}
+          style={{padding:"8px",borderRadius:8,background:"transparent",border:`1.5px dashed ${compColor}`,color:compColor,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+          + Agregar grupo
+        </button>
+      )}
     </div>
   );
 }
@@ -4056,7 +4152,7 @@ function CompetenciasModal({allTeams,onClose}){
                     style={{padding:"4px 8px",borderRadius:7,background:"transparent",border:`1px solid ${C.borderDark}`,color:C.textMid,fontSize:11,cursor:"pointer"}}>
                     ✏️
                   </button>
-                  <button onClick={()=>setSelected(comp.id)}
+                  <button onClick={()=>{setSelected(comp.id);setSubTab(comp.formato==="final"?"grupos":"equipos");}}
                     style={{padding:"6px 14px",borderRadius:8,background:comp.color,color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
                     Gestionar →
                   </button>
@@ -4066,7 +4162,7 @@ function CompetenciasModal({allTeams,onClose}){
           ))}
 
           {/* Sub-tabs: Equipos / Grupos y Tabla */}
-          {selected&&(
+          {selected&&activeComp.formato!=="final"&&(
             <div style={{display:"flex",gap:6,marginBottom:6}}>
               <button onClick={()=>setSubTab("equipos")}
                 style={{flex:1,padding:"7px",borderRadius:8,border:`1.5px solid ${subTab==="equipos"?activeComp.color:C.border}`,background:subTab==="equipos"?activeComp.color:C.inputBg,color:subTab==="equipos"?"#fff":C.textMid,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
@@ -4096,7 +4192,9 @@ function CompetenciasModal({allTeams,onClose}){
 
           {/* Vista: grupos y tabla de clasificación */}
           {selected&&subTab==="grupos"&&(
-            <CompetenciaGruposSetup compId={selected} compColor={activeComp.color} allTeams={allTeams} setAiMsg={setAiMsg}/>
+            activeComp.formato==="final"
+              ?<SuperCopaSetup compColor={activeComp.color} setAiMsg={setAiMsg}/>
+              :<CompetenciaGruposSetup compId={selected} compColor={activeComp.color} formato={activeComp.formato} allTeams={allTeams} setAiMsg={setAiMsg}/>
           )}
         </div>
       </div>
