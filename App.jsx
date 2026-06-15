@@ -3900,6 +3900,17 @@ function MainApp({user,isAdmin,onLogout}){
   };
   const erroresAlineacion=validarAlineacion();
 
+  // Top 10 por overall (titulares + banca) — para el selector de Copa
+  const getCopaTop10=()=>{
+    if(!activeLineup) return [];
+    const getFullPlayer=base=>squad.find(s=>s.name===base?.name)||base||{};
+    const starters11=Object.values(activeLineup.starters||{}).filter(Boolean);
+    const banca=(activeLineup.subs||[]).filter(Boolean);
+    const convocados=[...starters11,...banca];
+    return [...convocados].map(p=>getFullPlayer(p)).filter(p=>p.overall&&p.name)
+      .sort((a,b)=>(b.overall||0)-(a.overall||0)).slice(0,10);
+  };
+
   const updateActive=async fn=>{
     const targetId=activeLineup?.id||activeLineupId;
     const nl=lineups.map(l=>l.id===targetId?{...l,...fn(l)}:l);
@@ -4295,6 +4306,41 @@ function MainApp({user,isAdmin,onLogout}){
                 </button>
               </div>
             )}
+            {/* Selector Top 10 — solo en Copa */}
+            {activeLineup?.name==="Copa"&&!isSel&&(()=>{
+              const top10=getCopaTop10();
+              const elegidos=activeLineup.copaTop2||[];
+              return(
+                <div style={{marginBottom:9,padding:10,borderRadius:9,border:`1px solid ${C.borderDark}`,background:C.inputBg}}>
+                  <div style={{fontSize:11,fontWeight:800,color:C.text,marginBottom:6,fontFamily:"'DM Sans',sans-serif"}}>🏅 Elige 2 del Top 10 de tu plantilla</div>
+                  {top10.length===0?(
+                    <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Completa el 11 titular y la banca para ver el Top 10.</div>
+                  ):(
+                    <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                      {top10.map(p=>{
+                        const checked=elegidos.includes(p.name);
+                        return(
+                          <label key={p.name} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 8px",borderRadius:7,background:checked?TA.accentLight:"transparent",cursor:"pointer"}}>
+                            <input type="checkbox" checked={checked} onChange={()=>{
+                              let next=[...elegidos];
+                              if(checked) next=next.filter(n=>n!==p.name);
+                              else{
+                                if(next.length>=2) next=next.slice(1);
+                                next=[...next,p.name];
+                              }
+                              updateActive(()=>({copaTop2:next}));
+                            }}/>
+                            <span style={{fontSize:11,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif",flex:1}}>{p.name}</span>
+                            <span style={{fontSize:10,fontWeight:800,color:"#2980b9",fontFamily:"monospace"}}>{p.overall}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <div style={{fontSize:9,color:C.textFaint,marginTop:6,fontFamily:"'DM Sans',sans-serif"}}>Elegidos: {elegidos.length}/2</div>
+                </div>
+              );
+            })()}
             <div style={{fontSize:10,color:C.textLight,marginBottom:9,fontFamily:"'DM Sans',sans-serif"}}>Todas usan los mismos {squad.length} jugadores de la plantilla.</div>
             <div style={{display:"flex",gap:8}}>
               <input value={newLineupName} onChange={e=>setNewLineupName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addLineup()} placeholder="Nueva alineación…"
