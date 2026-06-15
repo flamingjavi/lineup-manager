@@ -183,7 +183,7 @@ function AuthScreen({onAuth}){
         const cred=await createUserWithEmailAndPassword(auth,email,password);
         await updateProfile(cred.user,{displayName:teamName.trim()});
         // Save color to Firestore teams doc
-        await setDoc(doc(db,"teams",cred.user.uid),{uid:cred.user.uid,email:cred.user.email,teamName:teamName.trim(),teamColor,squad:[],lineups:[{id:"a",name:"Alineación A",formation:"4-3-3",starters:{},subs:Array(7).fill(null)}],createdAt:new Date().toISOString()});
+        await setDoc(doc(db,"teams",cred.user.uid),{uid:cred.user.uid,email:cred.user.email,teamName:teamName.trim(),teamColor,squad:[],lineups:[{id:"a",name:"Liga",formation:"4-3-3",starters:{},subs:Array(7).fill(null)},{id:"b",name:"Copa",formation:"4-3-3",starters:{},subs:Array(7).fill(null)}],createdAt:new Date().toISOString()});
         onAuth(cred.user);
       }else{
         const cred=await signInWithEmailAndPassword(auth,email,password);
@@ -2973,6 +2973,7 @@ function ManualResultadoForm({grupos,allSelPlayers,fuzzyMatch,mundial,saveM,setA
   const[goleadores,setGoleadores]=useState([{nombre:"",equipo:"",goles:1}]);
   const[asistencias,setAsistencias]=useState([{nombre:"",equipo:"",asistencias:1}]);
   const[saving,setSaving]=useState(false);
+  const[editingMatchIdx,setEditingMatchIdx]=useState(null); // índice en mundial.partidos del partido que se está editando
   const grupoData=grupos.find(g=>g.nombre===`GRUPO ${grupoLetra}`);
   const sels=grupoData?.selecciones||[];
 
@@ -2980,43 +2981,97 @@ function ManualResultadoForm({grupos,allSelPlayers,fuzzyMatch,mundial,saveM,setA
   const jKey=jornada.replace(/ /g,"_");
   const fixturePartidos=mundial?.fixture?.[grupoLetra]?.[jKey]||[];
   const hasFixture=fixturePartidos.length>0&&fixturePartidos.some(p=>p.local&&p.visitante);
+
+  // Busca si un partido del fixture ya tiene resultado guardado
+  const findSavedMatch=(localN,visN)=>{
+    const pts=mundial?.partidos||[];
+    for(let i=pts.length-1;i>=0;i--){
+      const p=pts[i];
+      if(p.jornada===jornada&&p.grupo===`GRUPO ${grupoLetra}`&&p.local?.nombre===localN&&p.visitante?.nombre===visN) return{idx:i,partido:p};
+    }
+    return null;
+  };
+
+  const cargarPartido=(localN,visN)=>{
+    setLocalNombre(localN);setVisitanteNombre(visN);
+    const found=findSavedMatch(localN,visN);
+    if(found){
+      setEditingMatchIdx(found.idx);
+      setGolesLocal(String(found.partido.local?.goles??""));
+      setGolesVisitante(String(found.partido.visitante?.goles??""));
+      setGoleadores(found.partido.goleadores?.length?found.partido.goleadores.map(g=>({...g})):[{nombre:"",equipo:"",goles:1}]);
+      setAsistencias(found.partido.asistencias?.length?found.partido.asistencias.map(a=>({...a})):[{nombre:"",equipo:"",asistencias:1}]);
+    }else{
+      setEditingMatchIdx(null);
+      setGolesLocal("");setGolesVisitante("");
+      setGoleadores([{nombre:"",equipo:"",goles:1}]);setAsistencias([{nombre:"",equipo:"",asistencias:1}]);
+    }
+  };
+
   const save=async()=>{
     if(!localNombre||!visitanteNombre||golesLocal===""||golesVisitante==="") return;
     setSaving(true);
     const existing=mundial||{};
     const stats={...(existing.stats||{})};
     const pts=[...(existing.partidos||[])];
+    let gs=[...(existing.grupos||[])];
     const gl=Number(golesLocal),gv=Number(golesVisitante);
-    pts.push({local:{nombre:localNombre,goles:gl},visitante:{nombre:visitanteNombre,goles:gv},jornada,grupo:`GRUPO ${grupoLetra}`,fecha:new Date().toISOString()});
-    const mergePlayer=(arr,field)=>{arr.filter(p=>p.nombre.trim()).forEach(p=>{
+
+    const mergePlayer=(arr,field,sign)=>{arr.filter(p=>p.nombre.trim()).forEach(p=>{
       const matched=fuzzyMatch(p.nombre,allSelPlayers);
       const key=matched?`${matched.selId}_${matched.name}`:p.nombre;
       if(!stats[key]) stats[key]={name:matched?.name||p.nombre,selName:matched?.selName||p.equipo,goles:0,asistencias:0,ratings:[],partidos:0};
-      if(field==="goles") stats[key].goles+=Number(p.goles)||1;
-      if(field==="asistencias") stats[key].asistencias+=Number(p.asistencias)||1;
+      const cantidad=(field==="goles"?Number(p.goles):Number(p.asistencias))||1;
+      stats[key][field]+=sign*cantidad;
+      if(stats[key][field]<0) stats[key][field]=0;
     });};
-    mergePlayer(goleadores,"goles");mergePlayer(asistencias,"asistencias");
-    const gs=(existing.grupos||[]).map(g=>{
-      if(g.nombre!==`GRUPO ${grupoLetra}`) return g;
-      const tabla=[...(g.tabla||sels.map(s=>({sel:s,pj:0,pg:0,pe:0,pp:0,gf:0,gc:0,pts:0})))];
-      const upd=(sel,gf,gc)=>{const idx=tabla.findIndex(r=>r.sel===sel);if(idx===-1)return;tabla[idx]={...tabla[idx],pj:tabla[idx].pj+1,gf:tabla[idx].gf+gf,gc:tabla[idx].gc+gc,pg:tabla[idx].pg+(gf>gc?1:0),pe:tabla[idx].pe+(gf===gc?1:0),pp:tabla[idx].pp+(gf<gc?1:0),pts:tabla[idx].pts+(gf>gc?3:gf===gc?1:0)};};
-      upd(localNombre,gl,gv);upd(visitanteNombre,gv,gl);
-      return{...g,tabla};
-    });
+
+    const updTabla=(sel,gf,gc,sign)=>{
+      gs=gs.map(g=>{
+        if(g.nombre!==`GRUPO ${grupoLetra}`) return g;
+        const tabla=[...(g.tabla||sels.map(s=>({sel:s,pj:0,pg:0,pe:0,pp:0,gf:0,gc:0,pts:0})))];
+        const idx=tabla.findIndex(r=>r.sel===sel);if(idx===-1)return g;
+        const row={...tabla[idx]};
+        row.pj+=sign*1;row.gf+=sign*gf;row.gc+=sign*gc;
+        row.pg+=sign*(gf>gc?1:0);row.pe+=sign*(gf===gc?1:0);row.pp+=sign*(gf<gc?1:0);
+        row.pts+=sign*(gf>gc?3:gf===gc?1:0);
+        tabla[idx]=row;
+        return{...g,tabla};
+      });
+    };
+
+    if(editingMatchIdx!==null){
+      // Revertir contribución del partido anterior
+      const old=pts[editingMatchIdx];
+      mergePlayer(old.goleadores||[],"goles",-1);
+      mergePlayer(old.asistencias||[],"asistencias",-1);
+      updTabla(old.local?.nombre,old.local?.goles||0,old.visitante?.goles||0,-1);
+      updTabla(old.visitante?.nombre,old.visitante?.goles||0,old.local?.goles||0,-1);
+      pts[editingMatchIdx]={local:{nombre:localNombre,goles:gl},visitante:{nombre:visitanteNombre,goles:gv},jornada,grupo:`GRUPO ${grupoLetra}`,fecha:old.fecha||new Date().toISOString(),goleadores,asistencias};
+    }else{
+      pts.push({local:{nombre:localNombre,goles:gl},visitante:{nombre:visitanteNombre,goles:gv},jornada,grupo:`GRUPO ${grupoLetra}`,fecha:new Date().toISOString(),goleadores,asistencias});
+    }
+
+    // Aplicar contribución nueva
+    mergePlayer(goleadores,"goles",1);
+    mergePlayer(asistencias,"asistencias",1);
+    updTabla(localNombre,gl,gv,1);
+    updTabla(visitanteNombre,gv,gl,1);
+
     await saveM({grupos:gs,partidos:pts,stats});
     setAiMsg(`✅ ${localNombre} ${gl} - ${gv} ${visitanteNombre}`);
-    setGolesLocal("");setGolesVisitante("");setLocalNombre("");setVisitanteNombre("");setGoleadores([{nombre:"",equipo:"",goles:1}]);setAsistencias([{nombre:"",equipo:"",asistencias:1}]);
+    setGolesLocal("");setGolesVisitante("");setLocalNombre("");setVisitanteNombre("");setGoleadores([{nombre:"",equipo:"",goles:1}]);setAsistencias([{nombre:"",equipo:"",asistencias:1}]);setEditingMatchIdx(null);
     setSaving(false);
   };
   const inp=(val,onChange,placeholder)=>(<input value={val} onChange={e=>onChange(e.target.value)} placeholder={placeholder} style={{flex:1,padding:"6px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif",outline:"none"}}/>);
   return(
     <div style={{display:"flex",flexDirection:"column",gap:8}}>
       <div style={{display:"flex",gap:6}}>
-        <select value={jornada} onChange={e=>{setJornada(e.target.value);setPartidoIdx(0);}} style={{flex:1,padding:"7px 8px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.card,color:jornada?C.text:C.textFaint,fontSize:11,fontFamily:"'DM Sans',sans-serif",outline:"none"}}>
+        <select value={jornada} onChange={e=>{setJornada(e.target.value);setLocalNombre("");setVisitanteNombre("");setEditingMatchIdx(null);}} style={{flex:1,padding:"7px 8px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.card,color:jornada?C.text:C.textFaint,fontSize:11,fontFamily:"'DM Sans',sans-serif",outline:"none"}}>
           <option value="">Jornada</option>
           {JORNADAS.map(j=><option key={j} value={j}>{j}</option>)}
         </select>
-        <select value={grupoLetra} onChange={e=>{setGrupoLetra(e.target.value);setPartidoIdx(0);}} style={{flex:1,padding:"7px 8px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.card,color:grupoLetra?C.text:C.textFaint,fontSize:11,fontFamily:"'DM Sans',sans-serif",outline:"none"}}>
+        <select value={grupoLetra} onChange={e=>{setGrupoLetra(e.target.value);setLocalNombre("");setVisitanteNombre("");setEditingMatchIdx(null);}} style={{flex:1,padding:"7px 8px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.card,color:grupoLetra?C.text:C.textFaint,fontSize:11,fontFamily:"'DM Sans',sans-serif",outline:"none"}}>
           <option value="">Grupo</option>
           {GRUPOS_FIJOS.filter(g=>grupos.some(gr=>gr.nombre===`GRUPO ${g}`&&(gr.selecciones||[]).length===4)).map(g=><option key={g} value={g}>Grupo {g}</option>)}
         </select>
@@ -3026,12 +3081,24 @@ function ManualResultadoForm({grupos,allSelPlayers,fuzzyMatch,mundial,saveM,setA
           // Show saved fixture matchups as buttons
           <div style={{display:"flex",flexDirection:"column",gap:5}}>
             <div style={{fontSize:9,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",textAlign:"center"}}>Elige el partido:</div>
-            {fixturePartidos.filter(p=>p.local&&p.visitante).map((p,i)=>(
-              <button key={i} onClick={()=>{setLocalNombre(p.local);setVisitanteNombre(p.visitante);}}
-                style={{padding:"8px 10px",borderRadius:8,border:`1.5px solid ${localNombre===p.local&&visitanteNombre===p.visitante?"#1a3a5c":C.borderDark}`,background:localNombre===p.local&&visitanteNombre===p.visitante?"#1a3a5c":C.card,color:localNombre===p.local&&visitanteNombre===p.visitante?"#fff":C.text,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textAlign:"center"}}>
-                {p.local} vs {p.visitante}
-              </button>
-            ))}
+            {fixturePartidos.filter(p=>p.local&&p.visitante).map((p,i)=>{
+              const saved=findSavedMatch(p.local,p.visitante);
+              const isActive=localNombre===p.local&&visitanteNombre===p.visitante;
+              return(
+                <button key={i} onClick={()=>cargarPartido(p.local,p.visitante)}
+                  style={{padding:"8px 10px",borderRadius:8,border:`1.5px solid ${isActive?"#1a3a5c":C.borderDark}`,background:isActive?"#1a3a5c":C.card,color:isActive?"#fff":C.text,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textAlign:"center",display:"flex",alignItems:"center",justifyContent:"space-between",gap:6}}>
+                  <span style={{flex:1}}>{p.local} vs {p.visitante}</span>
+                  {saved?(
+                    <span style={{display:"flex",alignItems:"center",gap:5,fontSize:10}}>
+                      <span style={{fontFamily:"monospace",fontWeight:800,color:isActive?"#fff":"#27ae60"}}>✅ {saved.partido.local?.goles}-{saved.partido.visitante?.goles}</span>
+                      <span style={{fontSize:9,opacity:0.85}}>✏️ Editar</span>
+                    </span>
+                  ):(
+                    <span style={{fontSize:9,color:isActive?"#fff":C.textFaint,opacity:0.8}}>Sin jugar</span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         ):(
           // Manual fallback if no fixture configured
@@ -3051,6 +3118,11 @@ function ManualResultadoForm({grupos,allSelPlayers,fuzzyMatch,mundial,saveM,setA
         )
       )}
       {localNombre&&visitanteNombre&&(<>
+        {editingMatchIdx!==null&&(
+          <div style={{background:"#fff3cd",border:"1px solid #f0ad4e",borderRadius:8,padding:"6px 10px",fontSize:10,fontWeight:700,color:"#856404",fontFamily:"'DM Sans',sans-serif",textAlign:"center"}}>
+            ✏️ Editando partido ya jugado — al guardar se recalculará la tabla y las estadísticas
+          </div>
+        )}
         <div style={{background:"#7c3aed11",borderRadius:9,padding:"8px 12px",display:"flex",alignItems:"center",gap:8}}>
           <span style={{flex:1,fontSize:11,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif",textAlign:"center"}}>{localNombre}</span>
           <input type="number" min="0" value={golesLocal} onChange={e=>setGolesLocal(e.target.value)} placeholder="0" style={{width:40,padding:"6px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:14,fontFamily:"monospace",outline:"none",textAlign:"center",fontWeight:800}}/>
@@ -3075,7 +3147,7 @@ function ManualResultadoForm({grupos,allSelPlayers,fuzzyMatch,mundial,saveM,setA
         </div>))}
 
         <button onClick={save} disabled={saving||golesLocal===""||golesVisitante===""} style={{padding:"10px",borderRadius:9,background:"#1a3a5c",color:"#fff",border:"none",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:saving?0.6:1}}>
-          {saving?"Guardando…":"✅ Guardar Resultado"}
+          {saving?"Guardando…":editingMatchIdx!==null?"✏️ Actualizar Resultado":"✅ Guardar Resultado"}
         </button>
       </>)}
     </div>
@@ -3092,7 +3164,6 @@ function MundialModal({onClose,user,isAdmin,allSels,pool,teamData,initialTab="mi
   const[avisoText,setAvisoText]=useState("");
   const[avisoMin,setAvisoMin]=useState("");
   const[twitchChannel,setTwitchChannel]=useState("");
-  const[showTwitch,setShowTwitch]=useState(false);
   const fileRef=useRef(null);
 
   useEffect(()=>{
@@ -3258,18 +3329,8 @@ function MundialModal({onClose,user,isAdmin,allSels,pool,teamData,initialTab="mi
         {/* Header */}
         <div style={{padding:"12px 16px",background:"linear-gradient(135deg,#4c1d95,#7c3aed)",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
           <span style={{fontSize:15,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>🌍 MUNDIAL DE SELECCIONES</span>
-          {mundial?.twitchChannel&&<button onClick={()=>setShowTwitch(v=>!v)}
-            style={{marginLeft:"auto",padding:"4px 10px",borderRadius:20,background:showTwitch?"#e74c3c":"rgba(255,255,255,0.15)",border:"none",color:"#fff",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",display:"flex",alignItems:"center",gap:4}}>
-            🔴 {showTwitch?"Cerrar":"En Vivo"}
-          </button>}
-          <button onClick={onClose} style={{marginLeft:mundial?.twitchChannel?"0":"auto",background:"rgba(255,255,255,0.15)",border:"none",borderRadius:"50%",width:28,height:28,color:"#fff",cursor:"pointer",fontSize:15,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+          <button onClick={onClose} style={{marginLeft:"auto",background:"rgba(255,255,255,0.15)",border:"none",borderRadius:"50%",width:28,height:28,color:"#fff",cursor:"pointer",fontSize:15,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
         </div>
-        {/* Aviso banner */}
-        {mundial?.aviso?.activo&&<div style={{padding:"8px 16px",background:"#e74c3c",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
-          <span style={{fontSize:13}}>🔴</span>
-          <span style={{fontSize:12,fontWeight:700,color:"#fff",fontFamily:"'DM Sans',sans-serif",flex:1}}>{mundial.aviso.texto}</span>
-          {mundial.aviso.endsAt&&<CountdownTimer endsAt={mundial.aviso.endsAt}/>}
-        </div>}
         {/* Siguiente partido del usuario */}
         {userSelName&&(nextMatch||groupFinished)&&(
           <div style={{padding:"8px 16px",background:groupFinished?"#1a3a5c":"#7c3aed",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
@@ -3297,17 +3358,6 @@ function MundialModal({onClose,user,isAdmin,allSels,pool,teamData,initialTab="mi
                 </div>
               </>
             )}
-          </div>
-        )}
-        {/* Twitch embed */}
-        {showTwitch&&mundial?.twitchChannel&&(
-          <div style={{flexShrink:0,background:"#000",height:220}}>
-            <iframe
-              src={`https://player.twitch.tv/?channel=${mundial.twitchChannel}&parent=${window.location.hostname}`}
-              height="220" width="100%" allowFullScreen frameBorder="0"
-              allow="autoplay; fullscreen"
-              style={{display:"block"}}
-            />
           </div>
         )}
 
@@ -3522,25 +3572,6 @@ function MundialModal({onClose,user,isAdmin,allSels,pool,teamData,initialTab="mi
                 📊 {grupos.length} grupos · {partidos.length} partidos · {stats.length} jugadores con stats
               </div>
 
-              {/* Crear selecciones faltantes */}
-              <button onClick={async()=>{
-                const toCreate=[];
-                grupos.forEach(g=>{
-                  (g.selecciones||[]).forEach(selName=>{
-                    const id=selName.trim().toUpperCase().replace(/\s+/g,"_");
-                    const exists=allSels.some(s=>s.id===id||s.country===selName);
-                    if(!exists) toCreate.push({id,country:selName});
-                  });
-                });
-                if(toCreate.length===0){setAiMsg("✅ Todas las selecciones ya existen");return;}
-                for(const s of toCreate){
-                  await setDoc(doc(db,"selecciones",s.id),{country:s.country,formation:"4-3-3",starters:{},subs:Array(7).fill(null),image:"",code:"",squad:[]},{merge:true});
-                }
-                setAiMsg(`✅ ${toCreate.length} selecciones creadas: ${toCreate.map(s=>s.country).join(", ")}`);
-              }}
-                style={{padding:"10px",borderRadius:10,background:"#ebf5fb",color:"#2980b9",border:"1px solid #2980b9",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
-                🏳️ Crear selecciones faltantes del Mundial
-              </button>
             </div>
           )}
         </div>
@@ -3564,9 +3595,45 @@ function HomeScreen({teamData,onSelect,isAdmin,onOpenMundial}){
   const tc=getTeamColor(teamData?.teamColor||"blue");
   const comps=(teamData?.competencias||[]).map(id=>COMPETENCIAS_AVAILABLE.find(c=>c.id===id)).filter(Boolean);
   const teamInitials=(teamData?.teamName||"?").slice(0,2).toUpperCase();
+  const[mundial,setMundial]=useState(null);
+  const[showTwitch,setShowTwitch]=useState(false);
+  useEffect(()=>{
+    const unsub=onSnapshot(doc(db,"mundial","data"),snap=>{
+      if(snap.exists()) setMundial(snap.data());
+      else setMundial(null);
+    });
+    return unsub;
+  },[]);
 
   return(
     <div style={{minHeight:"100vh",background:C.bg,display:"flex",flexDirection:"column"}}>
+
+      {/* Aviso banner del Mundial */}
+      {mundial?.aviso?.activo&&<div style={{padding:"8px 16px",background:"#e74c3c",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+        <span style={{fontSize:13}}>🔴</span>
+        <span style={{fontSize:12,fontWeight:700,color:"#fff",fontFamily:"'DM Sans',sans-serif",flex:1}}>{mundial.aviso.texto}</span>
+        {mundial.aviso.endsAt&&<CountdownTimer endsAt={mundial.aviso.endsAt}/>}
+      </div>}
+
+      {/* En Vivo (Twitch) */}
+      {mundial?.twitchChannel&&(
+        <div style={{flexShrink:0}}>
+          <button onClick={()=>setShowTwitch(v=>!v)}
+            style={{width:"100%",padding:"8px 16px",background:showTwitch?"#e74c3c":"#1a1a2e",border:"none",color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+            🔴 {showTwitch?"Cerrar transmisión":"Ver En Vivo"}
+          </button>
+          {showTwitch&&(
+            <div style={{background:"#000",height:220}}>
+              <iframe
+                src={`https://player.twitch.tv/?channel=${mundial.twitchChannel}&parent=${window.location.hostname}`}
+                height="220" width="100%" allowFullScreen frameBorder="0"
+                allow="autoplay; fullscreen"
+                style={{display:"block"}}
+              />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Hero header */}
       <div style={{background:`linear-gradient(160deg,${tc.dark} 0%,${tc.bg} 100%)`,padding:"32px 20px 24px",display:"flex",flexDirection:"column",alignItems:"center",gap:12,position:"relative",overflow:"hidden"}}>
@@ -4980,7 +5047,7 @@ function MainApp({user,isAdmin,onLogout}){
                 const name=document.getElementById("newTeamNameAdmin").value.trim();
                 if(!name) return;
                 const id=`team_${Date.now()}`;
-                await setDoc(doc(db,"teams",id),{uid:"",email:"",teamName:name,squad:[],lineups:[{id:"a",name:"Alineación A",formation:"4-3-3",starters:{},subs:Array(7).fill(null)}],createdAt:new Date().toISOString()});
+                await setDoc(doc(db,"teams",id),{uid:"",email:"",teamName:name,squad:[],lineups:[{id:"a",name:"Liga",formation:"4-3-3",starters:{},subs:Array(7).fill(null)},{id:"b",name:"Copa",formation:"4-3-3",starters:{},subs:Array(7).fill(null)}],createdAt:new Date().toISOString()});
                 setShowCreateTeam(false);
                 alert(`✅ Equipo "${name}" creado`);
               }} style={{width:"100%",padding:"13px",background:C.accent,color:"#fff",border:"none",borderRadius:11,fontSize:15,fontWeight:800,cursor:"pointer",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:2}}>
@@ -5431,7 +5498,7 @@ function TeamSelectionScreen({user,onDone}){
     if(!newTeamName.trim()){setError("Escribe el nombre de tu equipo.");return;}
     setCreating(true);
     const ref=doc(db,"teams",user.uid);
-    await setDoc(ref,{uid:user.uid,email:user.email,teamName:newTeamName.trim(),teamColor:newTeamColor,squad:[],lineups:[{id:"a",name:"Alineación A",formation:"4-3-3",starters:{},subs:Array(7).fill(null)}],createdAt:new Date().toISOString()});
+    await setDoc(ref,{uid:user.uid,email:user.email,teamName:newTeamName.trim(),teamColor:newTeamColor,squad:[],lineups:[{id:"a",name:"Liga",formation:"4-3-3",starters:{},subs:Array(7).fill(null)},{id:"b",name:"Copa",formation:"4-3-3",starters:{},subs:Array(7).fill(null)}],createdAt:new Date().toISOString()});
     await updateProfile(user,{displayName:newTeamName.trim()});
     onDone();
   };
