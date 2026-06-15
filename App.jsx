@@ -799,9 +799,9 @@ function AdminTeamEditor({teamData,pool,allTeamsRef}){
       const enTitular=starters11.filter(p=>top10Names.includes(p.name));
       const cumpleTop10=enTitular.length<=2;
       let detalleTop10=`${enTitular.length}/2 máx`;
-      if(!cumpleTop10){
-        const sobran=enTitular.slice(2).map(p=>apellido(getFullPlayer(p)));
-        detalleTop10+=` — sobran: ${sobran.join(", ")}`;
+      if(enTitular.length>0){
+        const nombres=enTitular.map(p=>apellido(getFullPlayer(p)));
+        detalleTop10+=` — ${nombres.join(", ")}`;
       }
       reqs.push({
         texto:"Jugadores del Top 10 de su plantilla en el 11 titular (máx. 2)",
@@ -3982,9 +3982,9 @@ function MainApp({user,isAdmin,onLogout}){
       const enTitular=starters11.filter(p=>top10Names.includes(p.name));
       const cumpleTop10=enTitular.length<=2;
       let detalleTop10=`${enTitular.length}/2 máx`;
-      if(!cumpleTop10){
-        const sobran=enTitular.slice(2).map(p=>apellido(getFullPlayer(p)));
-        detalleTop10+=` — sobran: ${sobran.join(", ")}`;
+      if(enTitular.length>0){
+        const nombres=enTitular.map(p=>apellido(getFullPlayer(p)));
+        detalleTop10+=` — ${nombres.join(", ")}`;
       }
       reqs.push({
         texto:"Jugadores del Top 10 de tu plantilla en el 11 titular (máx. 2)",
