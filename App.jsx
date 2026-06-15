@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { auth, db } from "./firebase";
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile } from "firebase/auth";
-import { doc, getDoc, setDoc, updateDoc, onSnapshot, collection, getDocs, deleteDoc, addDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc, onSnapshot, collection, getDocs, deleteDoc, addDoc, serverTimestamp, deleteField } from "firebase/firestore";
 
 // Expose db for admin import scripts
 if (typeof window !== 'undefined') window.__app_db = db;
@@ -4343,6 +4343,22 @@ function MainApp({user,isAdmin,onLogout}){
                           alert(`✅ ${count} equipos actualizados.`);
                         }} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:"#9b59b6"}}>
                           ⚽ <span>Liga/Copa todos</span>
+                        </div>
+                        <div onClick={async()=>{
+                          setShowAdminMenu(false);
+                          if(!window.confirm(`⚠️ Esto borrará TODOS los jugadores, alineaciones, presupuestos, mercados y la pool global de los ${allTeams.length} equipos.\n\nEsta acción NO se puede deshacer. ¿Continuar?`)) return;
+                          if(!window.confirm("Última confirmación: ¿BORRAR TODO de verdad?")) return;
+                          let count=0;
+                          for(const t of allTeams){
+                            const ref=doc(db,"teams",t.id||t.uid);
+                            const lineups=(t.lineups||[]).map(l=>({...l,starters:{},subs:Array(7).fill(null),code:""}));
+                            await updateDoc(ref,{squad:[],lineups,presupuesto:"",mercado:deleteField(),pendingTransfers:deleteField()});
+                            count++;
+                          }
+                          await setDoc(doc(db,"pool","players"),{});
+                          alert(`✅ ${count} equipos limpiados y pool global vaciada.`);
+                        }} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:700,color:"#c0392b"}}>
+                          🧨 <span>Limpiar TODO</span>
                         </div>
                       </div>
                     )}
