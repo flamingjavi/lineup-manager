@@ -3636,6 +3636,26 @@ function MundialModal({onClose,user,isAdmin,allSels,pool,teamData,initialTab="mi
 }
 
 // ─── COMPETENCIAS ─────────────────────────────────────────────────────────────
+// ─── HELPERS: Noticias y Head-to-Head ────────────────────────────────────────
+async function addNoticia(texto,icono="📰"){
+  const ref=doc(db,"config","noticias");
+  const snap=await getDoc(ref).catch(()=>null);
+  const current=snap?.exists()?snap.data():{};
+  const lista=current.lista||[];
+  lista.push({texto,icono,fecha:new Date().toISOString()});
+  // Mantener solo las últimas 100
+  await setDoc(ref,{lista:lista.slice(-100)},{merge:true});
+}
+
+async function addH2H({local,golesLocal,visitante,golesVisitante,competencia,jornada}){
+  const ref=doc(db,"config","h2hHistorial");
+  const snap=await getDoc(ref).catch(()=>null);
+  const current=snap?.exists()?snap.data():{};
+  const lista=current.lista||[];
+  lista.push({local,golesLocal,visitante,golesVisitante,competencia,jornada:jornada||"",fecha:new Date().toISOString()});
+  await setDoc(ref,{lista},{merge:true});
+}
+
 const COMPETENCIAS_AVAILABLE=[
   {id:"liga1",    name:"Neo League",           icon:"🏆", color:"#1a3a5c", lineupName:"Liga", formato:"liga"},
   {id:"liga2",    name:"Europe Championship",  icon:"🌍", color:"#27ae60", lineupName:"Liga", formato:"liga"},
@@ -3650,6 +3670,7 @@ function HomeScreen({teamData,onSelect,isAdmin,onOpenMundial}){
   const tc=getTeamColor(teamData?.teamColor||"blue");
   const comps=(teamData?.competencias||[]).map(id=>COMPETENCIAS_AVAILABLE.find(c=>c.id===id)).filter(Boolean);
   const teamInitials=(teamData?.teamName||"?").slice(0,2).toUpperCase();
+  const[showNoticias,setShowNoticias]=useState(false);
 
   return(
     <div style={{minHeight:"100vh",background:C.bg,display:"flex",flexDirection:"column"}}>
@@ -3703,6 +3724,20 @@ function HomeScreen({teamData,onSelect,isAdmin,onOpenMundial}){
 
         <div style={{fontSize:10,fontWeight:700,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.8,marginTop:comps.length>0?8:0,marginBottom:2}}>Más</div>
 
+        {/* Noticias */}
+        <button onClick={()=>setShowNoticias(true)}
+          style={{width:"100%",padding:"16px 18px",borderRadius:16,background:"linear-gradient(135deg,#1a1a2eee,#34345688)",border:"1px solid #555",cursor:"pointer",display:"flex",alignItems:"center",gap:14,boxShadow:"0 4px 24px #00000033",textAlign:"left",position:"relative",overflow:"hidden"}}>
+          <div style={{position:"absolute",right:-10,top:-10,fontSize:60,opacity:0.12,lineHeight:1}}>📰</div>
+          <div style={{width:44,height:44,borderRadius:12,background:"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <span style={{fontSize:22}}>📰</span>
+          </div>
+          <div style={{flex:1,zIndex:1}}>
+            <div style={{fontSize:17,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:0.5}}>Noticias</div>
+            <div style={{fontSize:10,color:"rgba(255,255,255,0.65)",fontFamily:"'DM Sans',sans-serif",marginTop:1}}>Resultados y novedades</div>
+          </div>
+          <span style={{fontSize:18,color:"rgba(255,255,255,0.6)",zIndex:1}}>›</span>
+        </button>
+
         {/* Mundial */}
         <button onClick={onOpenMundial}
           style={{width:"100%",padding:"16px 18px",borderRadius:16,background:"linear-gradient(135deg,#4c1d95ee,#7c3aed88)",border:"1px solid #7c3aed",cursor:"pointer",display:"flex",alignItems:"center",gap:14,boxShadow:"0 4px 24px #7c3aed33",textAlign:"left",position:"relative",overflow:"hidden"}}>
@@ -3731,6 +3766,53 @@ function HomeScreen({teamData,onSelect,isAdmin,onOpenMundial}){
           <span style={{fontSize:18,color:"rgba(255,255,255,0.6)",zIndex:1}}>›</span>
         </button>
 
+      </div>
+      {showNoticias&&<NoticiasModal onClose={()=>setShowNoticias(false)}/>}
+    </div>
+  );
+}
+
+// ─── NOTICIAS ─────────────────────────────────────────────────────────────────
+function NoticiasModal({onClose}){
+  const[noticias,setNoticias]=useState([]);
+  useEffect(()=>{
+    const unsub=onSnapshot(doc(db,"config","noticias"),snap=>{
+      const lista=snap.exists()?(snap.data().lista||[]):[];
+      setNoticias([...lista].reverse()); // más reciente primero
+    });
+    return unsub;
+  },[]);
+
+  const formatFecha=(iso)=>{
+    try{
+      const d=new Date(iso);
+      return d.toLocaleDateString("es-GT",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"});
+    }catch{return "";}
+  };
+
+  return(
+    <div style={{position:"fixed",inset:0,zIndex:200,background:"rgba(0,0,0,0.7)",display:"flex",flexDirection:"column"}}>
+      <div style={{background:C.card,flex:1,display:"flex",flexDirection:"column",maxHeight:"100vh",overflowY:"auto"}}>
+        <div style={{padding:"12px 16px",background:"linear-gradient(135deg,#1a1a2e,#34345b)",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+          <span style={{fontSize:15,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>📰 NOTICIAS</span>
+          <button onClick={onClose} style={{marginLeft:"auto",background:"rgba(255,255,255,0.15)",border:"none",borderRadius:"50%",width:28,height:28,color:"#fff",cursor:"pointer",fontSize:15,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+        </div>
+        <div style={{flex:1,padding:"14px 16px",display:"flex",flexDirection:"column",gap:8,overflowY:"auto"}}>
+          {noticias.length===0&&(
+            <div style={{textAlign:"center",color:C.textFaint,fontSize:12,fontFamily:"'DM Sans',sans-serif",padding:"40px 0"}}>
+              📭 Sin noticias todavía
+            </div>
+          )}
+          {noticias.map((n,i)=>(
+            <div key={i} style={{background:C.cardAlt||C.inputBg,borderRadius:10,padding:"10px 12px",border:`1px solid ${C.border}`,display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:18,flexShrink:0}}>{n.icono||"📰"}</span>
+              <div style={{flex:1}}>
+                <div style={{fontSize:12,color:C.text,fontFamily:"'DM Sans',sans-serif",fontWeight:600,lineHeight:1.4}}>{n.texto}</div>
+                <div style={{fontSize:9,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginTop:3}}>{formatFecha(n.fecha)}</div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -3766,10 +3848,18 @@ function SuperCopaSetup({compColor,setAiMsg}){
     const ref=doc(db,"config","competenciaData");
     const snap=await getDoc(ref).catch(()=>null);
     const current=snap?.exists()?snap.data():{};
+    const eqA=local.equipoA.trim(),eqB=local.equipoB.trim();
+    const gA=Number(local.golesA)||0,gB=Number(local.golesB)||0;
     await setDoc(ref,{...current,supercopa:{partido:{
-      equipoA:local.equipoA.trim(),equipoB:local.equipoB.trim(),
-      golesA:Number(local.golesA)||0,golesB:Number(local.golesB)||0
+      equipoA:eqA,equipoB:eqB,golesA:gA,golesB:gB
     }}},{merge:true});
+    await addH2H({local:eqA,golesLocal:gA,visitante:eqB,golesVisitante:gB,competencia:"SuperCopa"});
+    if(gA!==gB){
+      const campeon=gA>gB?eqA:eqB;
+      await addNoticia(`👑 ${campeon} es el campeón de la SuperCopa (${gA}-${gB})`,"👑");
+    }else{
+      await addNoticia(`👑 SuperCopa terminó en empate ${gA}-${gB} entre ${eqA} y ${eqB}`,"👑");
+    }
     setSaving(false);
     setAiMsg("✅ SuperCopa guardada");
   };
@@ -4070,7 +4160,7 @@ function CompetenciaGruposSetup({compId,compColor,formato,allTeams,setAiMsg}){
 }
 
 // ─── COMPETENCIA: GOLEADORES Y ASISTENCIAS (tabla general por imagen) ────────
-function CompetenciaGoleadoresSetup({compId,compColor,setAiMsg}){
+function CompetenciaGoleadoresSetup({compId,compName,compColor,setAiMsg}){
   const[data,setData]=useState(null); // {goleadores:[{nombre,equipo,goles}], asistencias:[{nombre,equipo,asistencias}]}
   const[uploading,setUploading]=useState(null); // "goleadores" | "asistencias" | null
   const[preview,setPreview]=useState(null); // {tipo, filas:[...]}
@@ -4141,7 +4231,18 @@ function CompetenciaGoleadoresSetup({compId,compColor,setAiMsg}){
 
   const confirmPreview=async()=>{
     if(!preview) return;
+    // Detectar líder anterior (solo para goleadores)
+    let liderAntes=null;
+    if(preview.tipo==="goleadores"){
+      liderAntes=[...(data.goleadores||[])].sort((a,b)=>(b.goles||0)-(a.goles||0))[0]?.nombre||null;
+    }
     await saveTabla(preview.tipo,preview.filas);
+    if(preview.tipo==="goleadores"){
+      const liderDespues=[...preview.filas].sort((a,b)=>(b.goles||0)-(a.goles||0))[0];
+      if(liderDespues&&liderDespues.nombre!==liderAntes){
+        await addNoticia(`${liderDespues.nombre} (${liderDespues.equipo}) es el nuevo goleador de ${compName} con ${liderDespues.goles} goles`,"⚽");
+      }
+    }
     setAiMsg(`✅ Tabla de ${preview.tipo} actualizada`);
     setPreview(null);
   };
@@ -4246,7 +4347,7 @@ function CompetenciaGoleadoresSetup({compId,compColor,setAiMsg}){
 }
 
 // ─── COMPETENCIA: RESULTADO DE PARTIDO (por imagen, actualiza tabla) ─────────
-function CompetenciaResultadoSetup({compId,compColor,formato,setAiMsg}){
+function CompetenciaResultadoSetup({compId,compName,compColor,formato,setAiMsg}){
   const[grupos,setGrupos]=useState([]);
   const[uploading,setUploading]=useState(false);
   const[preview,setPreview]=useState(null); // {local,golesLocal,visitante,golesVisitante}
@@ -4320,6 +4421,10 @@ function CompetenciaResultadoSetup({compId,compColor,formato,setAiMsg}){
       tabla[idx]=row;
       return {...g,tabla};
     };
+    // Líder antes del cambio (en el grupo afectado)
+    const grupoAfectado=grupos.find(g=>(g.equipos||[]).includes(preview.local)||(g.equipos||[]).includes(preview.visitante));
+    const liderAntes=grupoAfectado?[...(grupoAfectado.tabla||[])].sort((a,b)=>b.pts-a.pts)[0]?.equipo:null;
+
     let nuevosGrupos=grupos.map(g=>{
       let ng=g;
       if((g.equipos||[]).includes(preview.local)) ng=updTabla(ng,preview.local,gl,gv);
@@ -4331,6 +4436,23 @@ function CompetenciaResultadoSetup({compId,compColor,formato,setAiMsg}){
     const current=snap?.exists()?snap.data():{};
     const compData=current[compId]||{};
     await setDoc(ref,{...current,[compId]:{...compData,grupos:nuevosGrupos}},{merge:true});
+
+    // Historial H2H (permanente)
+    await addH2H({local:preview.local,golesLocal:gl,visitante:preview.visitante,golesVisitante:gv,competencia:compName});
+
+    // Noticia del resultado
+    const resultadoTxt=gl>gv?`${preview.local} venció ${gl}-${gv} a ${preview.visitante}`
+      :gv>gl?`${preview.visitante} venció ${gv}-${gl} a ${preview.local}`
+      :`${preview.local} y ${preview.visitante} empataron ${gl}-${gv}`;
+    await addNoticia(`${resultadoTxt} en ${compName}`,"⚽");
+
+    // Noticia de cambio de líder
+    const nuevoGrupoAfectado=nuevosGrupos.find(g=>(g.equipos||[]).includes(preview.local)||(g.equipos||[]).includes(preview.visitante));
+    const liderDespues=nuevoGrupoAfectado?[...(nuevoGrupoAfectado.tabla||[])].sort((a,b)=>b.pts-a.pts)[0]?.equipo:null;
+    if(liderDespues&&liderDespues!==liderAntes){
+      await addNoticia(`Nuevo líder de ${compName}: ${liderDespues}`,"👑");
+    }
+
     setAiMsg(`✅ ${preview.local} ${gl} - ${gv} ${preview.visitante} aplicado a la tabla`);
     setPreview(null);
   };
@@ -4630,6 +4752,19 @@ function CompetenciasModal({allTeams,onClose}){
     const histList=histCurrent[compId]||[];
     await setDoc(histRef,{...histCurrent,[compId]:[...histList,{fecha:new Date().toISOString(),...compData}]},{merge:true});
 
+    // Noticia de campeón(es) — líder de cada grupo/tabla
+    const campeones=(compData.grupos||[]).map(g=>{
+      const top=[...(g.tabla||[])].sort((a,b)=>b.pts-a.pts)[0];
+      return top?{grupo:g.nombre,equipo:top.equipo}:null;
+    }).filter(Boolean);
+    if(campeones.length===1){
+      await addNoticia(`🏁 Temporada de ${comp.name} finalizada — Campeón: ${campeones[0].equipo}`,"🏆");
+    }else if(campeones.length>1){
+      await addNoticia(`🏁 Temporada de ${comp.name} finalizada — Campeones por grupo: ${campeones.map(c=>`${c.grupo}: ${c.equipo}`).join(", ")}`,"🏆");
+    }else{
+      await addNoticia(`🏁 Temporada de ${comp.name} finalizada`,"🏁");
+    }
+
     // Resetear tabla/fixture/goleadores/asistencias.
     // Liga (tabla única): mantiene la lista de equipos pero todo en 0.
     // Grupos: se vacían los grupos por completo (se reconfiguran cada temporada).
@@ -4770,12 +4905,12 @@ function CompetenciasModal({allTeams,onClose}){
 
           {/* Vista: goleadores y asistencias */}
           {selected&&subTab==="goleadores"&&(
-            <CompetenciaGoleadoresSetup compId={selected} compColor={activeComp.color} setAiMsg={setAiMsg}/>
+            <CompetenciaGoleadoresSetup compId={selected} compName={activeComp.name} compColor={activeComp.color} setAiMsg={setAiMsg}/>
           )}
 
           {/* Vista: resultado de partido (actualiza tabla) */}
           {selected&&subTab==="resultado"&&(
-            <CompetenciaResultadoSetup compId={selected} compColor={activeComp.color} formato={activeComp.formato} setAiMsg={setAiMsg}/>
+            <CompetenciaResultadoSetup compId={selected} compName={activeComp.name} compColor={activeComp.color} formato={activeComp.formato} setAiMsg={setAiMsg}/>
           )}
 
           {/* Vista: fixture / calendario */}
