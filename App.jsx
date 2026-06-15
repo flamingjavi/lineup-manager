@@ -4348,6 +4348,8 @@ function MainApp({user,isAdmin,onLogout}){
                           setShowAdminMenu(false);
                           if(!window.confirm(`⚠️ Esto borrará TODOS los jugadores, alineaciones, presupuestos, mercados y la pool global de los ${allTeams.length} equipos.\n\nEsta acción NO se puede deshacer. ¿Continuar?`)) return;
                           if(!window.confirm("Última confirmación: ¿BORRAR TODO de verdad?")) return;
+                          const pin=window.prompt("Ingresa el PIN de seguridad:");
+                          if(pin!=="0253"){alert("❌ PIN incorrecto. Acción cancelada.");return;}
                           let count=0;
                           for(const t of allTeams){
                             const ref=doc(db,"teams",t.id||t.uid);
