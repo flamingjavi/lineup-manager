@@ -4232,6 +4232,10 @@ function MainApp({user,isAdmin,onLogout}){
                           current={t.nationalTeam||""}
                           allSels={allSels}
                         />
+                        <input value={t.pais||""} placeholder="País"
+                          onChange={e=>{const v=e.target.value;setAllTeams(prev=>prev.map(x=>(x.uid||x.id)===(t.uid||t.id)?{...x,pais:v}:x));}}
+                          onBlur={async e=>{await updateDoc(doc(db,"teams",t.uid||t.id),{pais:e.target.value});}}
+                          style={{width:70,padding:"4px 7px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:10,fontFamily:"'DM Sans',sans-serif",outline:"none",flexShrink:0}}/>
                         {!isMe?(
                           <>
                             <button onClick={()=>setViewingTeam(isSelected?null:t)}
