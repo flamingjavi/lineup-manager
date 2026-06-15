@@ -3853,6 +3853,53 @@ function MainApp({user,isAdmin,onLogout}){
   const positions=FORMATIONS[activeLineup?.formation]||FORMATIONS["4-3-3"];
   const filled=Object.values(activeLineup?.starters||{}).filter(Boolean).length;
 
+  // ─── Validación de alineación (Liga / Copa) ──────────────────────────────
+  const validarAlineacion=()=>{
+    if(!activeLineup||isSel) return [];
+    const lineupName=activeLineup.name;
+    if(lineupName!=="Liga"&&lineupName!=="Copa") return [];
+    const starters11=Object.values(activeLineup.starters||{}).filter(Boolean);
+    if(starters11.length<11) return []; // aún no completa, no validar
+    const teamPais=(teamData.pais||"").trim().toLowerCase();
+    const getFullPlayer=base=>squad.find(s=>s.name===base?.name)||base||{};
+    const errores=[];
+
+    if(lineupName==="Liga"){
+      const nacionales=starters11.filter(p=>{
+        const full=getFullPlayer(p);
+        return teamPais&&(full.country||"").trim().toLowerCase()===teamPais;
+      });
+      if(nacionales.length<2) errores.push(`Necesita 2 jugadores nacionales (${teamData.pais||"país no configurado"}) — tiene ${nacionales.length}`);
+    }
+
+    if(lineupName==="Copa"){
+      const nacionales=starters11.filter(p=>{
+        const full=getFullPlayer(p);
+        return teamPais&&(full.country||"").trim().toLowerCase()===teamPais;
+      });
+      if(nacionales.length<2) errores.push(`Necesita 2 jugadores nacionales (${teamData.pais||"país no configurado"}) — tiene ${nacionales.length}`);
+
+      const sub20=starters11.filter(p=>{
+        const full=getFullPlayer(p);
+        return full.age&&Number(full.age)<=20;
+      });
+      if(sub20.length<2) errores.push(`Necesita 2 jugadores Sub-20 — tiene ${sub20.length}`);
+
+      // Top 10 por overall, de toda la convocatoria (titulares + banca)
+      const banca=(activeLineup.subs||[]).filter(Boolean);
+      const convocados=[...starters11,...banca];
+      const top10Names=[...convocados].map(p=>getFullPlayer(p)).filter(p=>p.overall).sort((a,b)=>(b.overall||0)-(a.overall||0)).slice(0,10).map(p=>p.name);
+      // Selección manual del equipo (2 elegidos dentro del Top 10)
+      const elegidos=(activeLineup.copaTop2||[]).filter(n=>top10Names.includes(n));
+      const topPlayers=starters11.filter(p=>elegidos.includes(p.name));
+      if(elegidos.length<2) errores.push(`Falta elegir 2 jugadores del Top 10 de tu plantilla (titulares+banca) en la pestaña de Copa`);
+      else if(topPlayers.length<2) errores.push(`Los 2 jugadores elegidos del Top 10 deben estar en el 11 titular — tiene ${topPlayers.length}`);
+    }
+
+    return errores;
+  };
+  const erroresAlineacion=validarAlineacion();
+
   const updateActive=async fn=>{
     const targetId=activeLineup?.id||activeLineupId;
     const nl=lineups.map(l=>l.id===targetId?{...l,...fn(l)}:l);
@@ -4046,6 +4093,16 @@ function MainApp({user,isAdmin,onLogout}){
           </div>
         </div>
       </div>
+
+      {/* ⚠️ Banner de advertencia de alineación */}
+      {erroresAlineacion.length>0&&(
+        <div style={{background:"#fff3cd",borderBottom:"2px solid #f0ad4e",padding:"8px 16px",display:"flex",flexDirection:"column",gap:2}}>
+          <div style={{fontSize:11,fontWeight:800,color:"#856404",fontFamily:"'DM Sans',sans-serif"}}>⚠️ No cumple con:</div>
+          {erroresAlineacion.map((e,i)=>(
+            <div key={i} style={{fontSize:10,color:"#856404",fontFamily:"'DM Sans',sans-serif"}}>• {e}</div>
+          ))}
+        </div>
+      )}
 
       {/* MAINTENANCE STRIP - admin only */}
       {isAdmin&&(
@@ -4310,6 +4367,16 @@ function MainApp({user,isAdmin,onLogout}){
             <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`}}>
               <div style={{fontSize:10,fontWeight:600,color:C.textLight,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8,fontFamily:"'DM Sans',sans-serif"}}>🎨 Color del equipo</div>
               <ColorPicker selected={teamData.teamColor||"blue"} onChange={color=>saveTeam({teamColor:color})}/>
+            </div>
+            <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12}}>
+              <span style={{fontSize:16}}>🌍</span>
+              <div style={{flex:1}}>
+                <div style={{fontSize:10,fontWeight:600,color:C.textLight,textTransform:"uppercase",letterSpacing:0.5,marginBottom:4,fontFamily:"'DM Sans',sans-serif"}}>País del equipo</div>
+                <input value={teamData.pais||""} onChange={e=>saveTeam({pais:e.target.value})} placeholder="Ej: Italia"
+                  style={{width:"100%",background:C.inputBg,border:`1px solid ${C.borderDark}`,borderRadius:9,padding:"8px 12px",color:C.text,fontSize:13,fontWeight:600,outline:"none",fontFamily:"'DM Sans',sans-serif"}}
+                  onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.borderDark}/>
+                <div style={{fontSize:9,color:C.textFaint,marginTop:4,fontFamily:"'DM Sans',sans-serif"}}>Se usa para validar jugadores "nacionales" en las alineaciones</div>
+              </div>
             </div>
             {/* Director Técnico */}
             <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`}}>
