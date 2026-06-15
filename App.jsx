@@ -4600,6 +4600,61 @@ function CompetenciasModal({allTeams,onClose}){
     setSaving(false);
   };
 
+  const finalizarTemporada=async(compId)=>{
+    const comp=comps.find(c=>c.id===compId);
+    if(!window.confirm(`⚠️ Esto guardará el historial de "${comp.name}" y reiniciará tabla, fixture, goleadores, asistencias y desinscribirá a todos los equipos.\n\nEsta acción NO se puede deshacer. ¿Continuar?`)) return;
+    if(!window.confirm("Última confirmación: ¿FINALIZAR TEMPORADA de verdad?")) return;
+    setSaving(true);
+    const ref=doc(db,"config","competenciaData");
+    const snap=await getDoc(ref).catch(()=>null);
+    const current=snap?.exists()?snap.data():{};
+    const compData=current[compId]||{};
+
+    if(comp.formato==="final"){
+      // SuperCopa: solo limpiar el partido, guardar en historial
+      const histRef=doc(db,"config","competenciaHistorial");
+      const histSnap=await getDoc(histRef).catch(()=>null);
+      const histCurrent=histSnap?.exists()?histSnap.data():{};
+      const histList=histCurrent[compId]||[];
+      await setDoc(histRef,{...histCurrent,[compId]:[...histList,{fecha:new Date().toISOString(),...compData}]},{merge:true});
+      await setDoc(ref,{...current,supercopa:{}},{merge:true});
+      setAiMsg(`✅ ${comp.name} finalizada y guardada en historial`);
+      setSaving(false);
+      return;
+    }
+
+    // Guardar snapshot en historial
+    const histRef=doc(db,"config","competenciaHistorial");
+    const histSnap=await getDoc(histRef).catch(()=>null);
+    const histCurrent=histSnap?.exists()?histSnap.data():{};
+    const histList=histCurrent[compId]||[];
+    await setDoc(histRef,{...histCurrent,[compId]:[...histList,{fecha:new Date().toISOString(),...compData}]},{merge:true});
+
+    // Resetear tabla/fixture/goleadores/asistencias.
+    // Liga (tabla única): mantiene la lista de equipos pero todo en 0.
+    // Grupos: se vacían los grupos por completo (se reconfiguran cada temporada).
+    let nuevoCompData;
+    if(comp.formato==="liga"){
+      const g=(compData.grupos||[])[0];
+      const tablaReset=(g?.tabla||[]).map(r=>({equipo:r.equipo,pj:0,pg:0,pe:0,pp:0,gf:0,gc:0,pts:0}));
+      nuevoCompData={grupos:g?[{...g,tabla:tablaReset}]:[],fixture:{},goleadores:[],asistencias:[]};
+    }else{
+      nuevoCompData={grupos:[],fixture:{},goleadores:[],asistencias:[]};
+    }
+    await setDoc(ref,{...current,[compId]:nuevoCompData},{merge:true});
+
+    // Desinscribir todos los equipos de esta competencia
+    for(const t of allTeams){
+      const cur=t.competencias||[];
+      if(cur.includes(compId)){
+        await updateDoc(doc(db,"teams",t.uid||t.id),{competencias:cur.filter(x=>x!==compId)});
+      }
+    }
+
+    setAiMsg(`✅ ${comp.name} finalizada: historial guardado, tabla/fixture/goleadores reiniciados, equipos desinscritos`);
+    setSaving(false);
+  };
+
   return(
     <div style={{position:"fixed",inset:0,zIndex:200,background:"rgba(0,0,0,0.7)",display:"flex",flexDirection:"column"}}>
       <div style={{background:C.card,flex:1,display:"flex",flexDirection:"column",maxHeight:"100vh",overflowY:"auto"}}>
@@ -4682,6 +4737,13 @@ function CompetenciasModal({allTeams,onClose}){
                 📅 Fixture
               </button>
             </div>
+          )}
+
+          {selected&&(
+            <button onClick={()=>finalizarTemporada(selected)} disabled={saving}
+              style={{padding:"8px",borderRadius:8,background:"transparent",border:"1.5px solid #c0392b",color:"#c0392b",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:saving?0.6:1}}>
+              🏁 Finalizar Temporada
+            </button>
           )}
 
           {aiMsg&&<div style={{padding:"6px 10px",borderRadius:8,background:"#f0fdf4",border:"1px solid #bbf7d0",fontSize:10,color:"#166534",fontFamily:"'DM Sans',sans-serif"}}>{aiMsg}</div>}
