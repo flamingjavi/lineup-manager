@@ -3370,6 +3370,40 @@ function MundialModal({onClose,user,isAdmin,allSels,pool,teamData,initialTab="mi
   const[convPreview,setConvPreview]=useState(null); // {filas:[{nombre,pos}]}
   const[convUploading,setConvUploading]=useState(false);
   const convFileRef=useRef(null);
+  const convExcelRef=useRef(null);
+
+  const processConvocatoriaExcel=async(file)=>{
+    setConvUploading(true);
+    setAiMsg("Leyendo Excel…");
+    try{
+      await new Promise((res,rej)=>{
+        if(window.XLSX){res();return;}
+        const s=document.createElement('script');
+        s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+        s.onload=res; s.onerror=rej;
+        document.head.appendChild(s);
+      });
+      const buf=await file.arrayBuffer();
+      const wb=window.XLSX.read(buf,{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const rows=window.XLSX.utils.sheet_to_json(ws,{header:1});
+      const filas=[];
+      for(const row of rows){
+        if(!row||row.every(v=>!v&&v!==0)) continue;
+        const nombre=row[0]?String(row[0]).trim():"";
+        const pos=row[1]?String(row[1]).trim().toUpperCase():"";
+        if(!nombre) continue;
+        if(nombre.toUpperCase()==="NOMBRE"||nombre.toUpperCase()==="JUGADOR") continue; // skip header row
+        filas.push({nombre,pos});
+      }
+      if(filas.length===0) throw new Error("No se encontraron filas válidas. Usa columna A = Nombre, columna B = Posición.");
+      setConvPreview({filas});
+      setAiMsg(`✅ ${filas.length} jugadores leídos del Excel — revisa y confirma abajo`);
+    }catch(e){
+      setAiMsg("❌ "+e.message);
+    }
+    setConvUploading(false);
+  };
 
   const callGeminiWithRetry=async(GEMINI_URL,body,onWaiting)=>{
     const attempt=async()=>{
@@ -3579,19 +3613,31 @@ function MundialModal({onClose,user,isAdmin,allSels,pool,teamData,initialTab="mi
                     </div>
                   )}
                 </div>
-                {/* Subir convocatoria por foto (admin o dueño) */}
+                {/* Subir convocatoria por foto o Excel (admin o dueño) */}
                 {(isAdmin||userSelId===teamData?.nationalTeam)&&(
-                  <div style={{marginBottom:14}}>
+                  <div style={{marginBottom:14,display:"flex",gap:8}}>
                     <input ref={convFileRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{
                       const f=e.target.files?.[0];
                       if(f) processConvocatoria(f);
                       e.target.value="";
                     }}/>
+                    <input ref={convExcelRef} type="file" accept=".xlsx,.xls" style={{display:"none"}} onChange={e=>{
+                      const f=e.target.files?.[0];
+                      if(f) processConvocatoriaExcel(f);
+                      e.target.value="";
+                    }}/>
                     <button onClick={()=>convFileRef.current?.click()} disabled={convUploading}
-                      style={{width:"100%",padding:"10px 14px",borderRadius:10,border:"1.5px dashed #7c3aed",background:"#7c3aed11",color:"#7c3aed",fontSize:12,fontWeight:700,fontFamily:"'DM Sans',sans-serif",cursor:convUploading?"default":"pointer",opacity:convUploading?0.6:1}}>
-                      {convUploading?"Leyendo…":"📷 Subir convocatoria FC26"}
+                      style={{flex:1,padding:"10px 8px",borderRadius:10,border:"1.5px dashed #7c3aed",background:"#7c3aed11",color:"#7c3aed",fontSize:11,fontWeight:700,fontFamily:"'DM Sans',sans-serif",cursor:convUploading?"default":"pointer",opacity:convUploading?0.6:1}}>
+                      {convUploading?"Leyendo…":"📷 Foto FC26"}
+                    </button>
+                    <button onClick={()=>convExcelRef.current?.click()} disabled={convUploading}
+                      style={{flex:1,padding:"10px 8px",borderRadius:10,border:"1.5px dashed #27ae60",background:"#27ae6011",color:"#27ae60",fontSize:11,fontWeight:700,fontFamily:"'DM Sans',sans-serif",cursor:convUploading?"default":"pointer",opacity:convUploading?0.6:1}}>
+                      {convUploading?"Leyendo…":"📋 Excel"}
                     </button>
                   </div>
+                )}
+                {(isAdmin||userSelId===teamData?.nationalTeam)&&(
+                  <div style={{fontSize:9,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginTop:-8,marginBottom:14,textAlign:"center"}}>Excel: columna A = Nombre, columna B = Posición (GK, CB, RB, LB, CDM, CM, CAM, RM, LM, RW, LW, ST, CF)</div>
                 )}
                 {/* Preview editable */}
                 {convPreview&&(
