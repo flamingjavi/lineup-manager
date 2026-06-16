@@ -1477,6 +1477,7 @@ function TransmisionAdmin({allTeams}){
   const[transmision,setTransmision]=useState(null);
   const[equipoA,setEquipoA]=useState("");
   const[equipoB,setEquipoB]=useState("");
+  const[lineupName,setLineupName]=useState("Liga");
   const[mensajes,setMensajes]=useState([]);
 
   useEffect(()=>{
@@ -1497,7 +1498,7 @@ function TransmisionAdmin({allTeams}){
   const iniciarTransmision=async()=>{
     if(!equipoA||!equipoB){alert("Selecciona ambos equipos");return;}
     if(equipoA===equipoB){alert("Los equipos no pueden ser el mismo");return;}
-    await setDoc(doc(db,"config","transmisionActiva"),{equipoA,equipoB,inicio:new Date().toISOString()});
+    await setDoc(doc(db,"config","transmisionActiva"),{equipoA,equipoB,lineupName,inicio:new Date().toISOString()});
     await setDoc(doc(db,"config","transmisionMensajes"),{lista:[]}); // limpia mensajes de transmisión anterior
     await addNoticia(`🔴 ¡Empezó la transmisión! ${equipoA} vs ${equipoB} — manda tus cambios e instrucciones desde la app`,"🔴");
   };
@@ -1536,6 +1537,10 @@ function TransmisionAdmin({allTeams}){
             {allTeams.map(t=><option key={t.uid||t.id} value={t.teamName}>{t.teamName}</option>)}
           </select>
         </div>
+        <select value={lineupName} onChange={e=>setLineupName(e.target.value)}
+          style={{padding:"7px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif"}}>
+          {[...new Set(COMPETENCIAS_AVAILABLE.map(c=>c.lineupName))].map(ln=><option key={ln} value={ln}>{ln}</option>)}
+        </select>
         <button onClick={iniciarTransmision}
           style={{padding:"9px",borderRadius:8,background:"#e74c3c",color:"#fff",border:"none",fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
           🔴 Iniciar transmisión
@@ -1548,7 +1553,7 @@ function TransmisionAdmin({allTeams}){
     <div style={{display:"flex",flexDirection:"column",gap:10}}>
       <div style={{background:"#e74c3c18",border:"1.5px solid #e74c3c",borderRadius:10,padding:"10px 12px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <div>
-          <div style={{fontSize:9,fontWeight:800,color:"#e74c3c",fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.5}}>🔴 En vivo</div>
+          <div style={{fontSize:9,fontWeight:800,color:"#e74c3c",fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.5}}>🔴 En vivo · {transmision.lineupName||"Liga"}</div>
           <div style={{fontSize:13,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{transmision.equipoA} 🆚 {transmision.equipoB}</div>
         </div>
         <button onClick={terminarTransmision}
@@ -3948,7 +3953,7 @@ const COMPETENCIAS_AVAILABLE=[
 ];
 
 // ─── PANEL DE TRANSMISIÓN: dueños de equipo envían cambios/instrucciones al admin ───
-function TransmisionPanel({teamData,onClose}){
+function TransmisionPanel({teamData,lineupName,onClose}){
   const[vista,setVista]=useState("menu"); // menu | jugador | equipo | cambio
   const[jugadorSel,setJugadorSel]=useState(null);
   const[texto,setTexto]=useState("");
@@ -3956,7 +3961,14 @@ function TransmisionPanel({teamData,onClose}){
   const[entra,setEntra]=useState("");
   const[enviando,setEnviando]=useState(false);
 
-  const squad=teamData?.squad||[];
+  // Identifica la alineación correcta (Liga/Copa/etc) y extrae SOLO el 11 titular (sin duplicar banca)
+  const lineup=(teamData?.lineups||[]).find(l=>l.name===lineupName)||(teamData?.lineups||[])[0]||{starters:{},formation:"4-3-3"};
+  const positions=FORMATIONS[lineup.formation]||FORMATIONS["4-3-3"];
+  const titulares=positions
+    .map(p=>{const pl=lineup.starters?.[p.id]; return pl?{...pl,posLabel:p.label}:null;})
+    .filter(Boolean);
+  const suplentes=(lineup.subs||[]).filter(Boolean);
+
   const tacticasRapidas=["⚡ Más ofensivo","🛡️ Más defensivo","🔥 Presión alta","🔒 Cerrar el partido","⏱️ Bajar el ritmo","🎯 Buscar el contraataque"];
 
   const enviarMensaje=async(payload)=>{
@@ -3998,13 +4010,16 @@ function TransmisionPanel({teamData,onClose}){
 
         {vista==="jugador"&&!jugadorSel&&(
           <div style={{display:"flex",flexDirection:"column",gap:6}}>
-            <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginBottom:4}}>Selecciona el jugador</div>
+            <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginBottom:4}}>Selecciona el jugador (11 titular — {lineupName})</div>
+            {titulares.length===0&&(
+              <div style={{textAlign:"center",color:C.textFaint,padding:16,fontFamily:"'DM Sans',sans-serif",fontSize:11}}>No hay 11 titular configurado para "{lineupName}"</div>
+            )}
             <div style={{maxHeight:280,overflowY:"auto",display:"flex",flexDirection:"column",gap:5}}>
-              {squad.map((p,i)=>(
+              {titulares.map((p,i)=>(
                 <button key={i} onClick={()=>setJugadorSel(p.name)}
                   style={{padding:"9px 11px",borderRadius:8,background:C.inputBg,border:`1px solid ${C.border}`,color:C.text,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textAlign:"left",display:"flex",justifyContent:"space-between"}}>
                   <span>{p.name}</span>
-                  <span style={{color:C.textFaint,fontSize:10}}>{p.primaryPos||p.pos||""}</span>
+                  <span style={{color:C.textFaint,fontSize:10}}>{p.posLabel}</span>
                 </button>
               ))}
             </div>
@@ -4053,17 +4068,17 @@ function TransmisionPanel({teamData,onClose}){
 
         {vista==="cambio"&&(
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Sale</div>
+            <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Sale (titular)</div>
             <select value={sale} onChange={e=>setSale(e.target.value)}
               style={{padding:"9px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:12,fontFamily:"'DM Sans',sans-serif"}}>
               <option value="">— Selecciona —</option>
-              {squad.map((p,i)=><option key={i} value={p.name}>{p.name}</option>)}
+              {titulares.map((p,i)=><option key={i} value={p.name}>{p.name} ({p.posLabel})</option>)}
             </select>
-            <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Entra</div>
+            <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Entra (banca)</div>
             <select value={entra} onChange={e=>setEntra(e.target.value)}
               style={{padding:"9px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:12,fontFamily:"'DM Sans',sans-serif"}}>
               <option value="">— Selecciona —</option>
-              {squad.map((p,i)=><option key={i} value={p.name}>{p.name}</option>)}
+              {suplentes.map((p,i)=><option key={i} value={p.name}>{p.name} ({p.primaryPos||p.pos||"—"})</option>)}
             </select>
             <div style={{display:"flex",gap:6,marginTop:4}}>
               <button onClick={()=>setVista("menu")} style={{flex:1,padding:"9px",borderRadius:8,background:"none",border:`1px solid ${C.border}`,color:C.textFaint,fontSize:12,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>← Volver</button>
@@ -4113,7 +4128,7 @@ function HomeScreen({teamData,onSelect,isAdmin,onOpenMundial}){
           </div>
         </button>
       )}
-      {showTransmisionPanel&&<TransmisionPanel teamData={teamData} onClose={()=>setShowTransmisionPanel(false)}/>}
+      {showTransmisionPanel&&<TransmisionPanel teamData={teamData} lineupName={transmision?.lineupName||"Liga"} onClose={()=>setShowTransmisionPanel(false)}/>}
 
       {/* Hero header */}
       <div style={{background:`linear-gradient(160deg,${tc.dark} 0%,${tc.bg} 100%)`,padding:"32px 20px 24px",display:"flex",flexDirection:"column",alignItems:"center",gap:12,position:"relative",overflow:"hidden"}}>
