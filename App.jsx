@@ -6049,15 +6049,15 @@ function MainApp({user,isAdmin,onLogout}){
                         <div style={{display:"grid",gridTemplateColumns:"1fr 32px 32px 32px 32px 32px 32px",gap:0,padding:"7px 10px",background:C.inputBg,fontSize:9,fontWeight:800,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.3}}>
                           <span>Equipo</span><span style={{textAlign:"center"}}>PJ</span><span style={{textAlign:"center"}}>G</span><span style={{textAlign:"center"}}>E</span><span style={{textAlign:"center"}}>P</span><span style={{textAlign:"center"}}>GD</span><span style={{textAlign:"center",fontWeight:900,color:TA.accent}}>Pts</span>
                         </div>
-                        {(g.equipos||[]).sort((a,b)=>(b.pts||0)-(a.pts||0)||(b.gf-b.gc||0)-(a.gf-a.gc||0)).map((eq,ei)=>(
+                        {[...(g.tabla||[])].sort((a,b)=>(b.pts||0)-(a.pts||0)||((b.gf||0)-(b.gc||0))-((a.gf||0)-(a.gc||0))).map((eq,ei)=>(
                           <Fragment key={ei}>
                             <div style={{display:"grid",gridTemplateColumns:"1fr 32px 32px 32px 32px 32px 32px",gap:0,padding:"9px 10px",borderTop:`1px solid ${C.border}`,fontSize:12,fontFamily:"'DM Sans',sans-serif",alignItems:"center",background:comp.formato==="liga"&&ei<8?TA.accent+"0d":"transparent"}}>
-                              <span style={{fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{comp.formato==="liga"&&ei<8?"🟢 ":""}{eq.nombre}</span>
-                              <span style={{textAlign:"center",color:C.textLight}}>{(eq.g||0)+(eq.e||0)+(eq.p||0)}</span>
-                              <span style={{textAlign:"center",color:"#27ae60",fontWeight:600}}>{eq.g||0}</span>
-                              <span style={{textAlign:"center",color:C.textLight}}>{eq.e||0}</span>
-                              <span style={{textAlign:"center",color:"#e74c3c"}}>{eq.p||0}</span>
-                              <span style={{textAlign:"center",color:C.textLight}}>{(eq.gf||0)-(eq.gc||0)>=0?"+"+(eq.gf-eq.gc||0):(eq.gf-eq.gc||0)}</span>
+                              <span style={{fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{comp.formato==="liga"&&ei<8?"🟢 ":""}{eq.equipo}</span>
+                              <span style={{textAlign:"center",color:C.textLight}}>{eq.pj||0}</span>
+                              <span style={{textAlign:"center",color:"#27ae60",fontWeight:600}}>{eq.pg||0}</span>
+                              <span style={{textAlign:"center",color:C.textLight}}>{eq.pe||0}</span>
+                              <span style={{textAlign:"center",color:"#e74c3c"}}>{eq.pp||0}</span>
+                              <span style={{textAlign:"center",color:C.textLight}}>{(eq.gf||0)-(eq.gc||0)>=0?"+"+((eq.gf||0)-(eq.gc||0)):(eq.gf||0)-(eq.gc||0)}</span>
                               <span style={{textAlign:"center",fontWeight:900,fontSize:14,color:TA.accent}}>{eq.pts||0}</span>
                             </div>
                             {comp.formato==="liga"&&ei===7&&(
