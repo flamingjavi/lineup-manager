@@ -1475,10 +1475,19 @@ function LiveAndAviso(){
 // ─── MODO TRANSMISIÓN: admin activa/gestiona, equipos envían instrucciones ───
 function TransmisionAdmin({allTeams}){
   const[transmision,setTransmision]=useState(null);
+  const[esMundial,setEsMundial]=useState(false);
   const[equipoA,setEquipoA]=useState("");
   const[equipoB,setEquipoB]=useState("");
   const[lineupName,setLineupName]=useState("Liga");
   const[mensajes,setMensajes]=useState([]);
+  const[selecciones,setSelecciones]=useState([]);
+
+  useEffect(()=>{
+    const unsub=onSnapshot(collection(db,"selecciones"),snap=>{
+      setSelecciones(snap.docs.map(d=>({id:d.id,...d.data()})));
+    });
+    return unsub;
+  },[]);
 
   useEffect(()=>{
     const unsub=onSnapshot(doc(db,"config","transmisionActiva"),snap=>{
@@ -1498,7 +1507,7 @@ function TransmisionAdmin({allTeams}){
   const iniciarTransmision=async()=>{
     if(!equipoA||!equipoB){alert("Selecciona ambos equipos");return;}
     if(equipoA===equipoB){alert("Los equipos no pueden ser el mismo");return;}
-    await setDoc(doc(db,"config","transmisionActiva"),{equipoA,equipoB,lineupName,inicio:new Date().toISOString()});
+    await setDoc(doc(db,"config","transmisionActiva"),{equipoA,equipoB,lineupName,esMundial,inicio:new Date().toISOString()});
     await setDoc(doc(db,"config","transmisionMensajes"),{lista:[]}); // limpia mensajes de transmisión anterior
     await addNoticia(`🔴 ¡Empezó la transmisión! ${equipoA} vs ${equipoB} — manda tus cambios e instrucciones desde la app`,"🔴");
   };
@@ -1526,21 +1535,37 @@ function TransmisionAdmin({allTeams}){
       <div style={{display:"flex",flexDirection:"column",gap:8}}>
         <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Activa el modo transmisión para que los dueños de ambos equipos puedan enviarte cambios e instrucciones en vivo desde la app.</div>
         <div style={{display:"flex",gap:6}}>
+          <button onClick={()=>{setEsMundial(false);setEquipoA("");setEquipoB("");}}
+            style={{flex:1,padding:"7px",borderRadius:7,border:`1.5px solid ${!esMundial?"#e74c3c":C.border}`,background:!esMundial?"#e74c3c":C.inputBg,color:!esMundial?"#fff":C.textMid,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+            🏟️ Liga/Copa
+          </button>
+          <button onClick={()=>{setEsMundial(true);setEquipoA("");setEquipoB("");}}
+            style={{flex:1,padding:"7px",borderRadius:7,border:`1.5px solid ${esMundial?"#e74c3c":C.border}`,background:esMundial?"#e74c3c":C.inputBg,color:esMundial?"#fff":C.textMid,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+            🌍 Mundial
+          </button>
+        </div>
+        <div style={{display:"flex",gap:6}}>
           <select value={equipoA} onChange={e=>setEquipoA(e.target.value)}
             style={{flex:1,padding:"7px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif"}}>
-            <option value="">— Equipo A —</option>
-            {allTeams.map(t=><option key={t.uid||t.id} value={t.teamName}>{t.teamName}</option>)}
+            <option value="">{esMundial?"— Selección A —":"— Equipo A —"}</option>
+            {esMundial
+              ? selecciones.map(s=><option key={s.id} value={s.country||s.id}>{s.country||s.id}</option>)
+              : allTeams.map(t=><option key={t.uid||t.id} value={t.teamName}>{t.teamName}</option>)}
           </select>
           <select value={equipoB} onChange={e=>setEquipoB(e.target.value)}
             style={{flex:1,padding:"7px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif"}}>
-            <option value="">— Equipo B —</option>
-            {allTeams.map(t=><option key={t.uid||t.id} value={t.teamName}>{t.teamName}</option>)}
+            <option value="">{esMundial?"— Selección B —":"— Equipo B —"}</option>
+            {esMundial
+              ? selecciones.map(s=><option key={s.id} value={s.country||s.id}>{s.country||s.id}</option>)
+              : allTeams.map(t=><option key={t.uid||t.id} value={t.teamName}>{t.teamName}</option>)}
           </select>
         </div>
-        <select value={lineupName} onChange={e=>setLineupName(e.target.value)}
-          style={{padding:"7px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif"}}>
-          {[...new Set(COMPETENCIAS_AVAILABLE.map(c=>c.lineupName))].map(ln=><option key={ln} value={ln}>{ln}</option>)}
-        </select>
+        {!esMundial&&(
+          <select value={lineupName} onChange={e=>setLineupName(e.target.value)}
+            style={{padding:"7px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif"}}>
+            {[...new Set(COMPETENCIAS_AVAILABLE.map(c=>c.lineupName))].map(ln=><option key={ln} value={ln}>{ln}</option>)}
+          </select>
+        )}
         <button onClick={iniciarTransmision}
           style={{padding:"9px",borderRadius:8,background:"#e74c3c",color:"#fff",border:"none",fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
           🔴 Iniciar transmisión
@@ -1553,7 +1578,7 @@ function TransmisionAdmin({allTeams}){
     <div style={{display:"flex",flexDirection:"column",gap:10}}>
       <div style={{background:"#e74c3c18",border:"1.5px solid #e74c3c",borderRadius:10,padding:"10px 12px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <div>
-          <div style={{fontSize:9,fontWeight:800,color:"#e74c3c",fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.5}}>🔴 En vivo · {transmision.lineupName||"Liga"}</div>
+          <div style={{fontSize:9,fontWeight:800,color:"#e74c3c",fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.5}}>🔴 En vivo · {transmision.esMundial?"🌍 Mundial":(transmision.lineupName||"Liga")}</div>
           <div style={{fontSize:13,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{transmision.equipoA} 🆚 {transmision.equipoB}</div>
         </div>
         <button onClick={terminarTransmision}
@@ -3953,16 +3978,28 @@ const COMPETENCIAS_AVAILABLE=[
 ];
 
 // ─── PANEL DE TRANSMISIÓN: dueños de equipo envían cambios/instrucciones al admin ───
-function TransmisionPanel({teamData,lineupName,onClose}){
+function TransmisionPanel({teamData,lineupName,esMundial,onClose}){
   const[vista,setVista]=useState("menu"); // menu | jugador | equipo | cambio
   const[jugadorSel,setJugadorSel]=useState(null);
   const[texto,setTexto]=useState("");
   const[sale,setSale]=useState("");
   const[entra,setEntra]=useState("");
   const[enviando,setEnviando]=useState(false);
+  const[selData,setSelData]=useState(null);
 
-  // Identifica la alineación correcta (Liga/Copa/etc) y extrae SOLO el 11 titular (sin duplicar banca)
-  const lineup=(teamData?.lineups||[]).find(l=>l.name===lineupName)||(teamData?.lineups||[])[0]||{starters:{},formation:"4-3-3"};
+  useEffect(()=>{
+    if(!esMundial||!teamData?.nationalTeam){setSelData(null);return;}
+    const unsub=onSnapshot(doc(db,"selecciones",teamData.nationalTeam),snap=>{
+      setSelData(snap.exists()?{id:snap.id,...snap.data()}:null);
+    });
+    return unsub;
+  },[esMundial,teamData?.nationalTeam]);
+
+  // Identifica la alineación correcta y extrae SOLO el 11 titular (sin duplicar banca)
+  const lineup=esMundial
+    ? (selData||{starters:{},subs:Array(7).fill(null),formation:"4-3-3"})
+    : ((teamData?.lineups||[]).find(l=>l.name===lineupName)||(teamData?.lineups||[])[0]||{starters:{},formation:"4-3-3"});
+  const nombreEquipoMostrar=esMundial?(selData?.country||teamData?.nationalTeam):lineupName;
   const positions=FORMATIONS[lineup.formation]||FORMATIONS["4-3-3"];
   const titulares=positions
     .map(p=>{const pl=lineup.starters?.[p.id]; return pl?{...pl,posLabel:p.label}:null;})
@@ -3976,7 +4013,7 @@ function TransmisionPanel({teamData,lineupName,onClose}){
     const ref=doc(db,"config","transmisionMensajes");
     const snap=await getDoc(ref).catch(()=>null);
     const current=snap?.exists()?snap.data():{lista:[]};
-    const nuevo={equipo:teamData.teamName,fecha:new Date().toISOString(),atendido:false,...payload};
+    const nuevo={equipo:esMundial?(selData?.country||teamData.nationalTeam):teamData.teamName,fecha:new Date().toISOString(),atendido:false,...payload};
     await setDoc(ref,{lista:[...(current.lista||[]),nuevo]});
     setEnviando(false);
     setTexto("");setJugadorSel(null);setSale("");setEntra("");
@@ -4010,9 +4047,9 @@ function TransmisionPanel({teamData,lineupName,onClose}){
 
         {vista==="jugador"&&!jugadorSel&&(
           <div style={{display:"flex",flexDirection:"column",gap:6}}>
-            <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginBottom:4}}>Selecciona el jugador (11 titular — {lineupName})</div>
+            <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginBottom:4}}>Selecciona el jugador (11 titular — {nombreEquipoMostrar})</div>
             {titulares.length===0&&(
-              <div style={{textAlign:"center",color:C.textFaint,padding:16,fontFamily:"'DM Sans',sans-serif",fontSize:11}}>No hay 11 titular configurado para "{lineupName}"</div>
+              <div style={{textAlign:"center",color:C.textFaint,padding:16,fontFamily:"'DM Sans',sans-serif",fontSize:11}}>No hay 11 titular configurado para "{nombreEquipoMostrar}"</div>
             )}
             <div style={{maxHeight:280,overflowY:"auto",display:"flex",flexDirection:"column",gap:5}}>
               {titulares.map((p,i)=>(
@@ -4102,6 +4139,7 @@ function HomeScreen({teamData,onSelect,isAdmin,onOpenMundial}){
   const[showNoticias,setShowNoticias]=useState(false);
   const[transmision,setTransmision]=useState(null);
   const[showTransmisionPanel,setShowTransmisionPanel]=useState(false);
+  const[miSeleccionCountry,setMiSeleccionCountry]=useState(null);
 
   useEffect(()=>{
     const unsub=onSnapshot(doc(db,"config","transmisionActiva"),snap=>{
@@ -4110,8 +4148,17 @@ function HomeScreen({teamData,onSelect,isAdmin,onOpenMundial}){
     return unsub;
   },[]);
 
-  const enTransmision=transmision&&(transmision.equipoA===teamData?.teamName||transmision.equipoB===teamData?.teamName);
-  const rival=enTransmision?(transmision.equipoA===teamData?.teamName?transmision.equipoB:transmision.equipoA):null;
+  useEffect(()=>{
+    if(!teamData?.nationalTeam){setMiSeleccionCountry(null);return;}
+    const unsub=onSnapshot(doc(db,"selecciones",teamData.nationalTeam),snap=>{
+      setMiSeleccionCountry(snap.exists()?(snap.data().country||teamData.nationalTeam):teamData.nationalTeam);
+    });
+    return unsub;
+  },[teamData?.nationalTeam]);
+
+  const miNombreEnTransmision=transmision?.esMundial?miSeleccionCountry:teamData?.teamName;
+  const enTransmision=transmision&&miNombreEnTransmision&&(transmision.equipoA===miNombreEnTransmision||transmision.equipoB===miNombreEnTransmision);
+  const rival=enTransmision?(transmision.equipoA===miNombreEnTransmision?transmision.equipoB:transmision.equipoA):null;
 
   return(
     <div style={{minHeight:"100vh",background:C.bg,display:"flex",flexDirection:"column"}}>
@@ -4128,7 +4175,7 @@ function HomeScreen({teamData,onSelect,isAdmin,onOpenMundial}){
           </div>
         </button>
       )}
-      {showTransmisionPanel&&<TransmisionPanel teamData={teamData} lineupName={transmision?.lineupName||"Liga"} onClose={()=>setShowTransmisionPanel(false)}/>}
+      {showTransmisionPanel&&<TransmisionPanel teamData={teamData} lineupName={transmision?.lineupName||"Liga"} esMundial={!!transmision?.esMundial} miSeleccionCountry={miSeleccionCountry} onClose={()=>setShowTransmisionPanel(false)}/>}
 
       {/* Hero header */}
       <div style={{background:`linear-gradient(160deg,${tc.dark} 0%,${tc.bg} 100%)`,padding:"32px 20px 24px",display:"flex",flexDirection:"column",alignItems:"center",gap:12,position:"relative",overflow:"hidden"}}>
