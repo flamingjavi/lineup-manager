@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Fragment } from "react";
 import { auth, db } from "./firebase";
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile } from "firebase/auth";
 import { doc, getDoc, setDoc, updateDoc, onSnapshot, collection, getDocs, deleteDoc, addDoc, serverTimestamp, deleteField } from "firebase/firestore";
@@ -4300,7 +4300,7 @@ function CompetenciaGruposSetup({compId,compName,compColor,formato,allTeams,setA
                 </thead>
                 <tbody>
                   {[...(g.tabla||[])].sort((a,b)=>b.pts-a.pts).map((r,ri)=>(
-                    <React.Fragment key={ri}>
+                    <Fragment key={ri}>
                       <tr style={{borderTop:`1px solid ${C.border}`,background:formato==="liga"&&ri<8?compColor+"0d":"transparent"}}>
                         <td style={{padding:"3px 4px",fontWeight:700,color:C.text}}>{formato==="liga"&&ri<8?"🟢 ":""}{r.equipo}</td>
                         <td style={{padding:"3px 4px",textAlign:"center"}}>{r.pj}</td>
@@ -4314,7 +4314,7 @@ function CompetenciaGruposSetup({compId,compName,compColor,formato,allTeams,setA
                       {formato==="liga"&&ri===7&&(
                         <tr><td colSpan={8} style={{padding:"4px 0",textAlign:"center",fontSize:8,fontWeight:800,color:compColor,borderBottom:`2px dashed ${compColor}`}}>▲ Clasificados a Liguilla</td></tr>
                       )}
-                    </React.Fragment>
+                    </Fragment>
                   ))}
                 </tbody>
               </table>
@@ -5953,10 +5953,10 @@ function MainApp({user,isAdmin,onLogout}){
         const goleadores=compData.goleadores||[];
         const asistencias=compData.asistencias||[];
         const fixture=compData.fixture||{};
-        const [vistaTab,setVistaTab]=React.useState("tabla");
-        const [apuestasComp,setApuestasComp]=React.useState([]);
-        const [h2hLista,setH2hLista]=React.useState([]);
-        React.useEffect(()=>{
+        const [vistaTab,setVistaTab]=useState("tabla");
+        const [apuestasComp,setApuestasComp]=useState([]);
+        const [h2hLista,setH2hLista]=useState([]);
+        useEffect(()=>{
           const unsub1=onSnapshot(doc(db,"config","apuestas"),snap=>{
             const all=snap.exists()?snap.data():{};
             setApuestasComp((all.lista||[]).filter(a=>a.compId===compId));
@@ -6013,7 +6013,7 @@ function MainApp({user,isAdmin,onLogout}){
                           <span>Equipo</span><span style={{textAlign:"center"}}>PJ</span><span style={{textAlign:"center"}}>G</span><span style={{textAlign:"center"}}>E</span><span style={{textAlign:"center"}}>P</span><span style={{textAlign:"center"}}>GD</span><span style={{textAlign:"center",fontWeight:900,color:TA.accent}}>Pts</span>
                         </div>
                         {(g.equipos||[]).sort((a,b)=>(b.pts||0)-(a.pts||0)||(b.gf-b.gc||0)-(a.gf-a.gc||0)).map((eq,ei)=>(
-                          <React.Fragment key={ei}>
+                          <Fragment key={ei}>
                             <div style={{display:"grid",gridTemplateColumns:"1fr 32px 32px 32px 32px 32px 32px",gap:0,padding:"9px 10px",borderTop:`1px solid ${C.border}`,fontSize:12,fontFamily:"'DM Sans',sans-serif",alignItems:"center",background:comp.formato==="liga"&&ei<8?TA.accent+"0d":"transparent"}}>
                               <span style={{fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{comp.formato==="liga"&&ei<8?"🟢 ":""}{eq.nombre}</span>
                               <span style={{textAlign:"center",color:C.textLight}}>{(eq.g||0)+(eq.e||0)+(eq.p||0)}</span>
@@ -6026,7 +6026,7 @@ function MainApp({user,isAdmin,onLogout}){
                             {comp.formato==="liga"&&ei===7&&(
                               <div style={{padding:"4px 0",textAlign:"center",fontSize:10,fontWeight:800,color:TA.accent,borderBottom:`2px dashed ${TA.accent}`}}>▲ Clasificados a Liguilla</div>
                             )}
-                          </React.Fragment>
+                          </Fragment>
                         ))}
                       </div>
                     </div>
