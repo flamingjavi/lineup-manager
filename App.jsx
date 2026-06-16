@@ -3367,6 +3367,65 @@ function MundialModal({onClose,user,isAdmin,allSels,pool,teamData,initialTab="mi
     setUploading(false);
   };
 
+  const[convPreview,setConvPreview]=useState(null); // {filas:[{nombre,pos}]}
+  const[convUploading,setConvUploading]=useState(false);
+  const convFileRef=useRef(null);
+
+  const processConvocatoria=async(file)=>{
+    setConvUploading(true);
+    setAiMsg("Leyendo imagen…");
+    try{
+      const b64=await new Promise((res,rej)=>{
+        const r=new FileReader();
+        r.onload=()=>res(r.result.split(",")[1]);
+        r.onerror=()=>rej(new Error("FileReader error"));
+        r.readAsDataURL(file);
+      });
+      setAiMsg("Conectando con Gemini…");
+      const prompt=`Analiza esta captura de la convocatoria/plantilla de un equipo en FC26. Para cada jugador extrae su nombre y su posición (usa códigos en inglés: GK, CB, RB, LB, CDM, CM, CAM, RM, LM, RW, LW, ST, CF). Responde SOLO con JSON sin markdown, sin texto adicional: {"jugadores":[{"nombre":"","pos":""}]}`;
+      const GEMINI_KEY="AIzaSyAGlxjD12k38Xu9L-8K165iJma1ZwR7tyY";
+      const GEMINI_URL=`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`;
+      const body=JSON.stringify({contents:[{parts:[{inline_data:{mime_type:file.type||"image/jpeg",data:b64}},{text:prompt}]}],generationConfig:{temperature:0,maxOutputTokens:2000}});
+      const resp=await fetch(GEMINI_URL,{method:"POST",headers:{"Content-Type":"application/json"},body});
+      if(!resp.ok){
+        const errTxt=await resp.text().catch(()=>"");
+        throw new Error(`HTTP ${resp.status} ${errTxt.slice(0,200)}`);
+      }
+      const respData=await resp.json();
+      if(respData.error) throw new Error(respData.error.message);
+      const raw=respData.candidates?.[0]?.content?.parts?.[0]?.text;
+      if(!raw) throw new Error("Respuesta vacía de Gemini");
+      const cleaned=raw.replace(/```json|```/g,"").trim();
+      let parsed;
+      try{ parsed=JSON.parse(cleaned); }
+      catch{ throw new Error("No se pudo interpretar el JSON: "+cleaned.slice(0,150)); }
+      const filas=(parsed.jugadores||[]).map(j=>({nombre:j.nombre||"",pos:(j.pos||"").toUpperCase()}));
+      if(filas.length===0) throw new Error("No se detectaron jugadores en la imagen");
+      setConvPreview({filas});
+      setAiMsg(`✅ ${filas.length} jugadores leídos — revisa y confirma abajo`);
+    }catch(e){
+      setAiMsg("❌ "+e.message);
+    }
+    setConvUploading(false);
+  };
+
+  const confirmConvocatoria=async()=>{
+    if(!convPreview||!userSel) return;
+    const newSquad=convPreview.filas.map(f=>({name:f.nombre,pos:f.pos,primaryPos:f.pos}));
+    await setDoc(doc(db,"selecciones",userSel.id),{squad:newSquad},{merge:true});
+    setAiMsg(`✅ Convocatoria de ${userSel.country} actualizada (${newSquad.length} jugadores)`);
+    setConvPreview(null);
+  };
+
+  const updateConvCell=(fi,field,val)=>{
+    const filas=[...convPreview.filas];
+    filas[fi]={...filas[fi],[field]:field==="pos"?val.toUpperCase():val};
+    setConvPreview({...convPreview,filas});
+  };
+
+  const addConvRow=()=>setConvPreview({...convPreview,filas:[...convPreview.filas,{nombre:"",pos:""}]});
+  const removeConvRow=(fi)=>setConvPreview({...convPreview,filas:convPreview.filas.filter((_,i)=>i!==fi)});
+
   const grupos=mundial?.grupos||[];
   const partidos=mundial?.partidos||[];
   const stats=Object.values(mundial?.stats||{});
@@ -3493,6 +3552,42 @@ function MundialModal({onClose,user,isAdmin,allSels,pool,teamData,initialTab="mi
                     </div>
                   )}
                 </div>
+                {/* Subir convocatoria por foto (admin o dueño) */}
+                {(isAdmin||userSelId===teamData?.nationalTeam)&&(
+                  <div style={{marginBottom:14}}>
+                    <input ref={convFileRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{
+                      const f=e.target.files?.[0];
+                      if(f) processConvocatoria(f);
+                      e.target.value="";
+                    }}/>
+                    <button onClick={()=>convFileRef.current?.click()} disabled={convUploading}
+                      style={{width:"100%",padding:"10px 14px",borderRadius:10,border:"1.5px dashed #7c3aed",background:"#7c3aed11",color:"#7c3aed",fontSize:12,fontWeight:700,fontFamily:"'DM Sans',sans-serif",cursor:convUploading?"default":"pointer",opacity:convUploading?0.6:1}}>
+                      {convUploading?"Leyendo…":"📷 Subir convocatoria FC26"}
+                    </button>
+                  </div>
+                )}
+                {/* Preview editable */}
+                {convPreview&&(
+                  <div style={{background:C.card,borderRadius:10,padding:"10px 12px",border:"1.5px solid #7c3aed",marginBottom:14}}>
+                    <div style={{fontSize:11,fontWeight:800,color:"#7c3aed",fontFamily:"'DM Sans',sans-serif",marginBottom:8}}>Revisa antes de confirmar</div>
+                    <div style={{maxHeight:240,overflowY:"auto",marginBottom:8}}>
+                      {convPreview.filas.map((f,fi)=>(
+                        <div key={fi} style={{display:"flex",gap:6,alignItems:"center",marginBottom:4}}>
+                          <input value={f.nombre} onChange={e=>updateConvCell(fi,"nombre",e.target.value)} placeholder="Nombre"
+                            style={{flex:1,fontSize:11,padding:"5px 7px",borderRadius:6,border:`1px solid ${C.border}`,background:C.inputBg,color:C.text,fontFamily:"'DM Sans',sans-serif"}}/>
+                          <input value={f.pos} onChange={e=>updateConvCell(fi,"pos",e.target.value)} placeholder="POS"
+                            style={{width:54,fontSize:11,padding:"5px 7px",borderRadius:6,border:`1px solid ${C.border}`,background:C.inputBg,color:C.text,fontFamily:"monospace",textAlign:"center"}}/>
+                          <button onClick={()=>removeConvRow(fi)} style={{background:"none",border:"none",color:"#e74c3c",cursor:"pointer",fontSize:14,padding:"2px 4px"}}>✕</button>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{display:"flex",gap:8}}>
+                      <button onClick={addConvRow} style={{flex:1,fontSize:11,padding:"7px 0",borderRadius:8,border:`1px solid ${C.border}`,background:C.inputBg,color:C.textMid,fontFamily:"'DM Sans',sans-serif",cursor:"pointer"}}>+ Agregar fila</button>
+                      <button onClick={()=>setConvPreview(null)} style={{flex:1,fontSize:11,padding:"7px 0",borderRadius:8,border:`1px solid ${C.border}`,background:"none",color:C.textFaint,fontFamily:"'DM Sans',sans-serif",cursor:"pointer"}}>Cancelar</button>
+                      <button onClick={confirmConvocatoria} style={{flex:1,fontSize:11,fontWeight:800,padding:"7px 0",borderRadius:8,border:"none",background:"#7c3aed",color:"#fff",fontFamily:"'DM Sans',sans-serif",cursor:"pointer"}}>✅ Confirmar</button>
+                    </div>
+                  </div>
+                )}
                 {/* Convocatoria */}
                 <div style={{fontSize:11,fontWeight:700,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}}>Convocatoria</div>
                 {(userSel.squad||[]).length===0
