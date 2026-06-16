@@ -5531,6 +5531,210 @@ function CompetenciasModal({allTeams,onClose}){
   );
 }
 
+// ─── VISTA PÚBLICA: Tabla / Goleadores / Fixture / Apuestas de una competencia ───
+function CompVistaPublica({comp,competenciaData,onClose}){
+  const compId=comp.id;
+  const compData=competenciaData?.[compId]||{};
+  const grupos=compData.grupos||[];
+  const goleadores=compData.goleadores||[];
+  const asistencias=compData.asistencias||[];
+  const fixture=compData.fixture||{};
+  const[vistaTab,setVistaTab]=useState("tabla");
+  const[apuestasComp,setApuestasComp]=useState([]);
+  const[h2hLista,setH2hLista]=useState([]);
+  useEffect(()=>{
+    const unsub1=onSnapshot(doc(db,"config","apuestas"),snap=>{
+      const all=snap.exists()?snap.data():{};
+      setApuestasComp((all.lista||[]).filter(a=>a.compId===compId));
+    });
+    const unsub2=onSnapshot(doc(db,"config","h2hHistorial"),snap=>{
+      const all=snap.exists()?snap.data():{};
+      setH2hLista(all.lista||[]);
+    });
+    return ()=>{unsub1();unsub2();};
+  },[compId]);
+  // Helper: obtiene fila de tabla de un equipo (busca en todos los grupos)
+  const filaDeEquipo=(nombre)=>{
+    for(const g of grupos){
+      const fila=(g.tabla||[]).find(r=>r.equipo===nombre);
+      if(fila) return fila;
+    }
+    return null;
+  };
+  const posicionDeEquipo=(nombre)=>{
+    for(const g of grupos){
+      const ordenada=[...(g.tabla||[])].sort((a,b)=>b.pts-a.pts);
+      const idx=ordenada.findIndex(r=>r.equipo===nombre);
+      if(idx>=0) return idx+1;
+    }
+    return null;
+  };
+  return(
+    <div style={{position:"fixed",inset:0,zIndex:200,background:C.bg,overflowY:"auto"}}>
+      {/* Header */}
+      <div style={{background:comp.color||"#1a3a5c",padding:"16px",display:"flex",alignItems:"center",gap:12,position:"sticky",top:0,zIndex:10}}>
+        <button onClick={onClose} style={{background:"rgba(255,255,255,0.15)",border:"none",borderRadius:8,width:34,height:34,cursor:"pointer",color:"#fff",fontSize:18,display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
+        <div>
+          <div style={{fontSize:18,fontWeight:900,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>{comp.name}</div>
+          <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",fontFamily:"'DM Sans',sans-serif",fontWeight:600,textTransform:"uppercase",letterSpacing:0.5}}>Vista pública</div>
+        </div>
+      </div>
+            {/* Tabs */}
+            <div style={{display:"flex",borderBottom:`2px solid ${C.border}`,background:C.card}}>
+              {[["tabla","📊 Tabla"],["goles","⚽ Goles"],["fixture","📅 Fixture"],["apuestas","🎲 Apuestas"]].map(([id,label])=>(
+                <button key={id} onClick={()=>setVistaTab(id)} style={{flex:1,padding:"11px 4px",background:"none",border:"none",borderBottom:vistaTab===id?`3px solid ${comp.color||TA.accent}`:"3px solid transparent",cursor:"pointer",fontSize:11,fontWeight:700,color:vistaTab===id?(comp.color||TA.accent):C.textFaint,fontFamily:"'DM Sans',sans-serif",transition:"all 0.15s"}}>{label}</button>
+              ))}
+            </div>
+            {/* Content */}
+            <div style={{padding:"16px",maxWidth:600,margin:"0 auto"}}>
+              {/* TABLA */}
+              {vistaTab==="tabla"&&(
+                grupos.length===0
+                  ? <div style={{textAlign:"center",color:C.textFaint,padding:40,fontFamily:"'DM Sans',sans-serif",fontSize:13}}>Sin tabla disponible</div>
+                  : grupos.map((g,gi)=>(
+                    <div key={gi} style={{marginBottom:20}}>
+                      {grupos.length>1&&<div style={{fontSize:12,fontWeight:800,color:C.textLight,fontFamily:"'DM Sans',sans-serif",marginBottom:8,textTransform:"uppercase",letterSpacing:0.5}}>{g.nombre||`Grupo ${gi+1}`}</div>}
+                      <div style={{background:C.card,borderRadius:12,overflow:"hidden",border:`1px solid ${C.border}`}}>
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 32px 32px 32px 32px 32px 32px",gap:0,padding:"7px 10px",background:C.inputBg,fontSize:9,fontWeight:800,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.3}}>
+                          <span>Equipo</span><span style={{textAlign:"center"}}>PJ</span><span style={{textAlign:"center"}}>G</span><span style={{textAlign:"center"}}>E</span><span style={{textAlign:"center"}}>P</span><span style={{textAlign:"center"}}>GD</span><span style={{textAlign:"center",fontWeight:900,color:TA.accent}}>Pts</span>
+                        </div>
+                        {[...(g.tabla||[])].sort((a,b)=>(b.pts||0)-(a.pts||0)||((b.gf||0)-(b.gc||0))-((a.gf||0)-(a.gc||0))).map((eq,ei)=>(
+                          <Fragment key={ei}>
+                            <div style={{display:"grid",gridTemplateColumns:"1fr 32px 32px 32px 32px 32px 32px",gap:0,padding:"9px 10px",borderTop:`1px solid ${C.border}`,fontSize:12,fontFamily:"'DM Sans',sans-serif",alignItems:"center",background:comp.formato==="liga"&&ei<8?TA.accent+"0d":"transparent"}}>
+                              <span style={{fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{comp.formato==="liga"&&ei<8?"🟢 ":""}{eq.equipo}</span>
+                              <span style={{textAlign:"center",color:C.textLight}}>{eq.pj||0}</span>
+                              <span style={{textAlign:"center",color:"#27ae60",fontWeight:600}}>{eq.pg||0}</span>
+                              <span style={{textAlign:"center",color:C.textLight}}>{eq.pe||0}</span>
+                              <span style={{textAlign:"center",color:"#e74c3c"}}>{eq.pp||0}</span>
+                              <span style={{textAlign:"center",color:C.textLight}}>{(eq.gf||0)-(eq.gc||0)>=0?"+"+((eq.gf||0)-(eq.gc||0)):(eq.gf||0)-(eq.gc||0)}</span>
+                              <span style={{textAlign:"center",fontWeight:900,fontSize:14,color:TA.accent}}>{eq.pts||0}</span>
+                            </div>
+                            {comp.formato==="liga"&&ei===7&&(
+                              <div style={{padding:"4px 0",textAlign:"center",fontSize:10,fontWeight:800,color:TA.accent,borderBottom:`2px dashed ${TA.accent}`}}>▲ Clasificados a Liguilla</div>
+                            )}
+                          </Fragment>
+                        ))}
+                      </div>
+                    </div>
+                  ))
+              )}
+              {/* GOLES */}
+              {vistaTab==="goles"&&(
+                <div>
+                  {/* Goleadores */}
+                  <div style={{fontSize:13,fontWeight:800,color:C.textLight,fontFamily:"'DM Sans',sans-serif",marginBottom:10,display:"flex",alignItems:"center",gap:6}}>⚽ Goleadores</div>
+                  {goleadores.length===0
+                    ? <div style={{textAlign:"center",color:C.textFaint,padding:20,fontFamily:"'DM Sans',sans-serif",fontSize:12}}>Sin datos</div>
+                    : <div style={{background:C.card,borderRadius:12,overflow:"hidden",border:`1px solid ${C.border}`,marginBottom:20}}>
+                        {goleadores.map((r,i)=>(
+                          <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderTop:i>0?`1px solid ${C.border}`:"none"}}>
+                            <span style={{fontWeight:900,fontSize:16,color:i===0?"#f39c12":i===1?"#95a5a6":i===2?"#cd7f32":C.textFaint,minWidth:22,textAlign:"center"}}>{i+1}</span>
+                            <span style={{flex:1,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif",fontSize:13}}>{r.nombre||r.player||"—"}</span>
+                            <span style={{fontSize:11,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>{r.equipo||r.team||""}</span>
+                            <span style={{fontWeight:900,fontSize:16,color:TA.accent,minWidth:24,textAlign:"right"}}>{r.goles||r.goals||r.valor||0}</span>
+                          </div>
+                        ))}
+                      </div>
+                  }
+                  {/* Asistencias */}
+                  <div style={{fontSize:13,fontWeight:800,color:C.textLight,fontFamily:"'DM Sans',sans-serif",marginBottom:10,display:"flex",alignItems:"center",gap:6}}>🎯 Asistencias</div>
+                  {asistencias.length===0
+                    ? <div style={{textAlign:"center",color:C.textFaint,padding:20,fontFamily:"'DM Sans',sans-serif",fontSize:12}}>Sin datos</div>
+                    : <div style={{background:C.card,borderRadius:12,overflow:"hidden",border:`1px solid ${C.border}`}}>
+                        {asistencias.map((r,i)=>(
+                          <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderTop:i>0?`1px solid ${C.border}`:"none"}}>
+                            <span style={{fontWeight:900,fontSize:16,color:i===0?"#f39c12":i===1?"#95a5a6":i===2?"#cd7f32":C.textFaint,minWidth:22,textAlign:"center"}}>{i+1}</span>
+                            <span style={{flex:1,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif",fontSize:13}}>{r.nombre||r.player||"—"}</span>
+                            <span style={{fontSize:11,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>{r.equipo||r.team||""}</span>
+                            <span style={{fontWeight:900,fontSize:16,color:"#8e44ad",minWidth:24,textAlign:"right"}}>{r.asistencias||r.assists||r.valor||0}</span>
+                          </div>
+                        ))}
+                      </div>
+                  }
+                </div>
+              )}
+              {/* FIXTURE */}
+              {vistaTab==="fixture"&&(
+                Object.keys(fixture).length===0
+                  ? <div style={{textAlign:"center",color:C.textFaint,padding:40,fontFamily:"'DM Sans',sans-serif",fontSize:13}}>Sin fixture disponible</div>
+                  : Object.entries(fixture).map(([jkey,jornada])=>(
+                    <div key={jkey} style={{marginBottom:20}}>
+                      <div style={{fontSize:12,fontWeight:800,color:C.textLight,fontFamily:"'DM Sans',sans-serif",marginBottom:8,textTransform:"uppercase",letterSpacing:0.5}}>{jornada.nombre||jkey}</div>
+                      <div style={{background:C.card,borderRadius:12,overflow:"hidden",border:`1px solid ${C.border}`}}>
+                        {(jornada.partidos||[]).map((p,pi)=>(
+                          <div key={pi} style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",borderTop:pi>0?`1px solid ${C.border}`:"none",fontFamily:"'DM Sans',sans-serif"}}>
+                            <span style={{flex:1,fontSize:12,fontWeight:700,color:C.text,textAlign:"right"}}>{p.local||p.home||"—"}</span>
+                            <span style={{background:C.inputBg,borderRadius:8,padding:"3px 10px",fontSize:12,fontWeight:900,color:C.text,minWidth:50,textAlign:"center",border:`1px solid ${C.border}`}}>{p.marcador||"vs"}</span>
+                            <span style={{flex:1,fontSize:12,fontWeight:700,color:C.text}}>{p.visitante||p.away||"—"}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))
+              )}
+              {/* APUESTAS */}
+              {vistaTab==="apuestas"&&(
+                apuestasComp.length===0
+                  ? <div style={{textAlign:"center",color:C.textFaint,padding:40,fontFamily:"'DM Sans',sans-serif",fontSize:13}}>Sin apuestas activas</div>
+                  : apuestasComp.map(ap=>{
+                    let progresoA="—",progresoB="—",etiqueta="";
+                    if(ap.metrica==="posicion"){
+                      etiqueta="Posición en tabla";
+                      const pA=posicionDeEquipo(ap.equipoA),pB=posicionDeEquipo(ap.equipoB);
+                      progresoA=pA?`#${pA}`:"—"; progresoB=pB?`#${pB}`:"—";
+                    }else if(ap.metrica==="puntos"){
+                      etiqueta="Puntos";
+                      const fA=filaDeEquipo(ap.equipoA),fB=filaDeEquipo(ap.equipoB);
+                      progresoA=fA?`${fA.pts||0} pts`:"—"; progresoB=fB?`${fB.pts||0} pts`:"—";
+                    }else if(ap.metrica==="gd"){
+                      etiqueta="Diferencia de goles";
+                      const fA=filaDeEquipo(ap.equipoA),fB=filaDeEquipo(ap.equipoB);
+                      const gdA=fA?(fA.gf||0)-(fA.gc||0):null, gdB=fB?(fB.gf||0)-(fB.gc||0):null;
+                      progresoA=gdA!==null?(gdA>=0?"+"+gdA:gdA):"—"; progresoB=gdB!==null?(gdB>=0?"+"+gdB:gdB):"—";
+                    }else if(ap.metrica==="h2h"){
+                      etiqueta="Resultado directo (H2H)";
+                      const partidos=h2hLista.filter(h=>(h.local===ap.equipoA&&h.visitante===ap.equipoB)||(h.local===ap.equipoB&&h.visitante===ap.equipoA));
+                      if(partidos.length===0){progresoA="Sin partidos";progresoB="Sin partidos";}
+                      else{
+                        let winsA=0,winsB=0;
+                        partidos.forEach(p=>{
+                          const golesA=p.local===ap.equipoA?p.golesLocal:p.golesVisitante;
+                          const golesB=p.local===ap.equipoB?p.golesLocal:p.golesVisitante;
+                          if(golesA>golesB) winsA++; else if(golesB>golesA) winsB++;
+                        });
+                        progresoA=`${winsA} victoria${winsA!==1?"s":""}`; progresoB=`${winsB} victoria${winsB!==1?"s":""}`;
+                      }
+                    }
+                    return(
+                      <div key={ap.id} style={{background:C.card,borderRadius:12,padding:"14px",border:`1.5px solid ${ap.estado==="activa"?(comp.color||TA.accent):C.border}`,marginBottom:12,opacity:ap.estado==="cerrada"?0.7:1}}>
+                        <div style={{fontSize:11,color:C.textMid,fontFamily:"'DM Sans',sans-serif",fontStyle:"italic",marginBottom:10}}>"{ap.condicion}"</div>
+                        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+                          <div style={{flex:1,textAlign:"center"}}>
+                            <div style={{fontSize:12,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{ap.equipoA}</div>
+                            <div style={{fontSize:16,fontWeight:900,color:comp.color||TA.accent,fontFamily:"'DM Sans',sans-serif"}}>{progresoA}</div>
+                          </div>
+                          <div style={{fontSize:11,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",fontWeight:700}}>VS</div>
+                          <div style={{flex:1,textAlign:"center"}}>
+                            <div style={{fontSize:12,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{ap.equipoB}</div>
+                            <div style={{fontSize:16,fontWeight:900,color:comp.color||TA.accent,fontFamily:"'DM Sans',sans-serif"}}>{progresoB}</div>
+                          </div>
+                        </div>
+                        <div style={{fontSize:8,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",textAlign:"center",marginTop:8}}>{etiqueta}</div>
+                        {ap.estado==="cerrada"&&(
+                          <div style={{marginTop:10,textAlign:"center",fontSize:11,fontWeight:800,color:"#27ae60",fontFamily:"'DM Sans',sans-serif"}}>
+                            {ap.ganador?`🏆 Ganó: ${ap.ganador}`:"Cerrada sin ganador"}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+              )}
+            </div>
+          </div>
+  );
+}
+
+
 function MainApp({user,isAdmin,onLogout}){
   const[teamData,setTeamData]=useState(null);
   const[allTeams,setAllTeams]=useState([]);
@@ -5982,208 +6186,7 @@ function MainApp({user,isAdmin,onLogout}){
       )}
 
       {/* VISTA PÚBLICA: Tabla / Goleadores / Fixture */}
-      {showCompVista&&(()=>{
-        const comp=showCompVista.comp;
-        const compId=comp.id;
-        const compData=competenciaData?.[compId]||{};
-        const grupos=compData.grupos||[];
-        const goleadores=compData.goleadores||[];
-        const asistencias=compData.asistencias||[];
-        const fixture=compData.fixture||{};
-        const [vistaTab,setVistaTab]=useState("tabla");
-        const [apuestasComp,setApuestasComp]=useState([]);
-        const [h2hLista,setH2hLista]=useState([]);
-        useEffect(()=>{
-          const unsub1=onSnapshot(doc(db,"config","apuestas"),snap=>{
-            const all=snap.exists()?snap.data():{};
-            setApuestasComp((all.lista||[]).filter(a=>a.compId===compId));
-          });
-          const unsub2=onSnapshot(doc(db,"config","h2hHistorial"),snap=>{
-            const all=snap.exists()?snap.data():{};
-            setH2hLista(all.lista||[]);
-          });
-          return ()=>{unsub1();unsub2();};
-        },[compId]);
-        // Helper: obtiene fila de tabla de un equipo (busca en todos los grupos)
-        const filaDeEquipo=(nombre)=>{
-          for(const g of grupos){
-            const fila=(g.tabla||[]).find(r=>r.equipo===nombre);
-            if(fila) return fila;
-          }
-          return null;
-        };
-        const posicionDeEquipo=(nombre)=>{
-          for(const g of grupos){
-            const ordenada=[...(g.tabla||[])].sort((a,b)=>b.pts-a.pts);
-            const idx=ordenada.findIndex(r=>r.equipo===nombre);
-            if(idx>=0) return idx+1;
-          }
-          return null;
-        };
-        return(
-          <div style={{position:"fixed",inset:0,zIndex:200,background:C.bg,overflowY:"auto"}}>
-            {/* Header */}
-            <div style={{background:comp.color||"#1a3a5c",padding:"16px",display:"flex",alignItems:"center",gap:12,position:"sticky",top:0,zIndex:10}}>
-              <button onClick={()=>setShowCompVista(null)} style={{background:"rgba(255,255,255,0.15)",border:"none",borderRadius:8,width:34,height:34,cursor:"pointer",color:"#fff",fontSize:18,display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
-              <div>
-                <div style={{fontSize:18,fontWeight:900,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>{comp.name}</div>
-                <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",fontFamily:"'DM Sans',sans-serif",fontWeight:600,textTransform:"uppercase",letterSpacing:0.5}}>Vista pública</div>
-              </div>
-            </div>
-            {/* Tabs */}
-            <div style={{display:"flex",borderBottom:`2px solid ${C.border}`,background:C.card}}>
-              {[["tabla","📊 Tabla"],["goles","⚽ Goles"],["fixture","📅 Fixture"],["apuestas","🎲 Apuestas"]].map(([id,label])=>(
-                <button key={id} onClick={()=>setVistaTab(id)} style={{flex:1,padding:"11px 4px",background:"none",border:"none",borderBottom:vistaTab===id?`3px solid ${comp.color||TA.accent}`:"3px solid transparent",cursor:"pointer",fontSize:11,fontWeight:700,color:vistaTab===id?(comp.color||TA.accent):C.textFaint,fontFamily:"'DM Sans',sans-serif",transition:"all 0.15s"}}>{label}</button>
-              ))}
-            </div>
-            {/* Content */}
-            <div style={{padding:"16px",maxWidth:600,margin:"0 auto"}}>
-              {/* TABLA */}
-              {vistaTab==="tabla"&&(
-                grupos.length===0
-                  ? <div style={{textAlign:"center",color:C.textFaint,padding:40,fontFamily:"'DM Sans',sans-serif",fontSize:13}}>Sin tabla disponible</div>
-                  : grupos.map((g,gi)=>(
-                    <div key={gi} style={{marginBottom:20}}>
-                      {grupos.length>1&&<div style={{fontSize:12,fontWeight:800,color:C.textLight,fontFamily:"'DM Sans',sans-serif",marginBottom:8,textTransform:"uppercase",letterSpacing:0.5}}>{g.nombre||`Grupo ${gi+1}`}</div>}
-                      <div style={{background:C.card,borderRadius:12,overflow:"hidden",border:`1px solid ${C.border}`}}>
-                        <div style={{display:"grid",gridTemplateColumns:"1fr 32px 32px 32px 32px 32px 32px",gap:0,padding:"7px 10px",background:C.inputBg,fontSize:9,fontWeight:800,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.3}}>
-                          <span>Equipo</span><span style={{textAlign:"center"}}>PJ</span><span style={{textAlign:"center"}}>G</span><span style={{textAlign:"center"}}>E</span><span style={{textAlign:"center"}}>P</span><span style={{textAlign:"center"}}>GD</span><span style={{textAlign:"center",fontWeight:900,color:TA.accent}}>Pts</span>
-                        </div>
-                        {[...(g.tabla||[])].sort((a,b)=>(b.pts||0)-(a.pts||0)||((b.gf||0)-(b.gc||0))-((a.gf||0)-(a.gc||0))).map((eq,ei)=>(
-                          <Fragment key={ei}>
-                            <div style={{display:"grid",gridTemplateColumns:"1fr 32px 32px 32px 32px 32px 32px",gap:0,padding:"9px 10px",borderTop:`1px solid ${C.border}`,fontSize:12,fontFamily:"'DM Sans',sans-serif",alignItems:"center",background:comp.formato==="liga"&&ei<8?TA.accent+"0d":"transparent"}}>
-                              <span style={{fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{comp.formato==="liga"&&ei<8?"🟢 ":""}{eq.equipo}</span>
-                              <span style={{textAlign:"center",color:C.textLight}}>{eq.pj||0}</span>
-                              <span style={{textAlign:"center",color:"#27ae60",fontWeight:600}}>{eq.pg||0}</span>
-                              <span style={{textAlign:"center",color:C.textLight}}>{eq.pe||0}</span>
-                              <span style={{textAlign:"center",color:"#e74c3c"}}>{eq.pp||0}</span>
-                              <span style={{textAlign:"center",color:C.textLight}}>{(eq.gf||0)-(eq.gc||0)>=0?"+"+((eq.gf||0)-(eq.gc||0)):(eq.gf||0)-(eq.gc||0)}</span>
-                              <span style={{textAlign:"center",fontWeight:900,fontSize:14,color:TA.accent}}>{eq.pts||0}</span>
-                            </div>
-                            {comp.formato==="liga"&&ei===7&&(
-                              <div style={{padding:"4px 0",textAlign:"center",fontSize:10,fontWeight:800,color:TA.accent,borderBottom:`2px dashed ${TA.accent}`}}>▲ Clasificados a Liguilla</div>
-                            )}
-                          </Fragment>
-                        ))}
-                      </div>
-                    </div>
-                  ))
-              )}
-              {/* GOLES */}
-              {vistaTab==="goles"&&(
-                <div>
-                  {/* Goleadores */}
-                  <div style={{fontSize:13,fontWeight:800,color:C.textLight,fontFamily:"'DM Sans',sans-serif",marginBottom:10,display:"flex",alignItems:"center",gap:6}}>⚽ Goleadores</div>
-                  {goleadores.length===0
-                    ? <div style={{textAlign:"center",color:C.textFaint,padding:20,fontFamily:"'DM Sans',sans-serif",fontSize:12}}>Sin datos</div>
-                    : <div style={{background:C.card,borderRadius:12,overflow:"hidden",border:`1px solid ${C.border}`,marginBottom:20}}>
-                        {goleadores.map((r,i)=>(
-                          <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderTop:i>0?`1px solid ${C.border}`:"none"}}>
-                            <span style={{fontWeight:900,fontSize:16,color:i===0?"#f39c12":i===1?"#95a5a6":i===2?"#cd7f32":C.textFaint,minWidth:22,textAlign:"center"}}>{i+1}</span>
-                            <span style={{flex:1,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif",fontSize:13}}>{r.nombre||r.player||"—"}</span>
-                            <span style={{fontSize:11,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>{r.equipo||r.team||""}</span>
-                            <span style={{fontWeight:900,fontSize:16,color:TA.accent,minWidth:24,textAlign:"right"}}>{r.goles||r.goals||r.valor||0}</span>
-                          </div>
-                        ))}
-                      </div>
-                  }
-                  {/* Asistencias */}
-                  <div style={{fontSize:13,fontWeight:800,color:C.textLight,fontFamily:"'DM Sans',sans-serif",marginBottom:10,display:"flex",alignItems:"center",gap:6}}>🎯 Asistencias</div>
-                  {asistencias.length===0
-                    ? <div style={{textAlign:"center",color:C.textFaint,padding:20,fontFamily:"'DM Sans',sans-serif",fontSize:12}}>Sin datos</div>
-                    : <div style={{background:C.card,borderRadius:12,overflow:"hidden",border:`1px solid ${C.border}`}}>
-                        {asistencias.map((r,i)=>(
-                          <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderTop:i>0?`1px solid ${C.border}`:"none"}}>
-                            <span style={{fontWeight:900,fontSize:16,color:i===0?"#f39c12":i===1?"#95a5a6":i===2?"#cd7f32":C.textFaint,minWidth:22,textAlign:"center"}}>{i+1}</span>
-                            <span style={{flex:1,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif",fontSize:13}}>{r.nombre||r.player||"—"}</span>
-                            <span style={{fontSize:11,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>{r.equipo||r.team||""}</span>
-                            <span style={{fontWeight:900,fontSize:16,color:"#8e44ad",minWidth:24,textAlign:"right"}}>{r.asistencias||r.assists||r.valor||0}</span>
-                          </div>
-                        ))}
-                      </div>
-                  }
-                </div>
-              )}
-              {/* FIXTURE */}
-              {vistaTab==="fixture"&&(
-                Object.keys(fixture).length===0
-                  ? <div style={{textAlign:"center",color:C.textFaint,padding:40,fontFamily:"'DM Sans',sans-serif",fontSize:13}}>Sin fixture disponible</div>
-                  : Object.entries(fixture).map(([jkey,jornada])=>(
-                    <div key={jkey} style={{marginBottom:20}}>
-                      <div style={{fontSize:12,fontWeight:800,color:C.textLight,fontFamily:"'DM Sans',sans-serif",marginBottom:8,textTransform:"uppercase",letterSpacing:0.5}}>{jornada.nombre||jkey}</div>
-                      <div style={{background:C.card,borderRadius:12,overflow:"hidden",border:`1px solid ${C.border}`}}>
-                        {(jornada.partidos||[]).map((p,pi)=>(
-                          <div key={pi} style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",borderTop:pi>0?`1px solid ${C.border}`:"none",fontFamily:"'DM Sans',sans-serif"}}>
-                            <span style={{flex:1,fontSize:12,fontWeight:700,color:C.text,textAlign:"right"}}>{p.local||p.home||"—"}</span>
-                            <span style={{background:C.inputBg,borderRadius:8,padding:"3px 10px",fontSize:12,fontWeight:900,color:C.text,minWidth:50,textAlign:"center",border:`1px solid ${C.border}`}}>{p.marcador||"vs"}</span>
-                            <span style={{flex:1,fontSize:12,fontWeight:700,color:C.text}}>{p.visitante||p.away||"—"}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))
-              )}
-              {/* APUESTAS */}
-              {vistaTab==="apuestas"&&(
-                apuestasComp.length===0
-                  ? <div style={{textAlign:"center",color:C.textFaint,padding:40,fontFamily:"'DM Sans',sans-serif",fontSize:13}}>Sin apuestas activas</div>
-                  : apuestasComp.map(ap=>{
-                    let progresoA="—",progresoB="—",etiqueta="";
-                    if(ap.metrica==="posicion"){
-                      etiqueta="Posición en tabla";
-                      const pA=posicionDeEquipo(ap.equipoA),pB=posicionDeEquipo(ap.equipoB);
-                      progresoA=pA?`#${pA}`:"—"; progresoB=pB?`#${pB}`:"—";
-                    }else if(ap.metrica==="puntos"){
-                      etiqueta="Puntos";
-                      const fA=filaDeEquipo(ap.equipoA),fB=filaDeEquipo(ap.equipoB);
-                      progresoA=fA?`${fA.pts||0} pts`:"—"; progresoB=fB?`${fB.pts||0} pts`:"—";
-                    }else if(ap.metrica==="gd"){
-                      etiqueta="Diferencia de goles";
-                      const fA=filaDeEquipo(ap.equipoA),fB=filaDeEquipo(ap.equipoB);
-                      const gdA=fA?(fA.gf||0)-(fA.gc||0):null, gdB=fB?(fB.gf||0)-(fB.gc||0):null;
-                      progresoA=gdA!==null?(gdA>=0?"+"+gdA:gdA):"—"; progresoB=gdB!==null?(gdB>=0?"+"+gdB:gdB):"—";
-                    }else if(ap.metrica==="h2h"){
-                      etiqueta="Resultado directo (H2H)";
-                      const partidos=h2hLista.filter(h=>(h.local===ap.equipoA&&h.visitante===ap.equipoB)||(h.local===ap.equipoB&&h.visitante===ap.equipoA));
-                      if(partidos.length===0){progresoA="Sin partidos";progresoB="Sin partidos";}
-                      else{
-                        let winsA=0,winsB=0;
-                        partidos.forEach(p=>{
-                          const golesA=p.local===ap.equipoA?p.golesLocal:p.golesVisitante;
-                          const golesB=p.local===ap.equipoB?p.golesLocal:p.golesVisitante;
-                          if(golesA>golesB) winsA++; else if(golesB>golesA) winsB++;
-                        });
-                        progresoA=`${winsA} victoria${winsA!==1?"s":""}`; progresoB=`${winsB} victoria${winsB!==1?"s":""}`;
-                      }
-                    }
-                    return(
-                      <div key={ap.id} style={{background:C.card,borderRadius:12,padding:"14px",border:`1.5px solid ${ap.estado==="activa"?(comp.color||TA.accent):C.border}`,marginBottom:12,opacity:ap.estado==="cerrada"?0.7:1}}>
-                        <div style={{fontSize:11,color:C.textMid,fontFamily:"'DM Sans',sans-serif",fontStyle:"italic",marginBottom:10}}>"{ap.condicion}"</div>
-                        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
-                          <div style={{flex:1,textAlign:"center"}}>
-                            <div style={{fontSize:12,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{ap.equipoA}</div>
-                            <div style={{fontSize:16,fontWeight:900,color:comp.color||TA.accent,fontFamily:"'DM Sans',sans-serif"}}>{progresoA}</div>
-                          </div>
-                          <div style={{fontSize:11,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",fontWeight:700}}>VS</div>
-                          <div style={{flex:1,textAlign:"center"}}>
-                            <div style={{fontSize:12,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{ap.equipoB}</div>
-                            <div style={{fontSize:16,fontWeight:900,color:comp.color||TA.accent,fontFamily:"'DM Sans',sans-serif"}}>{progresoB}</div>
-                          </div>
-                        </div>
-                        <div style={{fontSize:8,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",textAlign:"center",marginTop:8}}>{etiqueta}</div>
-                        {ap.estado==="cerrada"&&(
-                          <div style={{marginTop:10,textAlign:"center",fontSize:11,fontWeight:800,color:"#27ae60",fontFamily:"'DM Sans',sans-serif"}}>
-                            {ap.ganador?`🏆 Ganó: ${ap.ganador}`:"Cerrada sin ganador"}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })
-              )}
-            </div>
-          </div>
-        );
-      })()}
+      {showCompVista&&<CompVistaPublica comp={showCompVista.comp} competenciaData={competenciaData} onClose={()=>setShowCompVista(null)}/>}
 
       <LiveAndAviso/>
       {/* TOP BAR */}
