@@ -5258,6 +5258,24 @@ function CompetenciasModal({allTeams,onClose}){
     const hasIt=cur.includes(selected);
     const next=hasIt?cur.filter(x=>x!==selected):[...cur,selected];
     await updateDoc(doc(db,"teams",team.uid||team.id),{competencias:next});
+    // Si la competencia es formato "liga", sincroniza la Tabla General en Firestore
+    // (Resultado/Fixture leen directo de config/competenciaData, no solo del estado local de Tabla)
+    if(activeComp.formato==="liga"){
+      const eqNames=allTeams.filter(t=>{
+        const tc=(t.uid||t.id)===(team.uid||team.id)?next:(t.competencias||[]);
+        return tc.includes(selected);
+      }).map(t=>t.teamName);
+      const ref=doc(db,"config","competenciaData");
+      const snap=await getDoc(ref).catch(()=>null);
+      const current=snap?.exists()?snap.data():{};
+      const compData=current[selected]||{};
+      const existing=(compData.grupos||[])[0];
+      const tabla=eqNames.map(eq=>{
+        const found=(existing?.tabla||[]).find(r=>r.equipo===eq);
+        return found||{equipo:eq,pj:0,pg:0,pe:0,pp:0,gf:0,gc:0,pts:0};
+      });
+      await setDoc(ref,{...current,[selected]:{...compData,grupos:[{nombre:"Tabla General",equipos:eqNames,tabla}]}},{merge:true});
+    }
   };
 
   const saveCompName=async(id)=>{
@@ -5448,6 +5466,25 @@ function CompetenciasModal({allTeams,onClose}){
               setAiMsg(`✅ Sorteo de ${activeComp.name} anunciado (${inscritos.length} equipos)`);
             }} style={{padding:"8px",borderRadius:8,background:"transparent",border:`1.5px solid ${activeComp.color}`,color:activeComp.color,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",marginBottom:6}}>
               📢 Anunciar sorteo / inscripción de equipos
+            </button>
+          )}
+          {selected&&subTab==="equipos"&&activeComp.formato==="liga"&&(
+            <button onClick={async()=>{
+              const eqNames=allTeams.filter(t=>(t.competencias||[]).includes(selected)).map(t=>t.teamName);
+              if(eqNames.length<2){setAiMsg("❌ Necesitas al menos 2 equipos inscritos");return;}
+              const ref=doc(db,"config","competenciaData");
+              const snap=await getDoc(ref).catch(()=>null);
+              const current=snap?.exists()?snap.data():{};
+              const compData=current[selected]||{};
+              const existing=(compData.grupos||[])[0];
+              const tabla=eqNames.map(eq=>{
+                const found=(existing?.tabla||[]).find(r=>r.equipo===eq);
+                return found||{equipo:eq,pj:0,pg:0,pe:0,pp:0,gf:0,gc:0,pts:0};
+              });
+              await setDoc(ref,{...current,[selected]:{...compData,grupos:[{nombre:"Tabla General",equipos:eqNames,tabla}]}},{merge:true});
+              setAiMsg(`✅ Tabla sincronizada con Firestore (${eqNames.length} equipos) — ya puedes usar Resultado y Fixture`);
+            }} style={{padding:"8px",borderRadius:8,background:"transparent",border:"1.5px solid #27ae60",color:"#27ae60",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",marginBottom:6}}>
+              🔄 Sincronizar tabla (arregla "Primero configura equipos")
             </button>
           )}
           {selected&&subTab==="equipos"&&allTeams.map(team=>{
