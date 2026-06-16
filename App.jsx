@@ -4146,18 +4146,35 @@ function CompetenciaGruposSetup({compId,compName,compColor,formato,allTeams,setA
   };
 
   const iniciarLiguilla=async()=>{
-    const g=local[0];
-    if(!g||(g.tabla||[]).length<8){setAiMsg("❌ Se necesitan al menos 8 equipos para iniciar la liguilla");return;}
-    const ordenada=[...(g.tabla||[])].sort((a,b)=>b.pts-a.pts||((b.gf||0)-(b.gc||0))-((a.gf||0)-(a.gc||0)));
-    const top8=ordenada.slice(0,8).map(r=>r.equipo);
-    if(!window.confirm(`¿Iniciar la liguilla de ${compName} con estos 8 equipos?\n\n${top8.map((e,i)=>`${i+1}. ${e}`).join("\n")}\n\nLa tabla regular quedará guardada como historial.`)) return;
+    let clasificados=[];
+    let minRequerido=8;
+    if(formato==="liga"){
+      const g=local[0];
+      minRequerido=8;
+      if(!g||(g.tabla||[]).length<minRequerido){setAiMsg(`❌ Se necesitan al menos ${minRequerido} equipos para iniciar la liguilla`);return;}
+      const ordenada=[...(g.tabla||[])].sort((a,b)=>b.pts-a.pts||((b.gf||0)-(b.gc||0))-((a.gf||0)-(a.gc||0)));
+      clasificados=ordenada.slice(0,minRequerido).map(r=>r.equipo);
+    }else if(formato==="grupos"){
+      // Top 2 de cada grupo. Copa→cuartos (4 grupos x2=8), Champions/Europa/Conference→semis (2 grupos x2=4)
+      const gruposConTabla=local.filter(g=>(g.tabla||[]).length>=2);
+      minRequerido=compId==="copa"?16:4;
+      const gruposNecesarios=minRequerido/2;
+      if(gruposConTabla.length<gruposNecesarios){setAiMsg(`❌ Se necesitan al menos ${gruposNecesarios} grupos con tabla (2+ equipos cada uno) para clasificar a ${minRequerido===8?"Cuartos":"Semis"}`);return;}
+      clasificados=gruposConTabla.slice(0,gruposNecesarios).flatMap(g=>{
+        const ordenada=[...(g.tabla||[])].sort((a,b)=>b.pts-a.pts||((b.gf||0)-(b.gc||0))-((a.gf||0)-(a.gc||0)));
+        return ordenada.slice(0,2).map(r=>r.equipo);
+      });
+    }
+    if(clasificados.length===0){setAiMsg("❌ No hay clasificados suficientes");return;}
+    const faseLabel=clasificados.length===16?"Octavos de Final":clasificados.length===8?"Cuartos de Final":clasificados.length===4?"Semifinales":"Liguilla";
+    if(!window.confirm(`¿Iniciar ${faseLabel} de ${compName} con estos equipos?\n\n${clasificados.map((e,i)=>`${i+1}. ${e}`).join("\n")}\n\nLa tabla/grupos regular quedará guardada como historial.`)) return;
     const ref=doc(db,"config","competenciaData");
     const snap=await getDoc(ref).catch(()=>null);
     const current=snap?.exists()?snap.data():{};
     const compData=current[compId]||{};
-    await setDoc(ref,{...current,[compId]:{...compData,liguillaIniciada:true,liguillaEquipos:top8,liguillaPartidos:compData.liguillaPartidos||[]}},{merge:true});
-    await addNoticia(`🏆 ¡Inició la Liguilla de ${compName}! Clasificados: ${top8.join(", ")}`,"🏆");
-    setAiMsg("✅ Liguilla iniciada");
+    await setDoc(ref,{...current,[compId]:{...compData,liguillaIniciada:true,liguillaEquipos:clasificados,liguillaPartidos:compData.liguillaPartidos||[]}},{merge:true});
+    await addNoticia(`🏆 ¡Iniciaron ${faseLabel} de ${compName}! Clasificados: ${clasificados.join(", ")}`,"🏆");
+    setAiMsg(`✅ ${faseLabel} iniciada`);
   };
 
   // ─── Procesar imagen de tabla de clasificación ──────────────────────────
@@ -4335,17 +4352,6 @@ function CompetenciaGruposSetup({compId,compName,compColor,formato,allTeams,setA
               </table>
             </div>
           )}
-          {formato==="liga"&&(g.tabla||[]).length>=8&&!data?.liguillaIniciada&&(
-            <button onClick={iniciarLiguilla}
-              style={{width:"100%",padding:"10px",borderRadius:9,background:"#e67e22",color:"#fff",border:"none",fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",marginBottom:10}}>
-              🏁 Iniciar Liguilla
-            </button>
-          )}
-          {formato==="liga"&&data?.liguillaIniciada&&(
-            <div style={{padding:"8px 10px",borderRadius:9,background:"#e67e2222",border:"1.5px solid #e67e22",color:"#e67e22",fontSize:11,fontWeight:700,fontFamily:"'DM Sans',sans-serif",textAlign:"center",marginBottom:10}}>
-              🏆 Liguilla en curso — ve a la pestaña "Liguilla"
-            </div>
-          )}
           {/* Subir imagen o Excel */}
           {(g.equipos||[]).length>=2&&(
             <>
@@ -4399,6 +4405,29 @@ function CompetenciaGruposSetup({compId,compName,compColor,formato,allTeams,setA
           )}
         </div>
       ))}
+      {formato!=="final"&&(()=>{
+        const gruposConTabla=local.filter(g=>(g.tabla||[]).length>=2);
+        const minRequerido=formato==="liga"?8:(compId==="copa"?8:4);
+        const gruposNecesarios=formato==="liga"?1:minRequerido/2;
+        const listo=formato==="liga"?(local[0]?.tabla||[]).length>=8:gruposConTabla.length>=gruposNecesarios;
+        const faseLabel=minRequerido===16?"Octavos de Final":minRequerido===8?"Cuartos de Final":"Semifinales";
+        if(data?.liguillaIniciada){
+          return(
+            <div style={{padding:"8px 10px",borderRadius:9,background:"#e67e2222",border:"1.5px solid #e67e22",color:"#e67e22",fontSize:11,fontWeight:700,fontFamily:"'DM Sans',sans-serif",textAlign:"center",marginBottom:10}}>
+              🏆 {faseLabel} en curso — ve a la pestaña "Liguilla"
+            </div>
+          );
+        }
+        if(listo){
+          return(
+            <button onClick={iniciarLiguilla}
+              style={{width:"100%",padding:"10px",borderRadius:9,background:"#e67e22",color:"#fff",border:"none",fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",marginBottom:10}}>
+              🏁 Iniciar {faseLabel}
+            </button>
+          );
+        }
+        return null;
+      })()}
       {formato!=="liga"&&(
         <button onClick={addGrupo}
           style={{padding:"8px",borderRadius:8,background:"transparent",border:`1.5px dashed ${compColor}`,color:compColor,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
@@ -5019,7 +5048,7 @@ function CompetenciaLiguillaSetup({compId,compName,compColor,setAiMsg}){
   };
 
   if(equipos.length===0){
-    return <div style={{textAlign:"center",color:C.textFaint,padding:30,fontFamily:"'DM Sans',sans-serif",fontSize:12}}>La liguilla todavía no ha iniciado. Ve a la pestaña "Tabla" y presiona "🏁 Iniciar Liguilla" cuando la liga regular tenga 8+ equipos.</div>;
+    return <div style={{textAlign:"center",color:C.textFaint,padding:30,fontFamily:"'DM Sans',sans-serif",fontSize:12}}>La fase eliminatoria todavía no ha iniciado. Ve a la pestaña "Tabla" y presiona el botón de iniciar cuando haya suficientes equipos/grupos clasificados.</div>;
   }
 
   return(
@@ -5689,7 +5718,7 @@ function CompetenciasModal({allTeams,onClose}){
                 style={{flex:1,padding:"7px",borderRadius:8,border:`1.5px solid ${subTab==="apuestas"?activeComp.color:C.border}`,background:subTab==="apuestas"?activeComp.color:C.inputBg,color:subTab==="apuestas"?"#fff":C.textMid,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
                 🎲 Apuestas
               </button>
-              {activeComp.formato==="liga"&&liguillaIniciada&&(
+              {activeComp.formato!=="final"&&liguillaIniciada&&(
                 <button onClick={()=>setSubTab("liguilla")}
                   style={{flex:1,padding:"7px",borderRadius:8,border:`1.5px solid ${subTab==="liguilla"?"#e67e22":C.border}`,background:subTab==="liguilla"?"#e67e22":C.inputBg,color:subTab==="liguilla"?"#fff":C.textMid,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
                   🏆 Liguilla
@@ -5839,7 +5868,7 @@ function CompVistaPublica({comp,competenciaData,onClose}){
       </div>
             {/* Tabs */}
             <div style={{display:"flex",borderBottom:`2px solid ${C.border}`,background:C.card}}>
-              {[["tabla","📊 Tabla"],["goles","⚽ Goles"],["fixture","📅 Fixture"],["apuestas","🎲 Apuestas"],...(comp.formato==="liga"&&liguillaIniciada?[["liguilla","🏆 Liguilla"]]:[])].map(([id,label])=>(
+              {[["tabla","📊 Tabla"],["goles","⚽ Goles"],["fixture","📅 Fixture"],["apuestas","🎲 Apuestas"],...(comp.formato!=="final"&&liguillaIniciada?[["liguilla","🏆 Liguilla"]]:[])].map(([id,label])=>(
                 <button key={id} onClick={()=>setVistaTab(id)} style={{flex:1,padding:"11px 4px",background:"none",border:"none",borderBottom:vistaTab===id?`3px solid ${comp.color||"#1a3a5c"}`:"3px solid transparent",cursor:"pointer",fontSize:11,fontWeight:700,color:vistaTab===id?(comp.color||"#1a3a5c"):C.textFaint,fontFamily:"'DM Sans',sans-serif",transition:"all 0.15s"}}>{label}</button>
               ))}
             </div>
