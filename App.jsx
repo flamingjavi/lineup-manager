@@ -4407,7 +4407,7 @@ function CompetenciaGruposSetup({compId,compName,compColor,formato,allTeams,setA
       ))}
       {formato!=="final"&&(()=>{
         const gruposConTabla=local.filter(g=>(g.tabla||[]).length>=2);
-        const minRequerido=formato==="liga"?8:(compId==="copa"?8:4);
+        const minRequerido=formato==="liga"?8:(compId==="copa"?16:4);
         const gruposNecesarios=formato==="liga"?1:minRequerido/2;
         const listo=formato==="liga"?(local[0]?.tabla||[]).length>=8:gruposConTabla.length>=gruposNecesarios;
         const faseLabel=minRequerido===16?"Octavos de Final":minRequerido===8?"Cuartos de Final":"Semifinales";
