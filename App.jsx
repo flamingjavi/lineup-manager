@@ -7003,20 +7003,6 @@ function MainApp({user,isAdmin,onLogout}){
                         </div>
                         <div onClick={async()=>{
                           setShowAdminMenu(false);
-                          if(!window.confirm("¿Renombrar 'Alineación A' → 'Liga' y crear 'Copa' para todos los equipos?")) return;
-                          let count=0;
-                          for(const t of allTeams){
-                            const ref=doc(db,"teams",t.id||t.uid);let lineups=[...(t.lineups||[])];let changed=false;
-                            lineups=lineups.map(l=>{if(l.name==="Alineación A"||l.name==="Alineacion A"){changed=true;return{...l,name:"Liga"};}return l;});
-                            if(!lineups.some(l=>l.name==="Copa")){lineups.push({id:`copa_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,name:"Copa",formation:"4-3-3",starters:{},subs:Array(7).fill(null),code:""});changed=true;}
-                            if(changed){await updateDoc(ref,{lineups});count++;}
-                          }
-                          alert(`✅ ${count} equipos actualizados.`);
-                        }} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:"#9b59b6"}}>
-                          ⚽ <span>Liga/Copa todos</span>
-                        </div>
-                        <div onClick={async()=>{
-                          setShowAdminMenu(false);
                           const opciones={
                             jugadores:{label:"jugadores (plantillas + pool global)",patch:t=>({squad:[]})},
                             plantillas:{label:"plantillas (alineaciones: titulares, banca, código)",patch:t=>({lineups:(t.lineups||[]).map(l=>({...l,starters:{},subs:Array(7).fill(null),code:""}))})},
