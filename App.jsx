@@ -1473,6 +1473,126 @@ function LiveAndAviso(){
 
 // ─── ADMIN: Aviso + Canal Twitch (fuera del Mundial) ──────────────────────────
 // ─── MODO TRANSMISIÓN: admin activa/gestiona, equipos envían instrucciones ───
+// ─── ADMIN: Aprobar/rechazar noticias de equipos + gestionar temáticas ───────
+function NoticiasAdmin(){
+  const[pendientes,setPendientes]=useState([]);
+  const[tematicas,setTematicas]=useState(TEMATICAS_NOTICIAS_DEFAULT);
+  const[nuevaTematica,setNuevaTematica]=useState("");
+  const[mostrarHistorial,setMostrarHistorial]=useState(false);
+
+  useEffect(()=>{
+    const unsub=onSnapshot(doc(db,"config","noticiasUsuario"),snap=>{
+      const lista=snap.exists()?(snap.data().lista||[]):[];
+      setPendientes([...lista].reverse());
+    });
+    return unsub;
+  },[]);
+
+  useEffect(()=>{
+    const unsub=onSnapshot(doc(db,"config","tematicasNoticias"),snap=>{
+      const lista=snap.exists()?(snap.data().lista||[]):[];
+      setTematicas(lista.length>0?lista:TEMATICAS_NOTICIAS_DEFAULT);
+    });
+    return unsub;
+  },[]);
+
+  const actualizarEstado=async(id,estado)=>{
+    const ref=doc(db,"config","noticiasUsuario");
+    const snap=await getDoc(ref).catch(()=>null);
+    const current=snap?.exists()?snap.data():{lista:[]};
+    const item=(current.lista||[]).find(n=>n.id===id);
+    const nuevaLista=(current.lista||[]).map(n=>n.id===id?{...n,estado}:n);
+    await setDoc(ref,{lista:nuevaLista},{merge:true});
+    if(estado==="aprobada"&&item){
+      const textoFinal=item.equipoMencionado
+        ? `${item.icono} ${item.equipoAutor} sobre ${item.equipoMencionado}: ${item.texto}`
+        : `${item.icono} ${item.equipoAutor}: ${item.texto}`;
+      await addNoticia(textoFinal,item.icono);
+    }
+  };
+
+  const agregarTematica=async()=>{
+    if(!nuevaTematica.trim()){return;}
+    const id=`custom_${Date.now()}`;
+    const nueva={id,label:`📌 ${nuevaTematica.trim()}`,icono:"📌",requiereEquipo:true};
+    const ref=doc(db,"config","tematicasNoticias");
+    const snap=await getDoc(ref).catch(()=>null);
+    const current=snap?.exists()&&(snap.data().lista||[]).length>0?snap.data().lista:TEMATICAS_NOTICIAS_DEFAULT;
+    await setDoc(ref,{lista:[...current,nueva]},{merge:true});
+    setNuevaTematica("");
+  };
+
+  const eliminarTematica=async(id)=>{
+    const ref=doc(db,"config","tematicasNoticias");
+    const snap=await getDoc(ref).catch(()=>null);
+    const current=snap?.exists()&&(snap.data().lista||[]).length>0?snap.data().lista:TEMATICAS_NOTICIAS_DEFAULT;
+    await setDoc(ref,{lista:current.filter(t=>t.id!==id)},{merge:true});
+  };
+
+  const formatFecha=(iso)=>{
+    try{const d=new Date(iso);return d.toLocaleDateString("es-GT",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"});}catch{return "";}
+  };
+
+  const soloPendientes=pendientes.filter(n=>n.estado==="pendiente");
+  const historial=pendientes.filter(n=>n.estado!=="pendiente");
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:14}}>
+      {/* Gestor de temáticas */}
+      <div>
+        <div style={{fontSize:10,fontWeight:800,color:C.textLight,fontFamily:"'DM Sans',sans-serif",marginBottom:6}}>🏷️ Temáticas disponibles</div>
+        <div style={{display:"flex",flexDirection:"column",gap:5,marginBottom:8}}>
+          {tematicas.map(t=>(
+            <div key={t.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"6px 10px",borderRadius:7,background:C.inputBg,border:`1px solid ${C.border}`}}>
+              <span style={{fontSize:11,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{t.label}</span>
+              {!TEMATICAS_NOTICIAS_DEFAULT.some(d=>d.id===t.id)&&(
+                <button onClick={()=>eliminarTematica(t.id)} style={{background:"none",border:"none",color:"#c0392b",cursor:"pointer",fontSize:11}}>🗑️</button>
+              )}
+            </div>
+          ))}
+        </div>
+        <div style={{display:"flex",gap:6}}>
+          <input value={nuevaTematica} onChange={e=>setNuevaTematica(e.target.value)} placeholder="Nueva temática…"
+            style={{flex:1,padding:"7px 9px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif"}}/>
+          <button onClick={agregarTematica} style={{padding:"7px 12px",borderRadius:7,background:"#1a3a5c",color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>+ Agregar</button>
+        </div>
+      </div>
+
+      {/* Pendientes */}
+      <div>
+        <div style={{fontSize:10,fontWeight:800,color:C.textLight,fontFamily:"'DM Sans',sans-serif",marginBottom:6}}>📥 Pendientes ({soloPendientes.length})</div>
+        {soloPendientes.length===0
+          ? <div style={{textAlign:"center",color:C.textFaint,padding:14,fontFamily:"'DM Sans',sans-serif",fontSize:11}}>Sin noticias pendientes</div>
+          : soloPendientes.map(n=>(
+            <div key={n.id} style={{background:C.card,borderRadius:9,padding:"9px 11px",border:`1.5px solid #f39c12`,marginBottom:8}}>
+              <div style={{fontSize:9,fontWeight:700,color:"#f39c12",fontFamily:"'DM Sans',sans-serif",marginBottom:3}}>{n.tematicaLabel} · {n.equipoAutor}{n.equipoMencionado?` → ${n.equipoMencionado}`:""}</div>
+              <div style={{fontSize:12,color:C.text,fontFamily:"'DM Sans',sans-serif",marginBottom:6}}>{n.texto}</div>
+              <div style={{fontSize:9,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginBottom:6}}>{formatFecha(n.fecha)}</div>
+              <div style={{display:"flex",gap:6}}>
+                <button onClick={()=>actualizarEstado(n.id,"aprobada")} style={{flex:1,padding:"6px",borderRadius:7,background:"#27ae60",color:"#fff",border:"none",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>✅ Aprobar</button>
+                <button onClick={()=>actualizarEstado(n.id,"rechazada")} style={{flex:1,padding:"6px",borderRadius:7,background:"transparent",border:"1px solid #c0392b",color:"#c0392b",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>❌ Rechazar</button>
+              </div>
+            </div>
+          ))
+        }
+      </div>
+
+      {/* Historial */}
+      <div>
+        <button onClick={()=>setMostrarHistorial(v=>!v)} style={{background:"none",border:"none",color:C.textFaint,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+          {mostrarHistorial?"▲":"▼"} Historial ({historial.length})
+        </button>
+        {mostrarHistorial&&historial.map(n=>(
+          <div key={n.id} style={{padding:"7px 10px",borderRadius:7,background:C.inputBg,border:`1px solid ${C.border}`,marginTop:6,opacity:0.7}}>
+            <div style={{fontSize:9,fontWeight:700,color:n.estado==="aprobada"?"#27ae60":"#c0392b",fontFamily:"'DM Sans',sans-serif"}}>{n.estado==="aprobada"?"✅ Aprobada":"❌ Rechazada"} · {n.equipoAutor}</div>
+            <div style={{fontSize:11,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{n.texto}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function TransmisionAdmin({allTeams}){
   const[transmision,setTransmision]=useState(null);
   const[esMundial,setEsMundial]=useState(false);
@@ -3958,6 +4078,20 @@ async function addNoticia(texto,icono="📰"){
   await setDoc(ref,{lista:lista.slice(-100)},{merge:true});
 }
 
+const TEMATICAS_NOTICIAS_DEFAULT=[
+  {id:"tirarle",label:"🎯 Tirarle a un equipo",icono:"🎯",requiereEquipo:true},
+  {id:"prepararse",label:"🛡️ Prepararse para un partido",icono:"🛡️",requiereEquipo:true},
+  {id:"rumor",label:"🤫 Rumores de fichajes",icono:"🤫",requiereEquipo:true},
+  {id:"fichaje",label:"✅ Confirmación de fichajes",icono:"✅",requiereEquipo:true},
+];
+
+async function getTematicasNoticias(){
+  const ref=doc(db,"config","tematicasNoticias");
+  const snap=await getDoc(ref).catch(()=>null);
+  if(snap?.exists()&&(snap.data().lista||[]).length>0) return snap.data().lista;
+  return TEMATICAS_NOTICIAS_DEFAULT;
+}
+
 async function addH2H({local,golesLocal,visitante,golesVisitante,competencia,jornada}){
   const ref=doc(db,"config","h2hHistorial");
   const snap=await getDoc(ref).catch(()=>null);
@@ -4132,7 +4266,7 @@ function TransmisionPanel({teamData,lineupName,esMundial,onClose}){
 }
 
 
-function HomeScreen({teamData,onSelect,isAdmin,onOpenMundial}){
+function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial}){
   const tc=getTeamColor(teamData?.teamColor||"blue");
   const comps=(teamData?.competencias||[]).map(id=>COMPETENCIAS_AVAILABLE.find(c=>c.id===id)).filter(Boolean);
   const teamInitials=(teamData?.teamName||"?").slice(0,2).toUpperCase();
@@ -4267,14 +4401,15 @@ function HomeScreen({teamData,onSelect,isAdmin,onOpenMundial}){
         </button>
 
       </div>
-      {showNoticias&&<NoticiasModal onClose={()=>setShowNoticias(false)}/>}
+      {showNoticias&&<NoticiasModal teamData={teamData} allTeams={allTeams} onClose={()=>setShowNoticias(false)}/>}
     </div>
   );
 }
 
 // ─── NOTICIAS ─────────────────────────────────────────────────────────────────
-function NoticiasModal({onClose}){
+function NoticiasModal({teamData,allTeams,onClose}){
   const[noticias,setNoticias]=useState([]);
+  const[showCrear,setShowCrear]=useState(false);
   useEffect(()=>{
     const unsub=onSnapshot(doc(db,"config","noticias"),snap=>{
       const lista=snap.exists()?(snap.data().lista||[]):[];
@@ -4295,7 +4430,10 @@ function NoticiasModal({onClose}){
       <div style={{background:C.card,flex:1,display:"flex",flexDirection:"column",maxHeight:"100vh",overflowY:"auto"}}>
         <div style={{padding:"12px 16px",background:"linear-gradient(135deg,#1a1a2e,#34345b)",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
           <span style={{fontSize:15,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>📰 NOTICIAS</span>
-          <button onClick={onClose} style={{marginLeft:"auto",background:"rgba(255,255,255,0.15)",border:"none",borderRadius:"50%",width:28,height:28,color:"#fff",cursor:"pointer",fontSize:15,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+          {teamData?.teamName&&(
+            <button onClick={()=>setShowCrear(true)} style={{marginLeft:"auto",background:"rgba(255,255,255,0.15)",border:"none",borderRadius:14,padding:"5px 10px",color:"#fff",cursor:"pointer",fontSize:10,fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>✍️ Crear noticia</button>
+          )}
+          <button onClick={onClose} style={{background:"rgba(255,255,255,0.15)",border:"none",borderRadius:"50%",width:28,height:28,color:"#fff",cursor:"pointer",fontSize:15,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
         </div>
         <div style={{flex:1,padding:"14px 16px",display:"flex",flexDirection:"column",gap:8,overflowY:"auto"}}>
           {noticias.length===0&&(
@@ -4313,6 +4451,100 @@ function NoticiasModal({onClose}){
             </div>
           ))}
         </div>
+      </div>
+      {showCrear&&<CrearNoticiaModal teamData={teamData} allTeams={allTeams} onClose={()=>setShowCrear(false)}/>}
+    </div>
+  );
+}
+
+// ─── CREAR NOTICIA (equipo) → queda pendiente de aprobación del admin ────────
+function CrearNoticiaModal({teamData,allTeams,onClose}){
+  const[tematicas,setTematicas]=useState(TEMATICAS_NOTICIAS_DEFAULT);
+  const[tematicaSel,setTematicaSel]=useState(null);
+  const[equipoMencionado,setEquipoMencionado]=useState("");
+  const[texto,setTexto]=useState("");
+  const[enviando,setEnviando]=useState(false);
+  const[enviado,setEnviado]=useState(false);
+
+  useEffect(()=>{
+    getTematicasNoticias().then(setTematicas);
+  },[]);
+
+  const enviarNoticia=async()=>{
+    if(!tematicaSel){alert("Selecciona una temática");return;}
+    if(tematicaSel.requiereEquipo&&!equipoMencionado){alert("Selecciona el equipo");return;}
+    if(!texto.trim()){alert("Escribe el texto de la noticia");return;}
+    setEnviando(true);
+    const ref=doc(db,"config","noticiasUsuario");
+    const snap=await getDoc(ref).catch(()=>null);
+    const current=snap?.exists()?snap.data():{lista:[]};
+    const nueva={
+      id:`nu_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,
+      equipoAutor:teamData?.teamName||"",
+      tematicaId:tematicaSel.id,tematicaLabel:tematicaSel.label,icono:tematicaSel.icono,
+      equipoMencionado:tematicaSel.requiereEquipo?equipoMencionado:"",
+      texto:texto.trim(),estado:"pendiente",fecha:new Date().toISOString()
+    };
+    await setDoc(ref,{lista:[...(current.lista||[]),nueva]},{merge:true});
+    setEnviando(false);
+    setEnviado(true);
+  };
+
+  if(enviado){
+    return(
+      <div style={{position:"fixed",inset:0,zIndex:300,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
+        <div style={{background:C.card,borderRadius:16,padding:24,maxWidth:340,textAlign:"center"}} onClick={e=>e.stopPropagation()}>
+          <div style={{fontSize:32,marginBottom:10}}>📨</div>
+          <div style={{fontSize:14,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif",marginBottom:8}}>Noticia enviada</div>
+          <div style={{fontSize:12,color:C.textMid,fontFamily:"'DM Sans',sans-serif",marginBottom:16}}>Quedó pendiente de aprobación del admin. Si se aprueba, aparecerá en el feed de noticias.</div>
+          <button onClick={onClose} style={{padding:"9px 20px",borderRadius:9,background:"#1a3a5c",color:"#fff",border:"none",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Listo</button>
+        </div>
+      </div>
+    );
+  }
+
+  return(
+    <div style={{position:"fixed",inset:0,zIndex:300,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
+      <div style={{background:C.card,borderRadius:18,padding:20,width:"100%",maxWidth:380,maxHeight:"85vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+          <div style={{fontSize:13,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>✍️ Crear noticia</div>
+          <button onClick={onClose} style={{background:"none",border:"none",color:C.textFaint,fontSize:18,cursor:"pointer"}}>✕</button>
+        </div>
+
+        {!tematicaSel&&(
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>
+            <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginBottom:2}}>Elige la temática</div>
+            {tematicas.map(t=>(
+              <button key={t.id} onClick={()=>setTematicaSel(t)}
+                style={{padding:"11px 13px",borderRadius:10,background:C.inputBg,border:`1.5px solid ${C.border}`,color:C.text,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textAlign:"left"}}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {tematicaSel&&(
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            <div style={{fontSize:12,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{tematicaSel.label}</div>
+            {tematicaSel.requiereEquipo&&(
+              <select value={equipoMencionado} onChange={e=>setEquipoMencionado(e.target.value)}
+                style={{padding:"9px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:12,fontFamily:"'DM Sans',sans-serif"}}>
+                <option value="">— Selecciona equipo —</option>
+                {(allTeams||[]).filter(t=>t.teamName!==teamData?.teamName).map(t=><option key={t.uid||t.id} value={t.teamName}>{t.teamName}</option>)}
+              </select>
+            )}
+            <textarea value={texto} onChange={e=>setTexto(e.target.value)} placeholder="Escribe la noticia…"
+              style={{padding:"10px",borderRadius:9,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:12,fontFamily:"'DM Sans',sans-serif",minHeight:80,resize:"vertical"}}/>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>{setTematicaSel(null);setEquipoMencionado("");setTexto("");}}
+                style={{flex:1,padding:"9px",borderRadius:8,background:"none",border:`1px solid ${C.border}`,color:C.textFaint,fontSize:12,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>← Volver</button>
+              <button onClick={enviarNoticia} disabled={enviando}
+                style={{flex:1,padding:"9px",borderRadius:8,background:"#1a3a5c",color:"#fff",border:"none",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:enviando?0.6:1}}>
+                {enviando?"Enviando…":"📤 Enviar"}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -6390,6 +6622,7 @@ function MainApp({user,isAdmin,onLogout}){
   const[viewingTeam,setViewingTeam]=useState(null);
   const[showTeamsList,setShowTeamsList]=useState(false);
   const[showLiveAdmin,setShowLiveAdmin]=useState(false);
+  const[showNoticiasAdmin,setShowNoticiasAdmin]=useState(false);
   const[showPresidents,setShowPresidents]=useState(false);
   const[showImport,setShowImport]=useState(false);
   const[showSelecciones,setShowSelecciones]=useState(false);
@@ -6773,6 +7006,7 @@ function MainApp({user,isAdmin,onLogout}){
           <HomeScreen
             teamData={teamData}
             isAdmin={isAdmin}
+            allTeams={allTeams}
             onOpenMundial={()=>{setShowHome(false);setMundialInitialTab("misel");setShowMundial(true);}}
             onSelect={comp=>{
               if(comp===null){setActiveComp(null);setShowHome(false);return;}
@@ -7045,6 +7279,15 @@ function MainApp({user,isAdmin,onLogout}){
                   <TransmisionAdmin allTeams={allTeams}/>
                   <div style={{borderTop:`1px solid ${C.border}`,paddingTop:14}}><AvisoTwitchAdmin/></div>
                 </div>}
+              </div>
+              {/* Collapsible Noticias admin */}
+              <div style={{marginTop:10}}>
+                <button onClick={()=>setShowNoticiasAdmin(v=>!v)}
+                  style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 12px",borderRadius:8,background:"none",border:`1px solid ${C.border}`,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                  <span style={{fontSize:10,fontWeight:700,color:C.textLight,textTransform:"uppercase",letterSpacing:0.5}}>📰 Noticias de equipos</span>
+                  <span style={{fontSize:11,color:C.textLight}}>{showNoticiasAdmin?"▲":"▼"}</span>
+                </button>
+                {showNoticiasAdmin&&<div style={{marginTop:8}}><NoticiasAdmin/></div>}
               </div>
               {/* Collapsible teams list */}
               {showTeamsList&&(
