@@ -1472,6 +1472,119 @@ function LiveAndAviso(){
 }
 
 // ─── ADMIN: Aviso + Canal Twitch (fuera del Mundial) ──────────────────────────
+// ─── MODO TRANSMISIÓN: admin activa/gestiona, equipos envían instrucciones ───
+function TransmisionAdmin({allTeams}){
+  const[transmision,setTransmision]=useState(null);
+  const[equipoA,setEquipoA]=useState("");
+  const[equipoB,setEquipoB]=useState("");
+  const[mensajes,setMensajes]=useState([]);
+
+  useEffect(()=>{
+    const unsub=onSnapshot(doc(db,"config","transmisionActiva"),snap=>{
+      setTransmision(snap.exists()?snap.data():null);
+    });
+    return unsub;
+  },[]);
+
+  useEffect(()=>{
+    const unsub=onSnapshot(doc(db,"config","transmisionMensajes"),snap=>{
+      const all=snap.exists()?snap.data():{};
+      setMensajes((all.lista||[]).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha)));
+    });
+    return unsub;
+  },[]);
+
+  const iniciarTransmision=async()=>{
+    if(!equipoA||!equipoB){alert("Selecciona ambos equipos");return;}
+    if(equipoA===equipoB){alert("Los equipos no pueden ser el mismo");return;}
+    await setDoc(doc(db,"config","transmisionActiva"),{equipoA,equipoB,inicio:new Date().toISOString()});
+    await setDoc(doc(db,"config","transmisionMensajes"),{lista:[]}); // limpia mensajes de transmisión anterior
+    await addNoticia(`🔴 ¡Empezó la transmisión! ${equipoA} vs ${equipoB} — manda tus cambios e instrucciones desde la app`,"🔴");
+  };
+
+  const terminarTransmision=async()=>{
+    if(!window.confirm("¿Terminar la transmisión? Los equipos ya no podrán enviar instrucciones.")) return;
+    await deleteDoc(doc(db,"config","transmisionActiva"));
+  };
+
+  const marcarAtendido=async(idx)=>{
+    const ref=doc(db,"config","transmisionMensajes");
+    const snap=await getDoc(ref).catch(()=>null);
+    const current=snap?.exists()?snap.data():{lista:[]};
+    const nuevaLista=[...(current.lista||[])];
+    const target=mensajes[idx];
+    const realIdx=nuevaLista.findIndex(m=>m.fecha===target.fecha&&m.equipo===target.equipo);
+    if(realIdx>=0){
+      nuevaLista[realIdx]={...nuevaLista[realIdx],atendido:true};
+      await setDoc(ref,{lista:nuevaLista});
+    }
+  };
+
+  if(!transmision){
+    return(
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Activa el modo transmisión para que los dueños de ambos equipos puedan enviarte cambios e instrucciones en vivo desde la app.</div>
+        <div style={{display:"flex",gap:6}}>
+          <select value={equipoA} onChange={e=>setEquipoA(e.target.value)}
+            style={{flex:1,padding:"7px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif"}}>
+            <option value="">— Equipo A —</option>
+            {allTeams.map(t=><option key={t.uid||t.id} value={t.teamName}>{t.teamName}</option>)}
+          </select>
+          <select value={equipoB} onChange={e=>setEquipoB(e.target.value)}
+            style={{flex:1,padding:"7px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif"}}>
+            <option value="">— Equipo B —</option>
+            {allTeams.map(t=><option key={t.uid||t.id} value={t.teamName}>{t.teamName}</option>)}
+          </select>
+        </div>
+        <button onClick={iniciarTransmision}
+          style={{padding:"9px",borderRadius:8,background:"#e74c3c",color:"#fff",border:"none",fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+          🔴 Iniciar transmisión
+        </button>
+      </div>
+    );
+  }
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+      <div style={{background:"#e74c3c18",border:"1.5px solid #e74c3c",borderRadius:10,padding:"10px 12px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div>
+          <div style={{fontSize:9,fontWeight:800,color:"#e74c3c",fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.5}}>🔴 En vivo</div>
+          <div style={{fontSize:13,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{transmision.equipoA} 🆚 {transmision.equipoB}</div>
+        </div>
+        <button onClick={terminarTransmision}
+          style={{padding:"7px 12px",borderRadius:7,background:"transparent",border:"1px solid #c0392b",color:"#c0392b",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+          Terminar
+        </button>
+      </div>
+      <div style={{fontSize:10,fontWeight:800,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>📥 Instrucciones recibidas ({mensajes.filter(m=>!m.atendido).length} pendientes)</div>
+      {mensajes.length===0
+        ? <div style={{textAlign:"center",color:C.textFaint,padding:16,fontFamily:"'DM Sans',sans-serif",fontSize:11}}>Sin mensajes todavía</div>
+        : mensajes.map((m,idx)=>(
+          <div key={idx} style={{background:m.atendido?C.inputBg:C.card,borderRadius:9,padding:"9px 11px",border:`1.5px solid ${m.atendido?C.border:(m.equipo===transmision.equipoA?"#3498db":"#e67e22")}`,opacity:m.atendido?0.55:1}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+              <span style={{fontSize:9,fontWeight:800,color:m.equipo===transmision.equipoA?"#3498db":"#e67e22",fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase"}}>{m.equipo}</span>
+              {!m.atendido&&(
+                <button onClick={()=>marcarAtendido(idx)} style={{background:"none",border:"none",color:"#27ae60",cursor:"pointer",fontSize:9,fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>✅ Atendido</button>
+              )}
+            </div>
+            {m.tipo==="cambio"?(
+              <div style={{fontSize:12,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>🔄 Sale {m.sale} → Entra {m.entra}</div>
+            ):m.tipo==="tactica"?(
+              <div style={{fontSize:12,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>📋 {m.instruccion}</div>
+            ):(
+              <div style={{fontSize:12,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>
+                {m.jugador&&<span style={{fontWeight:800}}>{m.jugador}: </span>}
+                {!m.jugador&&<span style={{fontWeight:800}}>Equipo completo: </span>}
+                {m.mensaje}
+              </div>
+            )}
+          </div>
+        ))
+      }
+    </div>
+  );
+}
+
 function AvisoTwitchAdmin(){
   const[mundial,setMundial]=useState(null);
   const[avisoText,setAvisoText]=useState("");
@@ -3834,16 +3947,173 @@ const COMPETENCIAS_AVAILABLE=[
   {id:"supercopa",name:"SuperCopa",            icon:"👑", color:"#c0392b", lineupName:"SuperCopa", formato:"final"},
 ];
 
+// ─── PANEL DE TRANSMISIÓN: dueños de equipo envían cambios/instrucciones al admin ───
+function TransmisionPanel({teamData,onClose}){
+  const[vista,setVista]=useState("menu"); // menu | jugador | equipo | cambio
+  const[jugadorSel,setJugadorSel]=useState(null);
+  const[texto,setTexto]=useState("");
+  const[sale,setSale]=useState("");
+  const[entra,setEntra]=useState("");
+  const[enviando,setEnviando]=useState(false);
+
+  const squad=teamData?.squad||[];
+  const tacticasRapidas=["⚡ Más ofensivo","🛡️ Más defensivo","🔥 Presión alta","🔒 Cerrar el partido","⏱️ Bajar el ritmo","🎯 Buscar el contraataque"];
+
+  const enviarMensaje=async(payload)=>{
+    setEnviando(true);
+    const ref=doc(db,"config","transmisionMensajes");
+    const snap=await getDoc(ref).catch(()=>null);
+    const current=snap?.exists()?snap.data():{lista:[]};
+    const nuevo={equipo:teamData.teamName,fecha:new Date().toISOString(),atendido:false,...payload};
+    await setDoc(ref,{lista:[...(current.lista||[]),nuevo]});
+    setEnviando(false);
+    setTexto("");setJugadorSel(null);setSale("");setEntra("");
+    setVista("menu");
+  };
+
+  return(
+    <div style={{position:"fixed",inset:0,zIndex:300,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
+      <div style={{background:C.card,borderRadius:18,padding:"20px",width:"100%",maxWidth:380,maxHeight:"80vh",overflowY:"auto",border:"1.5px solid #e74c3c"}} onClick={e=>e.stopPropagation()}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+          <div style={{fontSize:10,fontWeight:800,color:"#e74c3c",fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.5}}>🔴 Enviar al admin</div>
+          <button onClick={onClose} style={{background:"none",border:"none",color:C.textFaint,fontSize:18,cursor:"pointer"}}>✕</button>
+        </div>
+
+        {vista==="menu"&&(
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            <button onClick={()=>setVista("jugador")}
+              style={{padding:"12px",borderRadius:10,background:C.inputBg,border:`1.5px solid ${C.border}`,color:C.text,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textAlign:"left"}}>
+              👤 Instrucción a un jugador
+            </button>
+            <button onClick={()=>setVista("equipo")}
+              style={{padding:"12px",borderRadius:10,background:C.inputBg,border:`1.5px solid ${C.border}`,color:C.text,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textAlign:"left"}}>
+              👥 Instrucción al equipo completo
+            </button>
+            <button onClick={()=>setVista("cambio")}
+              style={{padding:"12px",borderRadius:10,background:C.inputBg,border:`1.5px solid ${C.border}`,color:C.text,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textAlign:"left"}}>
+              🔄 Pedir un cambio
+            </button>
+          </div>
+        )}
+
+        {vista==="jugador"&&!jugadorSel&&(
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>
+            <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginBottom:4}}>Selecciona el jugador</div>
+            <div style={{maxHeight:280,overflowY:"auto",display:"flex",flexDirection:"column",gap:5}}>
+              {squad.map((p,i)=>(
+                <button key={i} onClick={()=>setJugadorSel(p.name)}
+                  style={{padding:"9px 11px",borderRadius:8,background:C.inputBg,border:`1px solid ${C.border}`,color:C.text,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textAlign:"left",display:"flex",justifyContent:"space-between"}}>
+                  <span>{p.name}</span>
+                  <span style={{color:C.textFaint,fontSize:10}}>{p.primaryPos||p.pos||""}</span>
+                </button>
+              ))}
+            </div>
+            <button onClick={()=>setVista("menu")} style={{marginTop:6,fontSize:11,color:C.textFaint,background:"none",border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>← Volver</button>
+          </div>
+        )}
+
+        {vista==="jugador"&&jugadorSel&&(
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            <div style={{fontSize:12,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>👤 {jugadorSel}</div>
+            <textarea value={texto} onChange={e=>setTexto(e.target.value)} placeholder="¿Qué debe hacer este jugador?"
+              style={{padding:"10px",borderRadius:9,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:12,fontFamily:"'DM Sans',sans-serif",minHeight:70,resize:"vertical"}} autoFocus/>
+            <div style={{display:"flex",gap:6}}>
+              <button onClick={()=>{setJugadorSel(null);setTexto("");}} style={{flex:1,padding:"9px",borderRadius:8,background:"none",border:`1px solid ${C.border}`,color:C.textFaint,fontSize:12,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>← Volver</button>
+              <button onClick={()=>texto.trim()&&enviarMensaje({tipo:"jugador",jugador:jugadorSel,mensaje:texto.trim()})} disabled={!texto.trim()||enviando}
+                style={{flex:1,padding:"9px",borderRadius:8,background:"#e74c3c",color:"#fff",border:"none",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:!texto.trim()||enviando?0.6:1}}>
+                {enviando?"Enviando…":"📤 Enviar"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {vista==="equipo"&&(
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Instrucciones rápidas:</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+              {tacticasRapidas.map(t=>(
+                <button key={t} onClick={()=>enviarMensaje({tipo:"tactica",instruccion:t})} disabled={enviando}
+                  style={{padding:"7px 11px",borderRadius:20,background:C.inputBg,border:`1.5px solid ${C.border}`,color:C.text,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                  {t}
+                </button>
+              ))}
+            </div>
+            <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginTop:6}}>O escribe algo distinto:</div>
+            <textarea value={texto} onChange={e=>setTexto(e.target.value)} placeholder="Instrucción para todo el equipo"
+              style={{padding:"10px",borderRadius:9,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:12,fontFamily:"'DM Sans',sans-serif",minHeight:60,resize:"vertical"}}/>
+            <div style={{display:"flex",gap:6}}>
+              <button onClick={()=>setVista("menu")} style={{flex:1,padding:"9px",borderRadius:8,background:"none",border:`1px solid ${C.border}`,color:C.textFaint,fontSize:12,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>← Volver</button>
+              <button onClick={()=>texto.trim()&&enviarMensaje({tipo:"equipo",mensaje:texto.trim()})} disabled={!texto.trim()||enviando}
+                style={{flex:1,padding:"9px",borderRadius:8,background:"#e74c3c",color:"#fff",border:"none",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:!texto.trim()||enviando?0.6:1}}>
+                {enviando?"Enviando…":"📤 Enviar"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {vista==="cambio"&&(
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Sale</div>
+            <select value={sale} onChange={e=>setSale(e.target.value)}
+              style={{padding:"9px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:12,fontFamily:"'DM Sans',sans-serif"}}>
+              <option value="">— Selecciona —</option>
+              {squad.map((p,i)=><option key={i} value={p.name}>{p.name}</option>)}
+            </select>
+            <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Entra</div>
+            <select value={entra} onChange={e=>setEntra(e.target.value)}
+              style={{padding:"9px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:12,fontFamily:"'DM Sans',sans-serif"}}>
+              <option value="">— Selecciona —</option>
+              {squad.map((p,i)=><option key={i} value={p.name}>{p.name}</option>)}
+            </select>
+            <div style={{display:"flex",gap:6,marginTop:4}}>
+              <button onClick={()=>setVista("menu")} style={{flex:1,padding:"9px",borderRadius:8,background:"none",border:`1px solid ${C.border}`,color:C.textFaint,fontSize:12,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>← Volver</button>
+              <button onClick={()=>sale&&entra&&sale!==entra&&enviarMensaje({tipo:"cambio",sale,entra})} disabled={!sale||!entra||sale===entra||enviando}
+                style={{flex:1,padding:"9px",borderRadius:8,background:"#e74c3c",color:"#fff",border:"none",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:(!sale||!entra||sale===entra||enviando)?0.6:1}}>
+                {enviando?"Enviando…":"📤 Enviar cambio"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
 function HomeScreen({teamData,onSelect,isAdmin,onOpenMundial}){
   const tc=getTeamColor(teamData?.teamColor||"blue");
   const comps=(teamData?.competencias||[]).map(id=>COMPETENCIAS_AVAILABLE.find(c=>c.id===id)).filter(Boolean);
   const teamInitials=(teamData?.teamName||"?").slice(0,2).toUpperCase();
   const[showNoticias,setShowNoticias]=useState(false);
+  const[transmision,setTransmision]=useState(null);
+  const[showTransmisionPanel,setShowTransmisionPanel]=useState(false);
+
+  useEffect(()=>{
+    const unsub=onSnapshot(doc(db,"config","transmisionActiva"),snap=>{
+      setTransmision(snap.exists()?snap.data():null);
+    });
+    return unsub;
+  },[]);
+
+  const enTransmision=transmision&&(transmision.equipoA===teamData?.teamName||transmision.equipoB===teamData?.teamName);
+  const rival=enTransmision?(transmision.equipoA===teamData?.teamName?transmision.equipoB:transmision.equipoA):null;
 
   return(
     <div style={{minHeight:"100vh",background:C.bg,display:"flex",flexDirection:"column"}}>
 
       <LiveAndAviso/>
+
+      {enTransmision&&(
+        <button onClick={()=>setShowTransmisionPanel(true)}
+          style={{margin:"10px 16px 0",padding:"12px 16px",borderRadius:14,background:"linear-gradient(135deg,#e74c3c,#c0392b)",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:10,boxShadow:"0 4px 16px #e74c3c44"}}>
+          <span style={{fontSize:20}}>🔴</span>
+          <div style={{textAlign:"left",flex:1}}>
+            <div style={{fontSize:12,fontWeight:900,color:"#fff",fontFamily:"'DM Sans',sans-serif"}}>¡Estás en transmisión! vs {rival}</div>
+            <div style={{fontSize:10,color:"rgba(255,255,255,0.85)",fontFamily:"'DM Sans',sans-serif"}}>Toca para enviar cambios e instrucciones</div>
+          </div>
+        </button>
+      )}
+      {showTransmisionPanel&&<TransmisionPanel teamData={teamData} onClose={()=>setShowTransmisionPanel(false)}/>}
 
       {/* Hero header */}
       <div style={{background:`linear-gradient(160deg,${tc.dark} 0%,${tc.bg} 100%)`,padding:"32px 20px 24px",display:"flex",flexDirection:"column",alignItems:"center",gap:12,position:"relative",overflow:"hidden"}}>
@@ -6723,7 +6993,10 @@ function MainApp({user,isAdmin,onLogout}){
                   <span style={{fontSize:10,fontWeight:700,color:C.textLight,textTransform:"uppercase",letterSpacing:0.5}}>📺 Transmisión / Avisos</span>
                   <span style={{fontSize:11,color:C.textLight}}>{showLiveAdmin?"▲":"▼"}</span>
                 </button>
-                {showLiveAdmin&&<div style={{marginTop:8}}><AvisoTwitchAdmin/></div>}
+                {showLiveAdmin&&<div style={{marginTop:8,display:"flex",flexDirection:"column",gap:14}}>
+                  <TransmisionAdmin allTeams={allTeams}/>
+                  <div style={{borderTop:`1px solid ${C.border}`,paddingTop:14}}><AvisoTwitchAdmin/></div>
+                </div>}
               </div>
               {/* Collapsible teams list */}
               {showTeamsList&&(
