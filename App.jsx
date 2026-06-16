@@ -4300,16 +4300,21 @@ function CompetenciaGruposSetup({compId,compName,compColor,formato,allTeams,setA
                 </thead>
                 <tbody>
                   {[...(g.tabla||[])].sort((a,b)=>b.pts-a.pts).map((r,ri)=>(
-                    <tr key={ri} style={{borderTop:`1px solid ${C.border}`}}>
-                      <td style={{padding:"3px 4px",fontWeight:700,color:C.text}}>{r.equipo}</td>
-                      <td style={{padding:"3px 4px",textAlign:"center"}}>{r.pj}</td>
-                      <td style={{padding:"3px 4px",textAlign:"center"}}>{r.pg}</td>
-                      <td style={{padding:"3px 4px",textAlign:"center"}}>{r.pe}</td>
-                      <td style={{padding:"3px 4px",textAlign:"center"}}>{r.pp}</td>
-                      <td style={{padding:"3px 4px",textAlign:"center"}}>{r.gf}</td>
-                      <td style={{padding:"3px 4px",textAlign:"center"}}>{r.gc}</td>
-                      <td style={{padding:"3px 4px",textAlign:"center",fontWeight:800,color:compColor}}>{r.pts}</td>
-                    </tr>
+                    <React.Fragment key={ri}>
+                      <tr style={{borderTop:`1px solid ${C.border}`,background:formato==="liga"&&ri<8?compColor+"0d":"transparent"}}>
+                        <td style={{padding:"3px 4px",fontWeight:700,color:C.text}}>{formato==="liga"&&ri<8?"🟢 ":""}{r.equipo}</td>
+                        <td style={{padding:"3px 4px",textAlign:"center"}}>{r.pj}</td>
+                        <td style={{padding:"3px 4px",textAlign:"center"}}>{r.pg}</td>
+                        <td style={{padding:"3px 4px",textAlign:"center"}}>{r.pe}</td>
+                        <td style={{padding:"3px 4px",textAlign:"center"}}>{r.pp}</td>
+                        <td style={{padding:"3px 4px",textAlign:"center"}}>{r.gf}</td>
+                        <td style={{padding:"3px 4px",textAlign:"center"}}>{r.gc}</td>
+                        <td style={{padding:"3px 4px",textAlign:"center",fontWeight:800,color:compColor}}>{r.pts}</td>
+                      </tr>
+                      {formato==="liga"&&ri===7&&(
+                        <tr><td colSpan={8} style={{padding:"4px 0",textAlign:"center",fontSize:8,fontWeight:800,color:compColor,borderBottom:`2px dashed ${compColor}`}}>▲ Clasificados a Liguilla</td></tr>
+                      )}
+                    </React.Fragment>
                   ))}
                 </tbody>
               </table>
@@ -5815,15 +5820,20 @@ function MainApp({user,isAdmin,onLogout}){
                           <span>Equipo</span><span style={{textAlign:"center"}}>PJ</span><span style={{textAlign:"center"}}>G</span><span style={{textAlign:"center"}}>E</span><span style={{textAlign:"center"}}>P</span><span style={{textAlign:"center"}}>GD</span><span style={{textAlign:"center",fontWeight:900,color:TA.accent}}>Pts</span>
                         </div>
                         {(g.equipos||[]).sort((a,b)=>(b.pts||0)-(a.pts||0)||(b.gf-b.gc||0)-(a.gf-a.gc||0)).map((eq,ei)=>(
-                          <div key={ei} style={{display:"grid",gridTemplateColumns:"1fr 32px 32px 32px 32px 32px 32px",gap:0,padding:"9px 10px",borderTop:`1px solid ${C.border}`,fontSize:12,fontFamily:"'DM Sans',sans-serif",alignItems:"center"}}>
-                            <span style={{fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{eq.nombre}</span>
-                            <span style={{textAlign:"center",color:C.textLight}}>{(eq.g||0)+(eq.e||0)+(eq.p||0)}</span>
-                            <span style={{textAlign:"center",color:"#27ae60",fontWeight:600}}>{eq.g||0}</span>
-                            <span style={{textAlign:"center",color:C.textLight}}>{eq.e||0}</span>
-                            <span style={{textAlign:"center",color:"#e74c3c"}}>{eq.p||0}</span>
-                            <span style={{textAlign:"center",color:C.textLight}}>{(eq.gf||0)-(eq.gc||0)>=0?"+"+(eq.gf-eq.gc||0):(eq.gf-eq.gc||0)}</span>
-                            <span style={{textAlign:"center",fontWeight:900,fontSize:14,color:TA.accent}}>{eq.pts||0}</span>
-                          </div>
+                          <React.Fragment key={ei}>
+                            <div style={{display:"grid",gridTemplateColumns:"1fr 32px 32px 32px 32px 32px 32px",gap:0,padding:"9px 10px",borderTop:`1px solid ${C.border}`,fontSize:12,fontFamily:"'DM Sans',sans-serif",alignItems:"center",background:comp.formato==="liga"&&ei<8?TA.accent+"0d":"transparent"}}>
+                              <span style={{fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{comp.formato==="liga"&&ei<8?"🟢 ":""}{eq.nombre}</span>
+                              <span style={{textAlign:"center",color:C.textLight}}>{(eq.g||0)+(eq.e||0)+(eq.p||0)}</span>
+                              <span style={{textAlign:"center",color:"#27ae60",fontWeight:600}}>{eq.g||0}</span>
+                              <span style={{textAlign:"center",color:C.textLight}}>{eq.e||0}</span>
+                              <span style={{textAlign:"center",color:"#e74c3c"}}>{eq.p||0}</span>
+                              <span style={{textAlign:"center",color:C.textLight}}>{(eq.gf||0)-(eq.gc||0)>=0?"+"+(eq.gf-eq.gc||0):(eq.gf-eq.gc||0)}</span>
+                              <span style={{textAlign:"center",fontWeight:900,fontSize:14,color:TA.accent}}>{eq.pts||0}</span>
+                            </div>
+                            {comp.formato==="liga"&&ei===7&&(
+                              <div style={{padding:"4px 0",textAlign:"center",fontSize:10,fontWeight:800,color:TA.accent,borderBottom:`2px dashed ${TA.accent}`}}>▲ Clasificados a Liguilla</div>
+                            )}
+                          </React.Fragment>
                         ))}
                       </div>
                     </div>
