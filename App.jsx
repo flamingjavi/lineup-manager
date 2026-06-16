@@ -5582,7 +5582,7 @@ function CompVistaPublica({comp,competenciaData,onClose}){
             {/* Tabs */}
             <div style={{display:"flex",borderBottom:`2px solid ${C.border}`,background:C.card}}>
               {[["tabla","📊 Tabla"],["goles","⚽ Goles"],["fixture","📅 Fixture"],["apuestas","🎲 Apuestas"]].map(([id,label])=>(
-                <button key={id} onClick={()=>setVistaTab(id)} style={{flex:1,padding:"11px 4px",background:"none",border:"none",borderBottom:vistaTab===id?`3px solid ${comp.color||TA.accent}`:"3px solid transparent",cursor:"pointer",fontSize:11,fontWeight:700,color:vistaTab===id?(comp.color||TA.accent):C.textFaint,fontFamily:"'DM Sans',sans-serif",transition:"all 0.15s"}}>{label}</button>
+                <button key={id} onClick={()=>setVistaTab(id)} style={{flex:1,padding:"11px 4px",background:"none",border:"none",borderBottom:vistaTab===id?`3px solid ${comp.color||"#1a3a5c"}`:"3px solid transparent",cursor:"pointer",fontSize:11,fontWeight:700,color:vistaTab===id?(comp.color||"#1a3a5c"):C.textFaint,fontFamily:"'DM Sans',sans-serif",transition:"all 0.15s"}}>{label}</button>
               ))}
             </div>
             {/* Content */}
@@ -5596,21 +5596,21 @@ function CompVistaPublica({comp,competenciaData,onClose}){
                       {grupos.length>1&&<div style={{fontSize:12,fontWeight:800,color:C.textLight,fontFamily:"'DM Sans',sans-serif",marginBottom:8,textTransform:"uppercase",letterSpacing:0.5}}>{g.nombre||`Grupo ${gi+1}`}</div>}
                       <div style={{background:C.card,borderRadius:12,overflow:"hidden",border:`1px solid ${C.border}`}}>
                         <div style={{display:"grid",gridTemplateColumns:"1fr 32px 32px 32px 32px 32px 32px",gap:0,padding:"7px 10px",background:C.inputBg,fontSize:9,fontWeight:800,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.3}}>
-                          <span>Equipo</span><span style={{textAlign:"center"}}>PJ</span><span style={{textAlign:"center"}}>G</span><span style={{textAlign:"center"}}>E</span><span style={{textAlign:"center"}}>P</span><span style={{textAlign:"center"}}>GD</span><span style={{textAlign:"center",fontWeight:900,color:TA.accent}}>Pts</span>
+                          <span>Equipo</span><span style={{textAlign:"center"}}>PJ</span><span style={{textAlign:"center"}}>G</span><span style={{textAlign:"center"}}>E</span><span style={{textAlign:"center"}}>P</span><span style={{textAlign:"center"}}>GD</span><span style={{textAlign:"center",fontWeight:900,color:(comp.color||"#1a3a5c")}}>Pts</span>
                         </div>
                         {[...(g.tabla||[])].sort((a,b)=>(b.pts||0)-(a.pts||0)||((b.gf||0)-(b.gc||0))-((a.gf||0)-(a.gc||0))).map((eq,ei)=>(
                           <Fragment key={ei}>
-                            <div style={{display:"grid",gridTemplateColumns:"1fr 32px 32px 32px 32px 32px 32px",gap:0,padding:"9px 10px",borderTop:`1px solid ${C.border}`,fontSize:12,fontFamily:"'DM Sans',sans-serif",alignItems:"center",background:comp.formato==="liga"&&ei<8?TA.accent+"0d":"transparent"}}>
+                            <div style={{display:"grid",gridTemplateColumns:"1fr 32px 32px 32px 32px 32px 32px",gap:0,padding:"9px 10px",borderTop:`1px solid ${C.border}`,fontSize:12,fontFamily:"'DM Sans',sans-serif",alignItems:"center",background:comp.formato==="liga"&&ei<8?(comp.color||"#1a3a5c")+"0d":"transparent"}}>
                               <span style={{fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{comp.formato==="liga"&&ei<8?"🟢 ":""}{eq.equipo}</span>
                               <span style={{textAlign:"center",color:C.textLight}}>{eq.pj||0}</span>
                               <span style={{textAlign:"center",color:"#27ae60",fontWeight:600}}>{eq.pg||0}</span>
                               <span style={{textAlign:"center",color:C.textLight}}>{eq.pe||0}</span>
                               <span style={{textAlign:"center",color:"#e74c3c"}}>{eq.pp||0}</span>
                               <span style={{textAlign:"center",color:C.textLight}}>{(eq.gf||0)-(eq.gc||0)>=0?"+"+((eq.gf||0)-(eq.gc||0)):(eq.gf||0)-(eq.gc||0)}</span>
-                              <span style={{textAlign:"center",fontWeight:900,fontSize:14,color:TA.accent}}>{eq.pts||0}</span>
+                              <span style={{textAlign:"center",fontWeight:900,fontSize:14,color:(comp.color||"#1a3a5c")}}>{eq.pts||0}</span>
                             </div>
                             {comp.formato==="liga"&&ei===7&&(
-                              <div style={{padding:"4px 0",textAlign:"center",fontSize:10,fontWeight:800,color:TA.accent,borderBottom:`2px dashed ${TA.accent}`}}>▲ Clasificados a Liguilla</div>
+                              <div style={{padding:"4px 0",textAlign:"center",fontSize:10,fontWeight:800,color:(comp.color||"#1a3a5c"),borderBottom:`2px dashed ${(comp.color||"#1a3a5c")}`}}>▲ Clasificados a Liguilla</div>
                             )}
                           </Fragment>
                         ))}
@@ -5631,7 +5631,7 @@ function CompVistaPublica({comp,competenciaData,onClose}){
                             <span style={{fontWeight:900,fontSize:16,color:i===0?"#f39c12":i===1?"#95a5a6":i===2?"#cd7f32":C.textFaint,minWidth:22,textAlign:"center"}}>{i+1}</span>
                             <span style={{flex:1,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif",fontSize:13}}>{r.nombre||r.player||"—"}</span>
                             <span style={{fontSize:11,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>{r.equipo||r.team||""}</span>
-                            <span style={{fontWeight:900,fontSize:16,color:TA.accent,minWidth:24,textAlign:"right"}}>{r.goles||r.goals||r.valor||0}</span>
+                            <span style={{fontWeight:900,fontSize:16,color:(comp.color||"#1a3a5c"),minWidth:24,textAlign:"right"}}>{r.goles||r.goals||r.valor||0}</span>
                           </div>
                         ))}
                       </div>
@@ -5706,17 +5706,17 @@ function CompVistaPublica({comp,competenciaData,onClose}){
                       }
                     }
                     return(
-                      <div key={ap.id} style={{background:C.card,borderRadius:12,padding:"14px",border:`1.5px solid ${ap.estado==="activa"?(comp.color||TA.accent):C.border}`,marginBottom:12,opacity:ap.estado==="cerrada"?0.7:1}}>
+                      <div key={ap.id} style={{background:C.card,borderRadius:12,padding:"14px",border:`1.5px solid ${ap.estado==="activa"?(comp.color||"#1a3a5c"):C.border}`,marginBottom:12,opacity:ap.estado==="cerrada"?0.7:1}}>
                         <div style={{fontSize:11,color:C.textMid,fontFamily:"'DM Sans',sans-serif",fontStyle:"italic",marginBottom:10}}>"{ap.condicion}"</div>
                         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
                           <div style={{flex:1,textAlign:"center"}}>
                             <div style={{fontSize:12,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{ap.equipoA}</div>
-                            <div style={{fontSize:16,fontWeight:900,color:comp.color||TA.accent,fontFamily:"'DM Sans',sans-serif"}}>{progresoA}</div>
+                            <div style={{fontSize:16,fontWeight:900,color:comp.color||"#1a3a5c",fontFamily:"'DM Sans',sans-serif"}}>{progresoA}</div>
                           </div>
                           <div style={{fontSize:11,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",fontWeight:700}}>VS</div>
                           <div style={{flex:1,textAlign:"center"}}>
                             <div style={{fontSize:12,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{ap.equipoB}</div>
-                            <div style={{fontSize:16,fontWeight:900,color:comp.color||TA.accent,fontFamily:"'DM Sans',sans-serif"}}>{progresoB}</div>
+                            <div style={{fontSize:16,fontWeight:900,color:comp.color||"#1a3a5c",fontFamily:"'DM Sans',sans-serif"}}>{progresoB}</div>
                           </div>
                         </div>
                         <div style={{fontSize:8,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",textAlign:"center",marginTop:8}}>{etiqueta}</div>
@@ -6162,7 +6162,7 @@ function MainApp({user,isAdmin,onLogout}){
                 setActiveLineupId(newId);
               }
               setActiveComp(comp);
-            }} style={{width:"100%",padding:"14px 16px",background:TA.accent,color:"#fff",border:"none",borderRadius:14,cursor:"pointer",fontSize:14,fontWeight:700,fontFamily:"'DM Sans',sans-serif",display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+            }} style={{width:"100%",padding:"14px 16px",background:(compMenuComp.color||"#1a3a5c"),color:"#fff",border:"none",borderRadius:14,cursor:"pointer",fontSize:14,fontWeight:700,fontFamily:"'DM Sans',sans-serif",display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
               <span style={{fontSize:20}}>👕</span>
               <div style={{textAlign:"left"}}>
                 <div style={{fontSize:14,fontWeight:800}}>Ver mi equipo</div>
