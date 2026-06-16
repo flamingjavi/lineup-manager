@@ -4145,6 +4145,21 @@ function CompetenciaGruposSetup({compId,compName,compColor,formato,allTeams,setA
     setAiMsg(`✅ ${g.nombre} guardado (${g.equipos.length} equipos)`);
   };
 
+  const iniciarLiguilla=async()=>{
+    const g=local[0];
+    if(!g||(g.tabla||[]).length<8){setAiMsg("❌ Se necesitan al menos 8 equipos para iniciar la liguilla");return;}
+    const ordenada=[...(g.tabla||[])].sort((a,b)=>b.pts-a.pts||((b.gf||0)-(b.gc||0))-((a.gf||0)-(a.gc||0)));
+    const top8=ordenada.slice(0,8).map(r=>r.equipo);
+    if(!window.confirm(`¿Iniciar la liguilla de ${compName} con estos 8 equipos?\n\n${top8.map((e,i)=>`${i+1}. ${e}`).join("\n")}\n\nLa tabla regular quedará guardada como historial.`)) return;
+    const ref=doc(db,"config","competenciaData");
+    const snap=await getDoc(ref).catch(()=>null);
+    const current=snap?.exists()?snap.data():{};
+    const compData=current[compId]||{};
+    await setDoc(ref,{...current,[compId]:{...compData,liguillaIniciada:true,liguillaEquipos:top8,liguillaPartidos:compData.liguillaPartidos||[]}},{merge:true});
+    await addNoticia(`🏆 ¡Inició la Liguilla de ${compName}! Clasificados: ${top8.join(", ")}`,"🏆");
+    setAiMsg("✅ Liguilla iniciada");
+  };
+
   // ─── Procesar imagen de tabla de clasificación ──────────────────────────
   const processTableImage=async(file,gi)=>{
     setUploadingIdx(gi);
@@ -4318,6 +4333,17 @@ function CompetenciaGruposSetup({compId,compName,compColor,formato,allTeams,setA
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+          {formato==="liga"&&(g.tabla||[]).length>=8&&!data?.liguillaIniciada&&(
+            <button onClick={iniciarLiguilla}
+              style={{width:"100%",padding:"10px",borderRadius:9,background:"#e67e22",color:"#fff",border:"none",fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",marginBottom:10}}>
+              🏁 Iniciar Liguilla
+            </button>
+          )}
+          {formato==="liga"&&data?.liguillaIniciada&&(
+            <div style={{padding:"8px 10px",borderRadius:9,background:"#e67e2222",border:"1.5px solid #e67e22",color:"#e67e22",fontSize:11,fontWeight:700,fontFamily:"'DM Sans',sans-serif",textAlign:"center",marginBottom:10}}>
+              🏆 Liguilla en curso — ve a la pestaña "Liguilla"
             </div>
           )}
           {/* Subir imagen o Excel */}
@@ -4862,6 +4888,214 @@ function CompetenciaResultadoSetup({compId,compName,compColor,formato,setAiMsg})
 }
 
 // ─── COMPETENCIA: FIXTURE (calendario por imagen) ────────────────────────────
+// ─── COMPETENCIA: LIGUILLA (eliminación directa post-liga) ──────────────────
+function CompetenciaLiguillaSetup({compId,compName,compColor,setAiMsg}){
+  const[data,setData]=useState(null);
+  const[uploading,setUploading]=useState(false);
+  const[preview,setPreview]=useState(null); // {local,golesLocal,visitante,golesVisitante}
+  const fileRef=useRef(null);
+  const excelRef=useRef(null);
+
+  useEffect(()=>{
+    const unsub=onSnapshot(doc(db,"config","competenciaData"),snap=>{
+      const all=snap.exists()?snap.data():{};
+      setData(all[compId]||{});
+    });
+    return unsub;
+  },[compId]);
+
+  const equipos=data?.liguillaEquipos||[];
+  const partidos=data?.liguillaPartidos||[];
+
+  const guardarPartido=async(local,golesLocal,visitante,golesVisitante,fase)=>{
+    const ref=doc(db,"config","competenciaData");
+    const snap=await getDoc(ref).catch(()=>null);
+    const current=snap?.exists()?snap.data():{};
+    const compData=current[compId]||{};
+    const nuevoPartido={local,golesLocal,visitante,golesVisitante,fase:fase||"",fecha:new Date().toISOString()};
+    const nuevaLista=[...(compData.liguillaPartidos||[]),nuevoPartido];
+    await setDoc(ref,{...current,[compId]:{...compData,liguillaPartidos:nuevaLista}},{merge:true});
+    await addH2H({local,golesLocal,visitante,golesVisitante,competencia:`${compName} (Liguilla)`});
+    const ganador=golesLocal>golesVisitante?local:golesVisitante>golesLocal?visitante:null;
+    const resultadoTxt=ganador?`${ganador} avanza tras ganar ${Math.max(golesLocal,golesVisitante)}-${Math.min(golesLocal,golesVisitante)}`:`${local} y ${visitante} empataron ${golesLocal}-${golesVisitante}`;
+    await addNoticia(`🏆 Liguilla ${compName}: ${resultadoTxt}`,"🏆");
+  };
+
+  const eliminarPartido=async(idx)=>{
+    if(!window.confirm("¿Eliminar este partido de la liguilla?")) return;
+    const ref=doc(db,"config","competenciaData");
+    const snap=await getDoc(ref).catch(()=>null);
+    const current=snap?.exists()?snap.data():{};
+    const compData=current[compId]||{};
+    const nuevaLista=(compData.liguillaPartidos||[]).filter((_,i)=>i!==idx);
+    await setDoc(ref,{...current,[compId]:{...compData,liguillaPartidos:nuevaLista}},{merge:true});
+    setAiMsg("✅ Partido eliminado");
+  };
+
+  const processImage=async(file)=>{
+    setUploading(true);
+    setAiMsg("Leyendo imagen…");
+    try{
+      const b64=await new Promise((res,rej)=>{
+        const r=new FileReader();
+        r.onload=()=>res(r.result.split(",")[1]);
+        r.onerror=()=>rej(new Error("FileReader error"));
+        r.readAsDataURL(file);
+      });
+      setAiMsg("Conectando con Gemini…");
+      const listaEquipos=equipos.join(", ");
+      const prompt=`Analiza esta captura de un resultado de partido de eliminación directa de FC26. Los equipos posibles son: ${listaEquipos}. Identifica el equipo local, el equipo visitante (usa EXACTAMENTE uno de los nombres de la lista que mejor coincida) y el marcador de cada uno. Responde SOLO con JSON sin markdown, sin texto adicional: {"local":"","golesLocal":0,"visitante":"","golesVisitante":0}`;
+      const GEMINI_KEY="AIzaSyAGlxjD12k38Xu9L-8K165iJma1ZwR7tyY";
+      const GEMINI_URL=`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`;
+      const body=JSON.stringify({contents:[{parts:[{inline_data:{mime_type:file.type||"image/jpeg",data:b64}},{text:prompt}]}],generationConfig:{temperature:0,maxOutputTokens:500}});
+      const resp=await fetch(GEMINI_URL,{method:"POST",headers:{"Content-Type":"application/json"},body});
+      if(!resp.ok){
+        const errTxt=await resp.text().catch(()=>"");
+        throw new Error(`HTTP ${resp.status} ${errTxt.slice(0,200)}`);
+      }
+      const respData=await resp.json();
+      if(respData.error) throw new Error(respData.error.message);
+      const raw=respData.candidates?.[0]?.content?.parts?.[0]?.text;
+      if(!raw) throw new Error("Respuesta vacía de Gemini");
+      const cleaned=raw.replace(/```json|```/g,"").trim();
+      let parsed;
+      try{ parsed=JSON.parse(cleaned); }
+      catch{ throw new Error("No se pudo interpretar el JSON: "+cleaned.slice(0,150)); }
+      setPreview({
+        local:parsed.local||"",golesLocal:Number(parsed.golesLocal)||0,
+        visitante:parsed.visitante||"",golesVisitante:Number(parsed.golesVisitante)||0,fase:""
+      });
+      setAiMsg("✅ Resultado leído — revisa y confirma abajo");
+    }catch(e){
+      setAiMsg("❌ "+e.message);
+    }
+    setUploading(false);
+  };
+
+  const processExcelBulk=async(file)=>{
+    setUploading(true);
+    setAiMsg("Leyendo Excel…");
+    try{
+      await new Promise((res,rej)=>{
+        if(window.XLSX){res();return;}
+        const s=document.createElement('script');
+        s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+        s.onload=res; s.onerror=rej;
+        document.head.appendChild(s);
+      });
+      const buf=await file.arrayBuffer();
+      const wb=window.XLSX.read(buf,{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const rows=window.XLSX.utils.sheet_to_json(ws,{header:1});
+      let count=0;
+      for(const row of rows){
+        if(!row||row.every(v=>!v&&v!==0)) continue;
+        const local=row[0]?String(row[0]).trim():"";
+        if(!local) continue;
+        if(local.toUpperCase()==="LOCAL"||local.toUpperCase()==="EQUIPO") continue;
+        const visitante=row[2]?String(row[2]).trim():"";
+        const golesLocal=Number(row[1])||0;
+        const golesVisitante=Number(row[3])||0;
+        const fase=row[4]?String(row[4]).trim():"";
+        if(!visitante) continue;
+        await guardarPartido(local,golesLocal,visitante,golesVisitante,fase);
+        count++;
+      }
+      if(count===0) throw new Error("No se encontraron partidos válidos. Usa: A=Local, B=Goles Local, C=Visitante, D=Goles Visitante, E=Fase (opcional).");
+      setAiMsg(`✅ ${count} partidos de liguilla guardados desde Excel`);
+    }catch(e){
+      setAiMsg("❌ "+e.message);
+    }
+    setUploading(false);
+  };
+
+  const confirmPreview=async()=>{
+    if(!preview) return;
+    if(!preview.local||!preview.visitante){setAiMsg("❌ Define ambos equipos");return;}
+    if(preview.local===preview.visitante){setAiMsg("❌ Los equipos no pueden ser el mismo");return;}
+    await guardarPartido(preview.local,Number(preview.golesLocal)||0,preview.visitante,Number(preview.golesVisitante)||0,preview.fase);
+    setAiMsg(`✅ ${preview.local} ${preview.golesLocal} - ${preview.golesVisitante} ${preview.visitante} guardado`);
+    setPreview(null);
+  };
+
+  if(equipos.length===0){
+    return <div style={{textAlign:"center",color:C.textFaint,padding:30,fontFamily:"'DM Sans',sans-serif",fontSize:12}}>La liguilla todavía no ha iniciado. Ve a la pestaña "Tabla" y presiona "🏁 Iniciar Liguilla" cuando la liga regular tenga 8+ equipos.</div>;
+  }
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+      <div style={{background:C.card,borderRadius:10,padding:"10px 12px",border:`1.5px solid ${compColor}`}}>
+        <div style={{fontSize:11,fontWeight:800,color:compColor,fontFamily:"'DM Sans',sans-serif",marginBottom:6}}>🏆 Equipos clasificados</div>
+        <div style={{fontSize:11,color:C.textMid,fontFamily:"'DM Sans',sans-serif",lineHeight:1.6}}>
+          {equipos.map((e,i)=>`${i+1}. ${e}`).join(" · ")}
+        </div>
+      </div>
+
+      {/* Subir resultado */}
+      <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}}
+        onChange={e=>{const f=e.target.files?.[0];if(f)processImage(f);e.target.value="";}}/>
+      <input ref={excelRef} type="file" accept=".xlsx,.xls" style={{display:"none"}}
+        onChange={e=>{const f=e.target.files?.[0];if(f)processExcelBulk(f);e.target.value="";}}/>
+      <div style={{display:"flex",gap:6}}>
+        <button onClick={()=>fileRef.current?.click()} disabled={uploading}
+          style={{flex:1,padding:"8px",borderRadius:7,background:"transparent",border:`1.5px dashed ${compColor}`,color:compColor,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:uploading?0.5:1}}>
+          {uploading?"Leyendo…":"📷 Foto del resultado"}
+        </button>
+        <button onClick={()=>excelRef.current?.click()} disabled={uploading}
+          style={{flex:1,padding:"8px",borderRadius:7,background:"transparent",border:"1.5px dashed #27ae60",color:"#27ae60",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:uploading?0.5:1}}>
+          {uploading?"Leyendo…":"📋 Excel (varios partidos)"}
+        </button>
+      </div>
+      <div style={{fontSize:8,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",textAlign:"center"}}>Formato Excel: A=Local, B=Goles Local, C=Visitante, D=Goles Visitante, E=Fase (ej. Cuartos, Semis, Final — opcional)</div>
+
+      {/* Preview editable */}
+      {preview&&(
+        <div style={{background:C.card,borderRadius:10,padding:"12px",border:`1.5px solid ${compColor}`,display:"flex",flexDirection:"column",gap:8}}>
+          <div style={{fontSize:11,fontWeight:800,color:compColor,fontFamily:"'DM Sans',sans-serif"}}>Revisa antes de confirmar</div>
+          <input value={preview.fase} onChange={e=>setPreview({...preview,fase:e.target.value})} placeholder="Fase (ej. Cuartos, Semis, Final)"
+            style={{padding:"7px 9px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif"}}/>
+          <div style={{display:"flex",gap:6,alignItems:"center"}}>
+            <select value={preview.local} onChange={e=>setPreview({...preview,local:e.target.value})}
+              style={{flex:1,padding:"7px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif"}}>
+              <option value="">— Local —</option>
+              {equipos.map(eq=><option key={eq} value={eq}>{eq}</option>)}
+            </select>
+            <input type="number" value={preview.golesLocal} onChange={e=>setPreview({...preview,golesLocal:e.target.value})}
+              style={{width:50,padding:"7px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:12,textAlign:"center",fontFamily:"'DM Sans',sans-serif"}}/>
+            <span style={{color:C.textFaint,fontSize:11}}>—</span>
+            <input type="number" value={preview.golesVisitante} onChange={e=>setPreview({...preview,golesVisitante:e.target.value})}
+              style={{width:50,padding:"7px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:12,textAlign:"center",fontFamily:"'DM Sans',sans-serif"}}/>
+            <select value={preview.visitante} onChange={e=>setPreview({...preview,visitante:e.target.value})}
+              style={{flex:1,padding:"7px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif"}}>
+              <option value="">— Visitante —</option>
+              {equipos.map(eq=><option key={eq} value={eq}>{eq}</option>)}
+            </select>
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={()=>setPreview(null)} style={{flex:1,fontSize:11,padding:"7px 0",borderRadius:8,border:`1px solid ${C.border}`,background:"none",color:C.textFaint,fontFamily:"'DM Sans',sans-serif",cursor:"pointer"}}>Cancelar</button>
+            <button onClick={confirmPreview} style={{flex:1,fontSize:11,fontWeight:800,padding:"7px 0",borderRadius:8,border:"none",background:compColor,color:"#fff",fontFamily:"'DM Sans',sans-serif",cursor:"pointer"}}>✅ Confirmar</button>
+          </div>
+        </div>
+      )}
+
+      {/* Historial de partidos */}
+      <div style={{fontSize:11,fontWeight:800,color:C.textLight,fontFamily:"'DM Sans',sans-serif",marginTop:6}}>📋 Partidos registrados</div>
+      {partidos.length===0
+        ? <div style={{textAlign:"center",color:C.textFaint,padding:16,fontFamily:"'DM Sans',sans-serif",fontSize:11}}>Sin partidos aún</div>
+        : partidos.map((p,idx)=>(
+          <div key={idx} style={{display:"flex",alignItems:"center",gap:8,background:C.card,borderRadius:9,padding:"8px 10px",border:`1px solid ${C.border}`}}>
+            {p.fase&&<span style={{fontSize:9,fontWeight:700,color:compColor,background:compColor+"18",padding:"2px 6px",borderRadius:6,fontFamily:"'DM Sans',sans-serif"}}>{p.fase}</span>}
+            <span style={{flex:1,fontSize:11,fontWeight:700,color:C.text,textAlign:"right",fontFamily:"'DM Sans',sans-serif"}}>{p.local}</span>
+            <span style={{fontSize:12,fontWeight:900,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{p.golesLocal} - {p.golesVisitante}</span>
+            <span style={{flex:1,fontSize:11,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{p.visitante}</span>
+            <button onClick={()=>eliminarPartido(idx)} style={{background:"none",border:"none",color:"#c0392b",cursor:"pointer",fontSize:12}}>🗑️</button>
+          </div>
+        ))
+      }
+    </div>
+  );
+}
+
 function CompetenciaFixtureSetup({compId,compColor,setAiMsg}){
   const[grupos,setGrupos]=useState([]);
   const[fixture,setFixture]=useState({}); // {jornadaKey:[{local,visitante}]}
@@ -5250,8 +5484,18 @@ function CompetenciasModal({allTeams,onClose}){
   const[aiMsg,setAiMsg]=useState("");
   const[editValue,setEditValue]=useState("");
   const[saving,setSaving]=useState(false);
+  const[liguillaIniciada,setLiguillaIniciada]=useState(false);
 
   const activeComp=comps.find(c=>c.id===selected);
+
+  useEffect(()=>{
+    if(!selected){setLiguillaIniciada(false);return;}
+    const unsub=onSnapshot(doc(db,"config","competenciaData"),snap=>{
+      const all=snap.exists()?snap.data():{};
+      setLiguillaIniciada(!!all[selected]?.liguillaIniciada);
+    });
+    return unsub;
+  },[selected]);
 
   const toggleTeam=async(team)=>{
     const cur=team.competencias||[];
@@ -5445,6 +5689,12 @@ function CompetenciasModal({allTeams,onClose}){
                 style={{flex:1,padding:"7px",borderRadius:8,border:`1.5px solid ${subTab==="apuestas"?activeComp.color:C.border}`,background:subTab==="apuestas"?activeComp.color:C.inputBg,color:subTab==="apuestas"?"#fff":C.textMid,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
                 🎲 Apuestas
               </button>
+              {activeComp.formato==="liga"&&liguillaIniciada&&(
+                <button onClick={()=>setSubTab("liguilla")}
+                  style={{flex:1,padding:"7px",borderRadius:8,border:`1.5px solid ${subTab==="liguilla"?"#e67e22":C.border}`,background:subTab==="liguilla"?"#e67e22":C.inputBg,color:subTab==="liguilla"?"#fff":C.textMid,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                  🏆 Liguilla
+                </button>
+              )}
             </div>
           )}
 
@@ -5525,6 +5775,11 @@ function CompetenciasModal({allTeams,onClose}){
           {selected&&subTab==="apuestas"&&(
             <CompetenciaApuestasSetup compId={selected} compName={activeComp.name} compColor={activeComp.color} allTeams={allTeams} setAiMsg={setAiMsg}/>
           )}
+
+          {/* Vista: liguilla (eliminación directa post-liga) */}
+          {selected&&subTab==="liguilla"&&(
+            <CompetenciaLiguillaSetup compId={selected} compName={activeComp.name} compColor="#e67e22" setAiMsg={setAiMsg}/>
+          )}
         </div>
       </div>
     </div>
@@ -5539,6 +5794,9 @@ function CompVistaPublica({comp,competenciaData,onClose}){
   const goleadores=compData.goleadores||[];
   const asistencias=compData.asistencias||[];
   const fixture=compData.fixture||{};
+  const liguillaIniciada=!!compData.liguillaIniciada;
+  const liguillaEquipos=compData.liguillaEquipos||[];
+  const liguillaPartidos=compData.liguillaPartidos||[];
   const[vistaTab,setVistaTab]=useState("tabla");
   const[apuestasComp,setApuestasComp]=useState([]);
   const[h2hLista,setH2hLista]=useState([]);
@@ -5581,7 +5839,7 @@ function CompVistaPublica({comp,competenciaData,onClose}){
       </div>
             {/* Tabs */}
             <div style={{display:"flex",borderBottom:`2px solid ${C.border}`,background:C.card}}>
-              {[["tabla","📊 Tabla"],["goles","⚽ Goles"],["fixture","📅 Fixture"],["apuestas","🎲 Apuestas"]].map(([id,label])=>(
+              {[["tabla","📊 Tabla"],["goles","⚽ Goles"],["fixture","📅 Fixture"],["apuestas","🎲 Apuestas"],...(comp.formato==="liga"&&liguillaIniciada?[["liguilla","🏆 Liguilla"]]:[])].map(([id,label])=>(
                 <button key={id} onClick={()=>setVistaTab(id)} style={{flex:1,padding:"11px 4px",background:"none",border:"none",borderBottom:vistaTab===id?`3px solid ${comp.color||"#1a3a5c"}`:"3px solid transparent",cursor:"pointer",fontSize:11,fontWeight:700,color:vistaTab===id?(comp.color||"#1a3a5c"):C.textFaint,fontFamily:"'DM Sans',sans-serif",transition:"all 0.15s"}}>{label}</button>
               ))}
             </div>
@@ -5728,6 +5986,28 @@ function CompVistaPublica({comp,competenciaData,onClose}){
                       </div>
                     );
                   })
+              )}
+              {/* LIGUILLA */}
+              {vistaTab==="liguilla"&&(
+                <div>
+                  <div style={{background:C.card,borderRadius:12,padding:"12px 14px",border:`1.5px solid #e67e22`,marginBottom:14}}>
+                    <div style={{fontSize:11,fontWeight:800,color:"#e67e22",fontFamily:"'DM Sans',sans-serif",marginBottom:6}}>🏆 Equipos clasificados</div>
+                    <div style={{fontSize:11,color:C.textMid,fontFamily:"'DM Sans',sans-serif",lineHeight:1.6}}>
+                      {liguillaEquipos.map((e,i)=>`${i+1}. ${e}`).join(" · ")}
+                    </div>
+                  </div>
+                  {liguillaPartidos.length===0
+                    ? <div style={{textAlign:"center",color:C.textFaint,padding:30,fontFamily:"'DM Sans',sans-serif",fontSize:12}}>Sin partidos de liguilla registrados aún</div>
+                    : liguillaPartidos.map((p,idx)=>(
+                      <div key={idx} style={{display:"flex",alignItems:"center",gap:8,background:C.card,borderRadius:9,padding:"10px 12px",border:`1px solid ${C.border}`,marginBottom:8}}>
+                        {p.fase&&<span style={{fontSize:9,fontWeight:700,color:"#e67e22",background:"#e67e2218",padding:"2px 6px",borderRadius:6,fontFamily:"'DM Sans',sans-serif"}}>{p.fase}</span>}
+                        <span style={{flex:1,fontSize:12,fontWeight:700,color:C.text,textAlign:"right",fontFamily:"'DM Sans',sans-serif"}}>{p.local}</span>
+                        <span style={{fontSize:13,fontWeight:900,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{p.golesLocal} - {p.golesVisitante}</span>
+                        <span style={{flex:1,fontSize:12,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{p.visitante}</span>
+                      </div>
+                    ))
+                  }
+                </div>
               )}
             </div>
           </div>
