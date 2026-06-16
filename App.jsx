@@ -4070,13 +4070,14 @@ function SuperCopaSetup({compColor,setAiMsg}){
 }
 
 // ─── COMPETENCIA: GRUPOS Y TABLA (genérico, editable por temporada) ──────────
-function CompetenciaGruposSetup({compId,compColor,formato,allTeams,setAiMsg}){
+function CompetenciaGruposSetup({compId,compName,compColor,formato,allTeams,setAiMsg}){
   const[data,setData]=useState(null); // {grupos:[{nombre,equipos:[...],tabla:[...]}]}
   const[local,setLocal]=useState([]); // working copy
   const[saving,setSaving]=useState(false);
   const[uploadingIdx,setUploadingIdx]=useState(null);
   const[preview,setPreview]=useState(null); // {grupoIdx, filas:[{equipo,pj,pg,pe,pp,gf,gc,pts}]}
   const fileRef=useRef({});
+  const excelRef=useRef({});
 
   const eligibles=allTeams.filter(t=>(t.competencias||[]).includes(compId));
 
@@ -4135,8 +4136,12 @@ function CompetenciaGruposSetup({compId,compColor,formato,allTeams,setAiMsg}){
   const saveGrupo=async(gi)=>{
     const g=local[gi];
     if(!g.equipos||g.equipos.length<2){setAiMsg("❌ El grupo necesita al menos 2 equipos");return;}
+    const yaEstabaGuardado=(data.grupos||[])[gi]?.equipos?.length>=2;
     const nuevosLocal=[...local];
     await saveAll(nuevosLocal);
+    if(!yaEstabaGuardado&&compName){
+      await addNoticia(`🎲 Se sortearon los grupos de ${compName} — ${g.nombre}: ${g.equipos.join(", ")}`,"🎲");
+    }
     setAiMsg(`✅ ${g.nombre} guardado (${g.equipos.length} equipos)`);
   };
 
@@ -4178,6 +4183,43 @@ function CompetenciaGruposSetup({compId,compColor,formato,allTeams,setAiMsg}){
       if(filas.length===0) throw new Error("No se detectaron filas en la imagen");
       setPreview({grupoIdx:gi,filas});
       setAiMsg(`✅ ${filas.length} filas leídas — revisa y confirma abajo`);
+    }catch(e){
+      setAiMsg("❌ "+e.message);
+    }
+    setUploadingIdx(null);
+  };
+
+  // ─── Procesar Excel de tabla de clasificación ──────────────────────────
+  const processTableExcel=async(file,gi)=>{
+    setUploadingIdx(gi);
+    setAiMsg("Leyendo Excel…");
+    try{
+      await new Promise((res,rej)=>{
+        if(window.XLSX){res();return;}
+        const s=document.createElement('script');
+        s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+        s.onload=res; s.onerror=rej;
+        document.head.appendChild(s);
+      });
+      const buf=await file.arrayBuffer();
+      const wb=window.XLSX.read(buf,{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const rows=window.XLSX.utils.sheet_to_json(ws,{header:1});
+      const filas=[];
+      for(const row of rows){
+        if(!row||row.every(v=>!v&&v!==0)) continue;
+        const equipo=row[0]?String(row[0]).trim():"";
+        if(!equipo) continue;
+        if(equipo.toUpperCase()==="EQUIPO") continue; // skip header row
+        filas.push({
+          equipo,
+          pj:Number(row[1])||0,pg:Number(row[2])||0,pe:Number(row[3])||0,pp:Number(row[4])||0,
+          gf:Number(row[5])||0,gc:Number(row[6])||0,pts:Number(row[7])||0
+        });
+      }
+      if(filas.length===0) throw new Error("No se encontraron filas válidas. Usa: A=Equipo, B=PJ, C=PG, D=PE, E=PP, F=GF, G=GC, H=Pts.");
+      setPreview({grupoIdx:gi,filas});
+      setAiMsg(`✅ ${filas.length} filas leídas del Excel — revisa y confirma abajo`);
     }catch(e){
       setAiMsg("❌ "+e.message);
     }
@@ -4273,15 +4315,24 @@ function CompetenciaGruposSetup({compId,compColor,formato,allTeams,setAiMsg}){
               </table>
             </div>
           )}
-          {/* Subir imagen */}
+          {/* Subir imagen o Excel */}
           {(g.equipos||[]).length>=2&&(
             <>
               <input ref={el=>{if(el)fileRef.current[gi]=el;}} type="file" accept="image/*" style={{display:"none"}}
                 onChange={e=>{const f=e.target.files?.[0];if(f)processTableImage(f,gi);e.target.value="";}}/>
-              <button onClick={()=>fileRef.current?.[gi]?.click()} disabled={uploadingIdx===gi}
-                style={{width:"100%",padding:"6px",borderRadius:7,background:"transparent",border:`1px dashed ${compColor}`,color:compColor,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:uploadingIdx===gi?0.5:1}}>
-                {uploadingIdx===gi?"Leyendo…":"📷 Subir foto de tabla FC26"}
-              </button>
+              <input ref={el=>{if(el)excelRef.current[gi]=el;}} type="file" accept=".xlsx,.xls" style={{display:"none"}}
+                onChange={e=>{const f=e.target.files?.[0];if(f)processTableExcel(f,gi);e.target.value="";}}/>
+              <div style={{display:"flex",gap:6}}>
+                <button onClick={()=>fileRef.current?.[gi]?.click()} disabled={uploadingIdx===gi}
+                  style={{flex:1,padding:"6px",borderRadius:7,background:"transparent",border:`1px dashed ${compColor}`,color:compColor,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:uploadingIdx===gi?0.5:1}}>
+                  {uploadingIdx===gi?"Leyendo…":"📷 Foto FC26"}
+                </button>
+                <button onClick={()=>excelRef.current?.[gi]?.click()} disabled={uploadingIdx===gi}
+                  style={{flex:1,padding:"6px",borderRadius:7,background:"transparent",border:"1px dashed #27ae60",color:"#27ae60",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:uploadingIdx===gi?0.5:1}}>
+                  {uploadingIdx===gi?"Leyendo…":"📋 Excel"}
+                </button>
+              </div>
+              <div style={{fontSize:8,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginTop:4,textAlign:"center"}}>Formato Excel: A=Equipo, B=PJ, C=PG, D=PE, E=PP, F=GF, G=GC, H=Pts</div>
             </>
           )}
           {/* Vista previa editable */}
@@ -4334,6 +4385,8 @@ function CompetenciaGoleadoresSetup({compId,compName,compColor,setAiMsg}){
   const[preview,setPreview]=useState(null); // {tipo, filas:[...]}
   const fileRefGol=useRef(null);
   const fileRefAsist=useRef(null);
+  const excelRefGol=useRef(null);
+  const excelRefAsist=useRef(null);
 
   useEffect(()=>{
     const unsub=onSnapshot(doc(db,"config","competenciaData"),snap=>{
@@ -4397,6 +4450,39 @@ function CompetenciaGoleadoresSetup({compId,compName,compColor,setAiMsg}){
     setUploading(null);
   };
 
+  const processExcel=async(file,tipo)=>{
+    setUploading(tipo);
+    setAiMsg("Leyendo Excel…");
+    try{
+      await new Promise((res,rej)=>{
+        if(window.XLSX){res();return;}
+        const s=document.createElement('script');
+        s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+        s.onload=res; s.onerror=rej;
+        document.head.appendChild(s);
+      });
+      const campo=tipo==="goleadores"?"goles":"asistencias";
+      const buf=await file.arrayBuffer();
+      const wb=window.XLSX.read(buf,{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const rows=window.XLSX.utils.sheet_to_json(ws,{header:1});
+      const filas=[];
+      for(const row of rows){
+        if(!row||row.every(v=>!v&&v!==0)) continue;
+        const nombre=row[0]?String(row[0]).trim():"";
+        if(!nombre) continue;
+        if(nombre.toUpperCase()==="JUGADOR"||nombre.toUpperCase()==="NOMBRE") continue; // skip header
+        filas.push({nombre,equipo:row[1]?String(row[1]).trim():"",[campo]:Number(row[2])||0});
+      }
+      if(filas.length===0) throw new Error(`No se encontraron filas válidas. Usa: A=Jugador, B=Equipo, C=${campo==="goles"?"Goles":"Asistencias"}.`);
+      setPreview({tipo,filas});
+      setAiMsg(`✅ ${filas.length} filas leídas del Excel — revisa y confirma abajo`);
+    }catch(e){
+      setAiMsg("❌ "+e.message);
+    }
+    setUploading(null);
+  };
+
   const confirmPreview=async()=>{
     if(!preview) return;
     // Detectar líder anterior (solo para goleadores)
@@ -4433,7 +4519,7 @@ function CompetenciaGoleadoresSetup({compId,compName,compColor,setAiMsg}){
 
   if(!data) return <div style={{fontSize:11,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Cargando…</div>;
 
-  const renderTabla=(tipo,titulo,emoji,filas,fileRef)=>{
+  const renderTabla=(tipo,titulo,emoji,filas,fileRef,excelRef)=>{
     const campo=tipo==="goleadores"?"goles":"asistencias";
     return(
       <div style={{background:C.card,borderRadius:9,padding:"10px 12px",border:`1.5px solid ${filas.length>0?compColor:C.border}`}}>
@@ -4462,10 +4548,19 @@ function CompetenciaGoleadoresSetup({compId,compName,compColor,setAiMsg}){
         )}
         <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}}
           onChange={e=>{const f=e.target.files?.[0];if(f)processImage(f,tipo);e.target.value="";}}/>
-        <button onClick={()=>fileRef.current?.click()} disabled={uploading===tipo}
-          style={{width:"100%",padding:"6px",borderRadius:7,background:"transparent",border:`1px dashed ${compColor}`,color:compColor,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:uploading===tipo?0.5:1}}>
-          {uploading===tipo?"Leyendo…":`📷 Subir foto de ${titulo.toLowerCase()}`}
-        </button>
+        <input ref={excelRef} type="file" accept=".xlsx,.xls" style={{display:"none"}}
+          onChange={e=>{const f=e.target.files?.[0];if(f)processExcel(f,tipo);e.target.value="";}}/>
+        <div style={{display:"flex",gap:6}}>
+          <button onClick={()=>fileRef.current?.click()} disabled={uploading===tipo}
+            style={{flex:1,padding:"6px",borderRadius:7,background:"transparent",border:`1px dashed ${compColor}`,color:compColor,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:uploading===tipo?0.5:1}}>
+            {uploading===tipo?"Leyendo…":"📷 Foto FC26"}
+          </button>
+          <button onClick={()=>excelRef.current?.click()} disabled={uploading===tipo}
+            style={{flex:1,padding:"6px",borderRadius:7,background:"transparent",border:"1px dashed #27ae60",color:"#27ae60",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:uploading===tipo?0.5:1}}>
+            {uploading===tipo?"Leyendo…":"📋 Excel"}
+          </button>
+        </div>
+        <div style={{fontSize:8,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginTop:4,textAlign:"center"}}>Formato Excel: A=Jugador, B=Equipo, C={campo==="goles"?"Goles":"Asistencias"}</div>
         {/* Vista previa editable */}
         {preview?.tipo===tipo&&(
           <div style={{marginTop:8,padding:8,borderRadius:8,border:`1.5px solid #f0ad4e`,background:"#fff3cd"}}>
@@ -4508,8 +4603,8 @@ function CompetenciaGoleadoresSetup({compId,compName,compColor,setAiMsg}){
       <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>
         Sube una foto de la tabla general de goleadores o asistencias de FC26 para esta competencia. La IA leerá los datos y podrás corregirlos antes de guardar.
       </div>
-      {renderTabla("goleadores","Goleadores","⚽",data.goleadores,fileRefGol)}
-      {renderTabla("asistencias","Asistencias","🎯",data.asistencias,fileRefAsist)}
+      {renderTabla("goleadores","Goleadores","⚽",data.goleadores,fileRefGol,excelRefGol)}
+      {renderTabla("asistencias","Asistencias","🎯",data.asistencias,fileRefAsist,excelRefAsist)}
     </div>
   );
 }
@@ -4520,6 +4615,7 @@ function CompetenciaResultadoSetup({compId,compName,compColor,formato,setAiMsg})
   const[uploading,setUploading]=useState(false);
   const[preview,setPreview]=useState(null); // {local,golesLocal,visitante,golesVisitante}
   const fileRef=useRef(null);
+  const excelRef=useRef(null);
 
   useEffect(()=>{
     const unsub=onSnapshot(doc(db,"config","competenciaData"),snap=>{
@@ -4625,6 +4721,81 @@ function CompetenciaResultadoSetup({compId,compName,compColor,formato,setAiMsg})
     setPreview(null);
   };
 
+  const processExcelBulk=async(file)=>{
+    setUploading(true);
+    setAiMsg("Leyendo Excel…");
+    try{
+      await new Promise((res,rej)=>{
+        if(window.XLSX){res();return;}
+        const s=document.createElement('script');
+        s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+        s.onload=res; s.onerror=rej;
+        document.head.appendChild(s);
+      });
+      const buf=await file.arrayBuffer();
+      const wb=window.XLSX.read(buf,{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const rows=window.XLSX.utils.sheet_to_json(ws,{header:1});
+      const partidos=[];
+      for(const row of rows){
+        if(!row||row.every(v=>!v&&v!==0)) continue;
+        const local=row[0]?String(row[0]).trim():"";
+        if(!local) continue;
+        if(local.toUpperCase()==="LOCAL"||local.toUpperCase()==="EQUIPO") continue; // skip header
+        const visitante=row[2]?String(row[2]).trim():"";
+        const golesLocal=Number(row[1])||0;
+        const golesVisitante=Number(row[3])||0;
+        if(!visitante) continue;
+        if(!todosEquipos.includes(local)||!todosEquipos.includes(visitante)){
+          partidos.push({local,golesLocal,visitante,golesVisitante,error:"Equipo no reconocido"});
+          continue;
+        }
+        partidos.push({local,golesLocal,visitante,golesVisitante});
+      }
+      const validos=partidos.filter(p=>!p.error);
+      if(validos.length===0) throw new Error("No se encontraron partidos válidos. Usa: A=Local, B=Goles Local, C=Visitante, D=Goles Visitante.");
+
+      const updTabla=(g,sel,gf,gc)=>{
+        const tabla=[...(g.tabla||[])];
+        const idx=tabla.findIndex(r=>r.equipo===sel);
+        if(idx===-1) return g;
+        const row={...tabla[idx]};
+        row.pj=(row.pj||0)+1;row.gf=(row.gf||0)+gf;row.gc=(row.gc||0)+gc;
+        row.pg=(row.pg||0)+(gf>gc?1:0);row.pe=(row.pe||0)+(gf===gc?1:0);row.pp=(row.pp||0)+(gf<gc?1:0);
+        row.pts=(row.pts||0)+(gf>gc?3:gf===gc?1:0);
+        tabla[idx]=row;
+        return {...g,tabla};
+      };
+
+      let nuevosGrupos=[...grupos];
+      for(const p of validos){
+        const gl=p.golesLocal,gv=p.golesVisitante;
+        nuevosGrupos=nuevosGrupos.map(g=>{
+          let ng=g;
+          if((g.equipos||[]).includes(p.local)) ng=updTabla(ng,p.local,gl,gv);
+          if((g.equipos||[]).includes(p.visitante)) ng=updTabla(ng,p.visitante,gv,gl);
+          return ng;
+        });
+        await addH2H({local:p.local,golesLocal:gl,visitante:p.visitante,golesVisitante:gv,competencia:compName});
+        const resultadoTxt=gl>gv?`${p.local} venció ${gl}-${gv} a ${p.visitante}`
+          :gv>gl?`${p.visitante} venció ${gv}-${gl} a ${p.local}`
+          :`${p.local} y ${p.visitante} empataron ${gl}-${gv}`;
+        await addNoticia(`${resultadoTxt} en ${compName}`,"⚽");
+      }
+      const ref=doc(db,"config","competenciaData");
+      const snap=await getDoc(ref).catch(()=>null);
+      const current=snap?.exists()?snap.data():{};
+      const compData=current[compId]||{};
+      await setDoc(ref,{...current,[compId]:{...compData,grupos:nuevosGrupos}},{merge:true});
+
+      const conError=partidos.filter(p=>p.error);
+      setAiMsg(`✅ ${validos.length} partidos aplicados a la tabla.${conError.length?` ⚠️ ${conError.length} omitidos por nombre no reconocido: ${conError.map(p=>`${p.local} vs ${p.visitante}`).join(", ")}`:""}`);
+    }catch(e){
+      setAiMsg("❌ "+e.message);
+    }
+    setUploading(false);
+  };
+
   return(
     <div style={{display:"flex",flexDirection:"column",gap:10}}>
       <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>
@@ -4633,10 +4804,19 @@ function CompetenciaResultadoSetup({compId,compName,compColor,formato,setAiMsg})
       <div style={{background:C.card,borderRadius:9,padding:"10px 12px",border:`1.5px solid ${C.border}`}}>
         <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}}
           onChange={e=>{const f=e.target.files?.[0];if(f)processImage(f);e.target.value="";}}/>
-        <button onClick={()=>fileRef.current?.click()} disabled={uploading||todosEquipos.length===0}
-          style={{width:"100%",padding:"8px",borderRadius:7,background:"transparent",border:`1.5px dashed ${compColor}`,color:compColor,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:(uploading||todosEquipos.length===0)?0.5:1}}>
-          {uploading?"Leyendo…":todosEquipos.length===0?"Primero configura equipos en Tabla":"📷 Subir foto del resultado"}
-        </button>
+        <input ref={excelRef} type="file" accept=".xlsx,.xls" style={{display:"none"}}
+          onChange={e=>{const f=e.target.files?.[0];if(f)processExcelBulk(f);e.target.value="";}}/>
+        <div style={{display:"flex",gap:6}}>
+          <button onClick={()=>fileRef.current?.click()} disabled={uploading||todosEquipos.length===0}
+            style={{flex:1,padding:"8px",borderRadius:7,background:"transparent",border:`1.5px dashed ${compColor}`,color:compColor,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:(uploading||todosEquipos.length===0)?0.5:1}}>
+            {uploading?"Leyendo…":todosEquipos.length===0?"Primero configura equipos":"📷 Foto del resultado"}
+          </button>
+          <button onClick={()=>excelRef.current?.click()} disabled={uploading||todosEquipos.length===0}
+            style={{flex:1,padding:"8px",borderRadius:7,background:"transparent",border:"1.5px dashed #27ae60",color:"#27ae60",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:(uploading||todosEquipos.length===0)?0.5:1}}>
+            {uploading?"Leyendo…":todosEquipos.length===0?"Primero configura equipos":"📋 Excel (varios partidos)"}
+          </button>
+        </div>
+        <div style={{fontSize:8,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginTop:4,textAlign:"center"}}>Formato Excel: A=Local, B=Goles Local, C=Visitante, D=Goles Visitante (una fila por partido, aplica directo sin vista previa)</div>
         {preview&&(
           <div style={{marginTop:8,padding:8,borderRadius:8,border:`1.5px solid #f0ad4e`,background:"#fff3cd"}}>
             <div style={{fontSize:10,fontWeight:800,color:"#856404",marginBottom:6,fontFamily:"'DM Sans',sans-serif"}}>🔎 Vista previa — corrige si algo está mal antes de confirmar</div>
@@ -4683,6 +4863,7 @@ function CompetenciaFixtureSetup({compId,compColor,setAiMsg}){
   const[uploading,setUploading]=useState(false);
   const[preview,setPreview]=useState(null); // {jornada, partidos:[{local,visitante}]}
   const fileRef=useRef(null);
+  const excelRef=useRef(null);
 
   useEffect(()=>{
     const unsub=onSnapshot(doc(db,"config","competenciaData"),snap=>{
@@ -4751,6 +4932,49 @@ function CompetenciaFixtureSetup({compId,compColor,setAiMsg}){
     await saveFixture(nuevo);
     setAiMsg(`✅ ${preview.jornada} guardada (${preview.partidos.length} partidos)`);
     setPreview(null);
+  };
+
+  const processExcelFixture=async(file)=>{
+    setUploading(true);
+    setAiMsg("Leyendo Excel…");
+    try{
+      await new Promise((res,rej)=>{
+        if(window.XLSX){res();return;}
+        const s=document.createElement('script');
+        s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+        s.onload=res; s.onerror=rej;
+        document.head.appendChild(s);
+      });
+      const buf=await file.arrayBuffer();
+      const wb=window.XLSX.read(buf,{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const rows=window.XLSX.utils.sheet_to_json(ws,{header:1});
+      const porJornada={}; // {nombreJornada:[{local,visitante}]}
+      for(const row of rows){
+        if(!row||row.every(v=>!v&&v!==0)) continue;
+        const jornada=row[0]?String(row[0]).trim():"";
+        if(!jornada) continue;
+        if(jornada.toUpperCase()==="JORNADA") continue; // skip header
+        const local=row[1]?String(row[1]).trim():"";
+        const visitante=row[2]?String(row[2]).trim():"";
+        if(!local||!visitante) continue;
+        if(!porJornada[jornada]) porJornada[jornada]=[];
+        porJornada[jornada].push({local,visitante});
+      }
+      const nombresJornada=Object.keys(porJornada);
+      if(nombresJornada.length===0) throw new Error("No se encontraron filas válidas. Usa: A=Jornada, B=Local, C=Visitante.");
+      const nuevo={...fixture};
+      nombresJornada.forEach(j=>{
+        const jKey=j.replace(/\s+/g,"_");
+        nuevo[jKey]=porJornada[j];
+      });
+      await saveFixture(nuevo);
+      const totalPartidos=Object.values(porJornada).reduce((s,p)=>s+p.length,0);
+      setAiMsg(`✅ ${nombresJornada.length} jornada(s) y ${totalPartidos} partidos guardados desde Excel`);
+    }catch(e){
+      setAiMsg("❌ "+e.message);
+    }
+    setUploading(false);
   };
 
   const updatePreviewPartido=(pi,field,val)=>{
@@ -5052,6 +5276,16 @@ function CompetenciasModal({allTeams,onClose}){
           {aiMsg&&<div style={{padding:"6px 10px",borderRadius:8,background:"#f0fdf4",border:"1px solid #bbf7d0",fontSize:10,color:"#166534",fontFamily:"'DM Sans',sans-serif"}}>{aiMsg}</div>}
 
           {/* Vista: equipos de una competencia */}
+          {selected&&subTab==="equipos"&&(
+            <button onClick={async()=>{
+              const inscritos=allTeams.filter(t=>(t.competencias||[]).includes(selected)).map(t=>t.teamName);
+              if(inscritos.length<2){setAiMsg("❌ Necesitas al menos 2 equipos inscritos para anunciar el sorteo");return;}
+              await addNoticia(`🎲 Se sortearon los equipos de ${activeComp.name}: ${inscritos.join(", ")}`,"🎲");
+              setAiMsg(`✅ Sorteo de ${activeComp.name} anunciado (${inscritos.length} equipos)`);
+            }} style={{padding:"8px",borderRadius:8,background:"transparent",border:`1.5px solid ${activeComp.color}`,color:activeComp.color,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",marginBottom:6}}>
+              📢 Anunciar sorteo / inscripción de equipos
+            </button>
+          )}
           {selected&&subTab==="equipos"&&allTeams.map(team=>{
             const active=(team.competencias||[]).includes(selected);
             return(
@@ -5068,7 +5302,7 @@ function CompetenciasModal({allTeams,onClose}){
           {selected&&subTab==="grupos"&&(
             activeComp.formato==="final"
               ?<SuperCopaSetup compColor={activeComp.color} setAiMsg={setAiMsg}/>
-              :<CompetenciaGruposSetup compId={selected} compColor={activeComp.color} formato={activeComp.formato} allTeams={allTeams} setAiMsg={setAiMsg}/>
+              :<CompetenciaGruposSetup compId={selected} compName={activeComp.name} compColor={activeComp.color} formato={activeComp.formato} allTeams={allTeams} setAiMsg={setAiMsg}/>
           )}
 
           {/* Vista: goleadores y asistencias */}
