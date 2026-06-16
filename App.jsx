@@ -4285,7 +4285,7 @@ function CompetenciaGruposSetup({compId,compName,compColor,formato,allTeams,setA
           )}
           {formato==="liga"&&(
             <div style={{fontSize:9,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginBottom:8}}>
-              {g.equipos.length} equipos inscritos (se actualiza automáticamente desde "Equipos")
+              {(g.equipos||[]).length} equipos inscritos (se actualiza automáticamente desde "Equipos")
             </div>
           )}
           {/* Tabla actual */}
