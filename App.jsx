@@ -5085,6 +5085,161 @@ function CompetenciaFixtureSetup({compId,compColor,setAiMsg}){
   );
 }
 
+// ─── COMPETENCIA: APUESTAS ENTRE EQUIPOS ──────────────────────────────────────
+function CompetenciaApuestasSetup({compId,compName,compColor,allTeams,setAiMsg}){
+  const[apuestas,setApuestas]=useState([]);
+  const[creando,setCreando]=useState(false);
+  const[form,setForm]=useState({equipoA:"",equipoB:"",condicion:"",metrica:"posicion"});
+  const[saving,setSaving]=useState(false);
+
+  const eligibles=allTeams.filter(t=>(t.competencias||[]).includes(compId));
+
+  useEffect(()=>{
+    const unsub=onSnapshot(doc(db,"config","apuestas"),snap=>{
+      const all=snap.exists()?snap.data():{};
+      setApuestas((all.lista||[]).filter(a=>a.compId===compId));
+    });
+    return unsub;
+  },[compId]);
+
+  const saveApuestas=async(nuevaLista)=>{
+    const ref=doc(db,"config","apuestas");
+    const snap=await getDoc(ref).catch(()=>null);
+    const current=snap?.exists()?snap.data():{};
+    const otras=(current.lista||[]).filter(a=>a.compId!==compId);
+    await setDoc(ref,{lista:[...otras,...nuevaLista]},{merge:true});
+  };
+
+  const crearApuesta=async()=>{
+    if(!form.equipoA||!form.equipoB){setAiMsg("❌ Selecciona ambos equipos");return;}
+    if(form.equipoA===form.equipoB){setAiMsg("❌ Los equipos no pueden ser el mismo");return;}
+    if(!form.condicion.trim()){setAiMsg("❌ Escribe la condición de la apuesta");return;}
+    setSaving(true);
+    const nueva={
+      id:`bet_${Date.now()}`,compId,equipoA:form.equipoA,equipoB:form.equipoB,
+      condicion:form.condicion.trim(),metrica:form.metrica,estado:"activa",ganador:null,
+      fecha:new Date().toISOString()
+    };
+    await saveApuestas([...apuestas,nueva]);
+    await addNoticia(`🎲 Nueva apuesta en ${compName}: ${form.equipoA} vs ${form.equipoB} — ${form.condicion.trim()}`,"🎲");
+    setForm({equipoA:"",equipoB:"",condicion:"",metrica:"posicion"});
+    setCreando(false);
+    setAiMsg("✅ Apuesta creada");
+    setSaving(false);
+  };
+
+  const marcarGanador=async(apId,ganador)=>{
+    const ap=apuestas.find(a=>a.id===apId);
+    if(!ap) return;
+    const nuevaLista=apuestas.map(a=>a.id===apId?{...a,estado:"cerrada",ganador}:a);
+    await saveApuestas(nuevaLista);
+    if(ganador){
+      await addNoticia(`🎲 ${ganador} ganó la apuesta contra ${ganador===ap.equipoA?ap.equipoB:ap.equipoA} en ${compName}: ${ap.condicion}`,"🏆");
+    }else{
+      await addNoticia(`🎲 Apuesta cerrada sin ganador en ${compName}: ${ap.condicion}`,"🎲");
+    }
+    setAiMsg("✅ Apuesta cerrada");
+  };
+
+  const eliminarApuesta=async(apId)=>{
+    if(!window.confirm("¿Eliminar esta apuesta?")) return;
+    await saveApuestas(apuestas.filter(a=>a.id!==apId));
+    setAiMsg("✅ Apuesta eliminada");
+  };
+
+  const metricaLabel={posicion:"Posición en tabla",puntos:"Puntos",gd:"Diferencia de goles",h2h:"Resultado directo (H2H)"};
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+      <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>
+        Crea apuestas entre equipos con la condición que pactaron. El progreso se muestra en vivo según la métrica elegida; tú decides manualmente quién ganó al cerrarla.
+      </div>
+
+      {!creando&&(
+        <button onClick={()=>setCreando(true)}
+          style={{padding:"9px",borderRadius:8,background:compColor,color:"#fff",border:"none",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+          + Nueva apuesta
+        </button>
+      )}
+
+      {creando&&(
+        <div style={{background:C.card,borderRadius:10,padding:"12px",border:`1.5px solid ${compColor}`,display:"flex",flexDirection:"column",gap:8}}>
+          <div style={{display:"flex",gap:6}}>
+            <select value={form.equipoA} onChange={e=>setForm({...form,equipoA:e.target.value})}
+              style={{flex:1,padding:"7px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif"}}>
+              <option value="">— Equipo A —</option>
+              {eligibles.map(t=><option key={t.uid||t.id} value={t.teamName}>{t.teamName}</option>)}
+            </select>
+            <select value={form.equipoB} onChange={e=>setForm({...form,equipoB:e.target.value})}
+              style={{flex:1,padding:"7px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif"}}>
+              <option value="">— Equipo B —</option>
+              {eligibles.map(t=><option key={t.uid||t.id} value={t.teamName}>{t.teamName}</option>)}
+            </select>
+          </div>
+          <textarea value={form.condicion} onChange={e=>setForm({...form,condicion:e.target.value})} placeholder='Condición de la apuesta (ej: "El que termine más abajo paga la cena")'
+            style={{padding:"8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif",minHeight:50,resize:"vertical"}}/>
+          <div>
+            <div style={{fontSize:9,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginBottom:4}}>Métrica a mostrar en vivo:</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+              {Object.entries(metricaLabel).map(([key,label])=>(
+                <button key={key} onClick={()=>setForm({...form,metrica:key})}
+                  style={{padding:"5px 10px",borderRadius:20,border:`1.5px solid ${form.metrica===key?compColor:C.borderDark}`,background:form.metrica===key?compColor+"22":C.inputBg,color:form.metrica===key?compColor:C.textMid,fontSize:9,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div style={{display:"flex",gap:6}}>
+            <button onClick={crearApuesta} disabled={saving}
+              style={{flex:1,padding:"8px",borderRadius:7,background:"#27ae60",color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:saving?0.6:1}}>
+              {saving?"Guardando…":"✅ Crear apuesta"}
+            </button>
+            <button onClick={()=>{setCreando(false);setForm({equipoA:"",equipoB:"",condicion:"",metrica:"posicion"});}}
+              style={{padding:"8px 14px",borderRadius:7,background:C.inputBg,color:C.textMid,border:`1px solid ${C.border}`,fontSize:11,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {apuestas.length===0&&!creando&&(
+        <div style={{textAlign:"center",color:C.textFaint,padding:20,fontFamily:"'DM Sans',sans-serif",fontSize:11}}>Sin apuestas todavía</div>
+      )}
+
+      {apuestas.map(ap=>(
+        <div key={ap.id} style={{background:C.card,borderRadius:10,padding:"10px 12px",border:`1.5px solid ${ap.estado==="activa"?compColor:C.border}`,opacity:ap.estado==="cerrada"?0.7:1}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:6,marginBottom:6}}>
+            <span style={{fontSize:12,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{ap.equipoA} 🆚 {ap.equipoB}</span>
+            <button onClick={()=>eliminarApuesta(ap.id)} style={{background:"none",border:"none",color:"#c0392b",cursor:"pointer",fontSize:12}}>🗑️</button>
+          </div>
+          <div style={{fontSize:11,color:C.textMid,fontFamily:"'DM Sans',sans-serif",marginBottom:8,fontStyle:"italic"}}>"{ap.condicion}"</div>
+          <div style={{fontSize:9,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginBottom:8}}>Métrica: {metricaLabel[ap.metrica]||ap.metrica}</div>
+          {ap.estado==="cerrada"?(
+            <div style={{fontSize:11,fontWeight:800,color:"#27ae60",fontFamily:"'DM Sans',sans-serif"}}>
+              {ap.ganador?`🏆 Ganó: ${ap.ganador}`:"Cerrada sin ganador"}
+            </div>
+          ):(
+            <div style={{display:"flex",gap:6}}>
+              <button onClick={()=>marcarGanador(ap.id,ap.equipoA)}
+                style={{flex:1,padding:"6px",borderRadius:7,background:"transparent",border:"1px solid #27ae60",color:"#27ae60",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                🏆 Ganó {ap.equipoA}
+              </button>
+              <button onClick={()=>marcarGanador(ap.id,ap.equipoB)}
+                style={{flex:1,padding:"6px",borderRadius:7,background:"transparent",border:"1px solid #27ae60",color:"#27ae60",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                🏆 Ganó {ap.equipoB}
+              </button>
+              <button onClick={()=>marcarGanador(ap.id,null)}
+                style={{padding:"6px 10px",borderRadius:7,background:"transparent",border:`1px solid ${C.border}`,color:C.textFaint,fontSize:10,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                Cerrar sin ganador
+              </button>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── COMPETENCIAS MODAL ───────────────────────────────────────────────────────
 function CompetenciasModal({allTeams,onClose}){
   const[comps,setComps]=useState(()=>COMPETENCIAS_AVAILABLE.map(c=>({...c})));
@@ -5268,6 +5423,10 @@ function CompetenciasModal({allTeams,onClose}){
                 style={{flex:1,padding:"7px",borderRadius:8,border:`1.5px solid ${subTab==="fixture"?activeComp.color:C.border}`,background:subTab==="fixture"?activeComp.color:C.inputBg,color:subTab==="fixture"?"#fff":C.textMid,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
                 📅 Fixture
               </button>
+              <button onClick={()=>setSubTab("apuestas")}
+                style={{flex:1,padding:"7px",borderRadius:8,border:`1.5px solid ${subTab==="apuestas"?activeComp.color:C.border}`,background:subTab==="apuestas"?activeComp.color:C.inputBg,color:subTab==="apuestas"?"#fff":C.textMid,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                🎲 Apuestas
+              </button>
             </div>
           )}
 
@@ -5323,6 +5482,11 @@ function CompetenciasModal({allTeams,onClose}){
           {/* Vista: fixture / calendario */}
           {selected&&subTab==="fixture"&&(
             <CompetenciaFixtureSetup compId={selected} compColor={activeComp.color} setAiMsg={setAiMsg}/>
+          )}
+
+          {/* Vista: apuestas entre equipos */}
+          {selected&&subTab==="apuestas"&&(
+            <CompetenciaApuestasSetup compId={selected} compName={activeComp.name} compColor={activeComp.color} allTeams={allTeams} setAiMsg={setAiMsg}/>
           )}
         </div>
       </div>
@@ -5790,6 +5954,35 @@ function MainApp({user,isAdmin,onLogout}){
         const asistencias=compData.asistencias||[];
         const fixture=compData.fixture||{};
         const [vistaTab,setVistaTab]=React.useState("tabla");
+        const [apuestasComp,setApuestasComp]=React.useState([]);
+        const [h2hLista,setH2hLista]=React.useState([]);
+        React.useEffect(()=>{
+          const unsub1=onSnapshot(doc(db,"config","apuestas"),snap=>{
+            const all=snap.exists()?snap.data():{};
+            setApuestasComp((all.lista||[]).filter(a=>a.compId===compId));
+          });
+          const unsub2=onSnapshot(doc(db,"config","h2hHistorial"),snap=>{
+            const all=snap.exists()?snap.data():{};
+            setH2hLista(all.lista||[]);
+          });
+          return ()=>{unsub1();unsub2();};
+        },[compId]);
+        // Helper: obtiene fila de tabla de un equipo (busca en todos los grupos)
+        const filaDeEquipo=(nombre)=>{
+          for(const g of grupos){
+            const fila=(g.tabla||[]).find(r=>r.equipo===nombre);
+            if(fila) return fila;
+          }
+          return null;
+        };
+        const posicionDeEquipo=(nombre)=>{
+          for(const g of grupos){
+            const ordenada=[...(g.tabla||[])].sort((a,b)=>b.pts-a.pts);
+            const idx=ordenada.findIndex(r=>r.equipo===nombre);
+            if(idx>=0) return idx+1;
+          }
+          return null;
+        };
         return(
           <div style={{position:"fixed",inset:0,zIndex:200,background:C.bg,overflowY:"auto"}}>
             {/* Header */}
@@ -5802,7 +5995,7 @@ function MainApp({user,isAdmin,onLogout}){
             </div>
             {/* Tabs */}
             <div style={{display:"flex",borderBottom:`2px solid ${C.border}`,background:C.card}}>
-              {[["tabla","📊 Tabla"],["goles","⚽ Goles"],["fixture","📅 Fixture"]].map(([id,label])=>(
+              {[["tabla","📊 Tabla"],["goles","⚽ Goles"],["fixture","📅 Fixture"],["apuestas","🎲 Apuestas"]].map(([id,label])=>(
                 <button key={id} onClick={()=>setVistaTab(id)} style={{flex:1,padding:"11px 4px",background:"none",border:"none",borderBottom:vistaTab===id?`3px solid ${comp.color||TA.accent}`:"3px solid transparent",cursor:"pointer",fontSize:11,fontWeight:700,color:vistaTab===id?(comp.color||TA.accent):C.textFaint,fontFamily:"'DM Sans',sans-serif",transition:"all 0.15s"}}>{label}</button>
               ))}
             </div>
@@ -5892,6 +6085,63 @@ function MainApp({user,isAdmin,onLogout}){
                       </div>
                     </div>
                   ))
+              )}
+              {/* APUESTAS */}
+              {vistaTab==="apuestas"&&(
+                apuestasComp.length===0
+                  ? <div style={{textAlign:"center",color:C.textFaint,padding:40,fontFamily:"'DM Sans',sans-serif",fontSize:13}}>Sin apuestas activas</div>
+                  : apuestasComp.map(ap=>{
+                    let progresoA="—",progresoB="—",etiqueta="";
+                    if(ap.metrica==="posicion"){
+                      etiqueta="Posición en tabla";
+                      const pA=posicionDeEquipo(ap.equipoA),pB=posicionDeEquipo(ap.equipoB);
+                      progresoA=pA?`#${pA}`:"—"; progresoB=pB?`#${pB}`:"—";
+                    }else if(ap.metrica==="puntos"){
+                      etiqueta="Puntos";
+                      const fA=filaDeEquipo(ap.equipoA),fB=filaDeEquipo(ap.equipoB);
+                      progresoA=fA?`${fA.pts||0} pts`:"—"; progresoB=fB?`${fB.pts||0} pts`:"—";
+                    }else if(ap.metrica==="gd"){
+                      etiqueta="Diferencia de goles";
+                      const fA=filaDeEquipo(ap.equipoA),fB=filaDeEquipo(ap.equipoB);
+                      const gdA=fA?(fA.gf||0)-(fA.gc||0):null, gdB=fB?(fB.gf||0)-(fB.gc||0):null;
+                      progresoA=gdA!==null?(gdA>=0?"+"+gdA:gdA):"—"; progresoB=gdB!==null?(gdB>=0?"+"+gdB:gdB):"—";
+                    }else if(ap.metrica==="h2h"){
+                      etiqueta="Resultado directo (H2H)";
+                      const partidos=h2hLista.filter(h=>(h.local===ap.equipoA&&h.visitante===ap.equipoB)||(h.local===ap.equipoB&&h.visitante===ap.equipoA));
+                      if(partidos.length===0){progresoA="Sin partidos";progresoB="Sin partidos";}
+                      else{
+                        let winsA=0,winsB=0;
+                        partidos.forEach(p=>{
+                          const golesA=p.local===ap.equipoA?p.golesLocal:p.golesVisitante;
+                          const golesB=p.local===ap.equipoB?p.golesLocal:p.golesVisitante;
+                          if(golesA>golesB) winsA++; else if(golesB>golesA) winsB++;
+                        });
+                        progresoA=`${winsA} victoria${winsA!==1?"s":""}`; progresoB=`${winsB} victoria${winsB!==1?"s":""}`;
+                      }
+                    }
+                    return(
+                      <div key={ap.id} style={{background:C.card,borderRadius:12,padding:"14px",border:`1.5px solid ${ap.estado==="activa"?(comp.color||TA.accent):C.border}`,marginBottom:12,opacity:ap.estado==="cerrada"?0.7:1}}>
+                        <div style={{fontSize:11,color:C.textMid,fontFamily:"'DM Sans',sans-serif",fontStyle:"italic",marginBottom:10}}>"{ap.condicion}"</div>
+                        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+                          <div style={{flex:1,textAlign:"center"}}>
+                            <div style={{fontSize:12,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{ap.equipoA}</div>
+                            <div style={{fontSize:16,fontWeight:900,color:comp.color||TA.accent,fontFamily:"'DM Sans',sans-serif"}}>{progresoA}</div>
+                          </div>
+                          <div style={{fontSize:11,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",fontWeight:700}}>VS</div>
+                          <div style={{flex:1,textAlign:"center"}}>
+                            <div style={{fontSize:12,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{ap.equipoB}</div>
+                            <div style={{fontSize:16,fontWeight:900,color:comp.color||TA.accent,fontFamily:"'DM Sans',sans-serif"}}>{progresoB}</div>
+                          </div>
+                        </div>
+                        <div style={{fontSize:8,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",textAlign:"center",marginTop:8}}>{etiqueta}</div>
+                        {ap.estado==="cerrada"&&(
+                          <div style={{marginTop:10,textAlign:"center",fontSize:11,fontWeight:800,color:"#27ae60",fontFamily:"'DM Sans',sans-serif"}}>
+                            {ap.ganador?`🏆 Ganó: ${ap.ganador}`:"Cerrada sin ganador"}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
               )}
             </div>
           </div>
