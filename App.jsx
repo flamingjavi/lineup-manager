@@ -5842,19 +5842,29 @@ function MainApp({user,isAdmin,onLogout}){
                         </div>
                         <div onClick={async()=>{
                           setShowAdminMenu(false);
-                          if(!window.confirm(`⚠️ Esto borrará TODOS los jugadores, alineaciones, presupuestos, mercados y la pool global de los ${allTeams.length} equipos.\n\nEsta acción NO se puede deshacer. ¿Continuar?`)) return;
-                          if(!window.confirm("Última confirmación: ¿BORRAR TODO de verdad?")) return;
+                          const opciones={
+                            jugadores:{label:"jugadores (plantillas + pool global)",patch:t=>({squad:[]})},
+                            plantillas:{label:"plantillas (alineaciones: titulares, banca, código)",patch:t=>({lineups:(t.lineups||[]).map(l=>({...l,starters:{},subs:Array(7).fill(null),code:""}))})},
+                            presupuestos:{label:"presupuestos",patch:t=>({presupuesto:""})},
+                            todo:{label:"TODO (jugadores + plantillas + presupuestos + mercado)",patch:t=>({squad:[],lineups:(t.lineups||[]).map(l=>({...l,starters:{},subs:Array(7).fill(null),code:""})),presupuesto:"",mercado:deleteField(),pendingTransfers:deleteField()})}
+                          };
+                          const choice=window.prompt("¿Qué quieres limpiar?\n\n1 = Jugadores\n2 = Plantillas\n3 = Presupuestos\n4 = TODO\n\nEscribe el número:");
+                          const map={1:"jugadores",2:"plantillas",3:"presupuestos",4:"todo"};
+                          const tipo=map[choice?.trim()];
+                          if(!tipo){if(choice!==null) alert("Opción inválida.");return;}
+                          const opt=opciones[tipo];
+                          if(!window.confirm(`⚠️ Esto borrará ${opt.label} de los ${allTeams.length} equipos${tipo==="jugadores"||tipo==="todo"?" y vaciará la pool global":""}.\n\nEsta acción NO se puede deshacer. ¿Continuar?`)) return;
+                          if(!window.confirm(`Última confirmación: ¿BORRAR ${opt.label.toUpperCase()} de verdad?`)) return;
                           const pin=window.prompt("Ingresa el PIN de seguridad:");
                           if(pin!=="0253"){alert("❌ PIN incorrecto. Acción cancelada.");return;}
                           let count=0;
                           for(const t of allTeams){
                             const ref=doc(db,"teams",t.id||t.uid);
-                            const lineups=(t.lineups||[]).map(l=>({...l,starters:{},subs:Array(7).fill(null),code:""}));
-                            await updateDoc(ref,{squad:[],lineups,presupuesto:"",mercado:deleteField(),pendingTransfers:deleteField()});
+                            await updateDoc(ref,opt.patch(t));
                             count++;
                           }
-                          await setDoc(doc(db,"pool","players"),{});
-                          alert(`✅ ${count} equipos limpiados y pool global vaciada.`);
+                          if(tipo==="jugadores"||tipo==="todo") await setDoc(doc(db,"pool","players"),{});
+                          alert(`✅ ${count} equipos limpiados (${opt.label}).`);
                         }} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:700,color:"#c0392b"}}>
                           🧨 <span>Limpiar TODO</span>
                         </div>
