@@ -1468,6 +1468,8 @@ function CalendarioGeneralAdmin({setAiMsg}){
   const[uploading,setUploading]=useState(false);
   const fileRef=useRef(null);
 
+  const OPCIONES_COMP=[...COMPETENCIAS_AVAILABLE.map(c=>c.name),"Otra / Fase especial"];
+
   useEffect(()=>{
     const unsub=onSnapshot(doc(db,"config","calendarioGeneral"),snap=>{
       const data=snap.exists()?snap.data():{};
@@ -1488,10 +1490,10 @@ function CalendarioGeneralAdmin({setAiMsg}){
         r.readAsDataURL(file);
       });
       setAiMsg("Conectando con Gemini…");
-      const prompt=`Analiza esta captura de un calendario semanal de competiciones de fútbol. Para cada semana extrae: número de semana, fecha (o rango de fechas), y el detalle de qué competiciones/jornadas juegan esa semana (texto libre, ej: "Neo League jornada 3, Champions jornada 2"). Responde SOLO con JSON sin markdown, sin texto adicional: {"semanas":[{"numero":1,"fecha":"","detalle":""}]}`;
+      const prompt=`Analiza esta captura de un calendario/orden de jornadas de competiciones de fútbol. Para cada fila numerada extrae: número de jornada, qué competencia es (ej: "Neo League", "Copa", "Champions", "Europa League", "Brave League", "Brave Cup", o "Otra" si no coincide), y la fase/jornada específica como texto (ej: "Jornada 3", "4tos Ida", "Final"). Responde SOLO con JSON sin markdown, sin texto adicional: {"semanas":[{"numero":1,"competencia":"","fase":"","fecha":""}]}`;
       const GEMINI_KEY="AIzaSyAGlxjD12k38Xu9L-8K165iJma1ZwR7tyY";
       const GEMINI_URL=`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`;
-      const body=JSON.stringify({contents:[{parts:[{inline_data:{mime_type:file.type||"image/jpeg",data:b64}},{text:prompt}]}],generationConfig:{temperature:0,maxOutputTokens:2000}});
+      const body=JSON.stringify({contents:[{parts:[{inline_data:{mime_type:file.type||"image/jpeg",data:b64}},{text:prompt}]}],generationConfig:{temperature:0,maxOutputTokens:3000}});
       const resp=await fetch(GEMINI_URL,{method:"POST",headers:{"Content-Type":"application/json"},body});
       if(!resp.ok){
         const errTxt=await resp.text().catch(()=>"");
@@ -1505,10 +1507,15 @@ function CalendarioGeneralAdmin({setAiMsg}){
       let parsed;
       try{ parsed=JSON.parse(cleaned); }
       catch{ throw new Error("No se pudo interpretar el JSON: "+cleaned.slice(0,150)); }
-      const filas=(parsed.semanas||[]).map(s=>({numero:Number(s.numero)||0,fecha:s.fecha||"",detalle:s.detalle||""}));
-      if(filas.length===0) throw new Error("No se detectaron semanas en la imagen");
+      const filas=(parsed.semanas||[]).map(s=>({
+        numero:Number(s.numero)||0,
+        competencia:OPCIONES_COMP.includes(s.competencia)?s.competencia:"Otra / Fase especial",
+        fase:s.fase||"",
+        fecha:s.fecha||""
+      }));
+      if(filas.length===0) throw new Error("No se detectaron jornadas en la imagen");
       setPreview(filas);
-      setAiMsg(`✅ ${filas.length} semanas leídas — revisa y confirma abajo`);
+      setAiMsg(`✅ ${filas.length} jornadas leídas — revisa y confirma abajo`);
     }catch(e){
       setAiMsg("❌ "+e.message);
     }
@@ -1519,7 +1526,7 @@ function CalendarioGeneralAdmin({setAiMsg}){
     if(!preview) return;
     const ordenadas=[...preview].sort((a,b)=>a.numero-b.numero);
     await setDoc(doc(db,"config","calendarioGeneral"),{semanas:ordenadas},{merge:true});
-    await addNoticia(`📅 Calendario actualizado: ${ordenadas.length} semanas cargadas`,"📅");
+    await addNoticia(`📅 Calendario actualizado: ${ordenadas.length} jornadas cargadas`,"📅");
     setAiMsg("✅ Calendario guardado");
     setPreview(null);
   };
@@ -1527,8 +1534,8 @@ function CalendarioGeneralAdmin({setAiMsg}){
   const marcarSemanaActual=async(numero)=>{
     await setDoc(doc(db,"config","calendarioGeneral"),{semanaActual:numero},{merge:true});
     const sem=semanas.find(s=>s.numero===numero);
-    if(sem) await addNoticia(`📅 Ahora estamos en la Semana ${numero}: ${sem.detalle}`,"📅");
-    setAiMsg(`✅ Semana ${numero} marcada como actual`);
+    if(sem) await addNoticia(`📅 Ahora estamos en la Jornada ${numero}: ${sem.competencia||""} ${sem.fase||sem.detalle||""}`,"📅");
+    setAiMsg(`✅ Jornada ${numero} marcada como actual`);
   };
 
   const updateCell=(i,field,val)=>{
@@ -1536,12 +1543,12 @@ function CalendarioGeneralAdmin({setAiMsg}){
     next[i]={...next[i],[field]:field==="numero"?Number(val):val};
     setPreview(next);
   };
-  const addRow=()=>setPreview([...(preview||[]),{numero:(preview?.length||0)+1,fecha:"",detalle:""}]);
+  const addRow=()=>setPreview([...(preview||[]),{numero:(preview?.length||0)+1,competencia:OPCIONES_COMP[0],fase:"",fecha:""}]);
   const removeRow=(i)=>setPreview(preview.filter((_,idx)=>idx!==i));
 
   return(
     <div style={{display:"flex",flexDirection:"column",gap:10}}>
-      <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Sube una foto del calendario general de competiciones. La IA detectará las semanas, fechas y detalle; revisa antes de confirmar.</div>
+      <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Sube una foto del calendario/orden de jornadas, o agrégalo manual. Cada fila es una jornada con su competencia y fase específica.</div>
       <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}}
         onChange={e=>{const f=e.target.files?.[0];if(f)processImage(f);e.target.value="";}}/>
       <div style={{display:"flex",gap:6}}>
@@ -1549,7 +1556,7 @@ function CalendarioGeneralAdmin({setAiMsg}){
           style={{flex:1,padding:"9px",borderRadius:8,background:"transparent",border:"1.5px dashed #1a3a5c",color:"#1a3a5c",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:uploading?0.5:1}}>
           {uploading?"Leyendo…":"📷 Subir foto del calendario"}
         </button>
-        <button onClick={()=>setPreview(semanas.length>0?[...semanas]:[{numero:1,fecha:"",detalle:""}])}
+        <button onClick={()=>setPreview(semanas.length>0?semanas.map(s=>({numero:s.numero,competencia:s.competencia||"Otra / Fase especial",fase:s.fase||s.detalle||"",fecha:s.fecha||""})):[{numero:1,competencia:OPCIONES_COMP[0],fase:"",fecha:""}])}
           style={{flex:1,padding:"9px",borderRadius:8,background:"transparent",border:"1.5px dashed #9b59b6",color:"#9b59b6",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
           ✍️ Manual
         </button>
@@ -1558,21 +1565,25 @@ function CalendarioGeneralAdmin({setAiMsg}){
       {preview&&(
         <div style={{background:C.card,borderRadius:10,padding:"10px 12px",border:"1.5px solid #1a3a5c"}}>
           <div style={{fontSize:11,fontWeight:800,color:"#1a3a5c",fontFamily:"'DM Sans',sans-serif",marginBottom:8}}>Revisa antes de confirmar</div>
-          <div style={{maxHeight:280,overflowY:"auto",display:"flex",flexDirection:"column",gap:6,marginBottom:8}}>
+          <div style={{maxHeight:340,overflowY:"auto",display:"flex",flexDirection:"column",gap:6,marginBottom:8}}>
             {preview.map((s,i)=>(
-              <div key={i} style={{display:"flex",gap:5,alignItems:"flex-start"}}>
+              <div key={i} style={{display:"flex",gap:5,alignItems:"flex-start",flexWrap:"wrap"}}>
                 <input type="number" value={s.numero} onChange={e=>updateCell(i,"numero",e.target.value)} placeholder="N°"
-                  style={{width:42,padding:"5px 6px",borderRadius:6,border:`1px solid ${C.border}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif",textAlign:"center"}}/>
-                <input value={s.fecha} onChange={e=>updateCell(i,"fecha",e.target.value)} placeholder="Fecha"
-                  style={{width:90,padding:"5px 6px",borderRadius:6,border:`1px solid ${C.border}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif"}}/>
-                <input value={s.detalle} onChange={e=>updateCell(i,"detalle",e.target.value)} placeholder="Detalle (competencias/jornadas)"
-                  style={{flex:1,padding:"5px 6px",borderRadius:6,border:`1px solid ${C.border}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif"}}/>
+                  style={{width:38,padding:"5px 6px",borderRadius:6,border:`1px solid ${C.border}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif",textAlign:"center"}}/>
+                <select value={s.competencia||""} onChange={e=>updateCell(i,"competencia",e.target.value)}
+                  style={{flex:1,minWidth:110,padding:"5px 6px",borderRadius:6,border:`1px solid ${C.border}`,background:C.inputBg,color:C.text,fontSize:10,fontFamily:"'DM Sans',sans-serif"}}>
+                  {OPCIONES_COMP.map(op=><option key={op} value={op}>{op}</option>)}
+                </select>
+                <input value={s.fase||""} onChange={e=>updateCell(i,"fase",e.target.value)} placeholder="Fase (ej: Jornada 3, 4tos Ida)"
+                  style={{flex:1,minWidth:120,padding:"5px 6px",borderRadius:6,border:`1px solid ${C.border}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif"}}/>
+                <input value={s.fecha||""} onChange={e=>updateCell(i,"fecha",e.target.value)} placeholder="Fecha"
+                  style={{width:80,padding:"5px 6px",borderRadius:6,border:`1px solid ${C.border}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif"}}/>
                 <button onClick={()=>removeRow(i)} style={{background:"none",border:"none",color:"#e74c3c",cursor:"pointer",fontSize:13}}>✕</button>
               </div>
             ))}
           </div>
           <div style={{display:"flex",gap:8}}>
-            <button onClick={addRow} style={{flex:1,fontSize:11,padding:"7px 0",borderRadius:8,border:`1px solid ${C.border}`,background:C.inputBg,color:C.textMid,fontFamily:"'DM Sans',sans-serif",cursor:"pointer"}}>+ Agregar semana</button>
+            <button onClick={addRow} style={{flex:1,fontSize:11,padding:"7px 0",borderRadius:8,border:`1px solid ${C.border}`,background:C.inputBg,color:C.textMid,fontFamily:"'DM Sans',sans-serif",cursor:"pointer"}}>+ Agregar jornada</button>
             <button onClick={()=>setPreview(null)} style={{flex:1,fontSize:11,padding:"7px 0",borderRadius:8,border:`1px solid ${C.border}`,background:"none",color:C.textFaint,fontFamily:"'DM Sans',sans-serif",cursor:"pointer"}}>Cancelar</button>
             <button onClick={confirmar} style={{flex:1,fontSize:11,fontWeight:800,padding:"7px 0",borderRadius:8,border:"none",background:"#1a3a5c",color:"#fff",fontFamily:"'DM Sans',sans-serif",cursor:"pointer"}}>✅ Confirmar</button>
           </div>
@@ -1581,12 +1592,12 @@ function CalendarioGeneralAdmin({setAiMsg}){
 
       {semanas.length>0&&(
         <div>
-          <div style={{fontSize:10,fontWeight:800,color:C.textLight,fontFamily:"'DM Sans',sans-serif",marginBottom:6}}>Marcar semana actual:</div>
+          <div style={{fontSize:10,fontWeight:800,color:C.textLight,fontFamily:"'DM Sans',sans-serif",marginBottom:6}}>Marcar jornada actual:</div>
           <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
             {semanas.map(s=>(
               <button key={s.numero} onClick={()=>marcarSemanaActual(s.numero)}
                 style={{padding:"5px 10px",borderRadius:20,border:`1.5px solid ${semanaActual===s.numero?"#1a3a5c":C.border}`,background:semanaActual===s.numero?"#1a3a5c":C.inputBg,color:semanaActual===s.numero?"#fff":C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
-                Semana {s.numero}
+                {s.numero}. {s.competencia||""} {s.fase||s.detalle||""}
               </button>
             ))}
           </div>
@@ -1615,13 +1626,13 @@ function CalendarioWidget(){
       <div style={{display:"flex",alignItems:"center",gap:10}}>
         <span style={{fontSize:18}}>📅</span>
         <div style={{flex:1}}>
-          <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Semana {actual.numero}{actual.fecha?` · ${actual.fecha}`:""}</div>
-          <div style={{fontSize:13,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{actual.detalle}</div>
+          <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Jornada {actual.numero}{actual.fecha?` · ${actual.fecha}`:""}</div>
+          <div style={{fontSize:13,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{actual.competencia?`${actual.competencia}${actual.fase?" — "+actual.fase:""}`:actual.detalle}</div>
         </div>
       </div>
       {siguiente&&(
         <div style={{marginTop:6,paddingTop:6,borderTop:`1px solid ${C.border}`,fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>
-          Próxima: Semana {siguiente.numero}{siguiente.fecha?` (${siguiente.fecha})`:""} — {siguiente.detalle}
+          Próxima: Jornada {siguiente.numero}{siguiente.fecha?` (${siguiente.fecha})`:""} — {siguiente.competencia?`${siguiente.competencia}${siguiente.fase?" "+siguiente.fase:""}`:siguiente.detalle}
         </div>
       )}
     </div>
@@ -5335,19 +5346,24 @@ function CompetenciaGruposSetup({compId,compName,compColor,formato,allTeams,setA
 
 // ─── COMPETENCIA: GOLEADORES Y ASISTENCIAS (tabla general por imagen) ────────
 function CompetenciaGoleadoresSetup({compId,compName,compColor,setAiMsg}){
-  const[data,setData]=useState(null); // {goleadores:[{nombre,equipo,goles}], asistencias:[{nombre,equipo,asistencias}]}
-  const[uploading,setUploading]=useState(null); // "goleadores" | "asistencias" | null
+  const CAMPO_POR_TIPO={goleadores:"goles",asistencias:"asistencias",porteros:"imbatidos",calificacion:"rating"};
+  const[data,setData]=useState(null); // {goleadores:[...], asistencias:[...], porteros:[...], calificacion:[...]}
+  const[uploading,setUploading]=useState(null);
   const[preview,setPreview]=useState(null); // {tipo, filas:[...]}
   const fileRefGol=useRef(null);
   const fileRefAsist=useRef(null);
+  const fileRefPort=useRef(null);
+  const fileRefCalif=useRef(null);
   const excelRefGol=useRef(null);
   const excelRefAsist=useRef(null);
+  const excelRefPort=useRef(null);
+  const excelRefCalif=useRef(null);
 
   useEffect(()=>{
     const unsub=onSnapshot(doc(db,"config","competenciaData"),snap=>{
       const all=snap.exists()?snap.data():{};
       const d=all[compId]||{};
-      setData({goleadores:d.goleadores||[],asistencias:d.asistencias||[]});
+      setData({goleadores:d.goleadores||[],asistencias:d.asistencias||[],porteros:d.porteros||[],calificacion:d.calificacion||[]});
     });
     return unsub;
   },[compId]);
@@ -5371,10 +5387,14 @@ function CompetenciaGoleadoresSetup({compId,compName,compColor,setAiMsg}){
         r.readAsDataURL(file);
       });
       setAiMsg("Conectando con Gemini…");
-      const campo=tipo==="goleadores"?"goles":"asistencias";
-      const prompt=tipo==="goleadores"
-        ?`Analiza esta captura de la tabla de máximos goleadores de FC26. Para cada fila extrae el nombre del jugador, el equipo y el número de goles. Responde SOLO con JSON sin markdown, sin texto adicional: {"filas":[{"nombre":"","equipo":"","goles":0}]}`
-        :`Analiza esta captura de la tabla de máximos asistentes de FC26. Para cada fila extrae el nombre del jugador, el equipo y el número de asistencias. Responde SOLO con JSON sin markdown, sin texto adicional: {"filas":[{"nombre":"","equipo":"","asistencias":0}]}`;
+      const campo=CAMPO_POR_TIPO[tipo];
+      const prompts={
+        goleadores:`Analiza esta captura de la tabla de máximos goleadores de FC26. Para cada fila extrae el nombre del jugador, el equipo y el número de goles. Responde SOLO con JSON sin markdown, sin texto adicional: {"filas":[{"nombre":"","equipo":"","goles":0}]}`,
+        asistencias:`Analiza esta captura de la tabla de máximos asistentes de FC26. Para cada fila extrae el nombre del jugador, el equipo y el número de asistencias. Responde SOLO con JSON sin markdown, sin texto adicional: {"filas":[{"nombre":"","equipo":"","asistencias":0}]}`,
+        porteros:`Analiza esta captura de la tabla de porteros imbatidos de FC26. Para cada fila extrae el nombre del jugador, el equipo y el número de partidos imbatido (portería a cero). Responde SOLO con JSON sin markdown, sin texto adicional: {"filas":[{"nombre":"","equipo":"","imbatidos":0}]}`,
+        calificacion:`Analiza esta captura de la tabla de calificación promedio de jugadores de FC26. Para cada fila extrae el nombre del jugador, el equipo y la calificación promedio (puede tener decimales, ej. 8.01). Responde SOLO con JSON sin markdown, sin texto adicional: {"filas":[{"nombre":"","equipo":"","rating":0}]}`,
+      };
+      const prompt=prompts[tipo];
       const GEMINI_KEY="AIzaSyAGlxjD12k38Xu9L-8K165iJma1ZwR7tyY";
       const GEMINI_URL=`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`;
       const body=JSON.stringify({contents:[{parts:[{inline_data:{mime_type:file.type||"image/jpeg",data:b64}},{text:prompt}]}],generationConfig:{temperature:0,maxOutputTokens:2000}});
@@ -5416,7 +5436,7 @@ function CompetenciaGoleadoresSetup({compId,compName,compColor,setAiMsg}){
         s.onload=res; s.onerror=rej;
         document.head.appendChild(s);
       });
-      const campo=tipo==="goleadores"?"goles":"asistencias";
+      const campo=CAMPO_POR_TIPO[tipo];
       const buf=await file.arrayBuffer();
       const wb=window.XLSX.read(buf,{type:'array'});
       const ws=wb.Sheets[wb.SheetNames[0]];
@@ -5429,7 +5449,8 @@ function CompetenciaGoleadoresSetup({compId,compName,compColor,setAiMsg}){
         if(nombre.toUpperCase()==="JUGADOR"||nombre.toUpperCase()==="NOMBRE") continue; // skip header
         filas.push({nombre,equipo:row[1]?String(row[1]).trim():"",[campo]:Number(row[2])||0});
       }
-      if(filas.length===0) throw new Error(`No se encontraron filas válidas. Usa: A=Jugador, B=Equipo, C=${campo==="goles"?"Goles":"Asistencias"}.`);
+      const labels={goles:"Goles",asistencias:"Asistencias",imbatidos:"Imbatidos",rating:"Calificación"};
+      if(filas.length===0) throw new Error(`No se encontraron filas válidas. Usa: A=Jugador, B=Equipo, C=${labels[campo]}.`);
       setPreview({tipo,filas});
       setAiMsg(`✅ ${filas.length} filas leídas del Excel — revisa y confirma abajo`);
     }catch(e){
@@ -5440,31 +5461,42 @@ function CompetenciaGoleadoresSetup({compId,compName,compColor,setAiMsg}){
 
   const confirmPreview=async()=>{
     if(!preview) return;
+    const campo=CAMPO_POR_TIPO[preview.tipo];
     // Detectar líder anterior (solo para goleadores)
     let liderAntes=null;
     if(preview.tipo==="goleadores"){
       liderAntes=[...(data.goleadores||[])].sort((a,b)=>(b.goles||0)-(a.goles||0))[0]?.nombre||null;
     }
-    await saveTabla(preview.tipo,preview.filas);
+    // Merge por nombre: actualiza/agrega los jugadores nuevos, conserva a los que ya no aparecen en este top 5
+    // con su último valor conocido (no se borran, solo bajan de posición al ordenar)
+    const existentes=[...(data[preview.tipo]||[])];
+    const nuevasFilas=[...preview.filas];
+    for(const nueva of nuevasFilas){
+      if(!nueva.nombre.trim()) continue;
+      const idx=existentes.findIndex(e=>e.nombre.trim().toLowerCase()===nueva.nombre.trim().toLowerCase());
+      if(idx>=0) existentes[idx]={...existentes[idx],...nueva};
+      else existentes.push(nueva);
+    }
+    await saveTabla(preview.tipo,existentes);
     if(preview.tipo==="goleadores"){
-      const liderDespues=[...preview.filas].sort((a,b)=>(b.goles||0)-(a.goles||0))[0];
+      const liderDespues=[...existentes].sort((a,b)=>(b.goles||0)-(a.goles||0))[0];
       if(liderDespues&&liderDespues.nombre!==liderAntes){
         await addNoticia(`${liderDespues.nombre} (${liderDespues.equipo}) es el nuevo goleador de ${compName} con ${liderDespues.goles} goles`,"⚽");
       }
     }
-    setAiMsg(`✅ Tabla de ${preview.tipo} actualizada`);
+    setAiMsg(`✅ Tabla de ${preview.tipo} actualizada (${nuevasFilas.length} jugadores actualizados, ${existentes.length} en total)`);
     setPreview(null);
   };
 
   const updatePreviewCell=(fi,field,val)=>{
     const filas=[...preview.filas];
-    const campo=preview.tipo==="goleadores"?"goles":"asistencias";
-    filas[fi]={...filas[fi],[field]:field===campo?Number(val)||0:val};
+    const campo=CAMPO_POR_TIPO[preview.tipo];
+    filas[fi]={...filas[fi],[field]:field===campo?(campo==="rating"?(parseFloat(val)||0):(Number(val)||0)):val};
     setPreview({...preview,filas});
   };
 
   const addPreviewRow=()=>{
-    const campo=preview.tipo==="goleadores"?"goles":"asistencias";
+    const campo=CAMPO_POR_TIPO[preview.tipo];
     setPreview({...preview,filas:[...preview.filas,{nombre:"",equipo:"",[campo]:0}]});
   };
 
@@ -5475,7 +5507,8 @@ function CompetenciaGoleadoresSetup({compId,compName,compColor,setAiMsg}){
   if(!data) return <div style={{fontSize:11,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Cargando…</div>;
 
   const renderTabla=(tipo,titulo,emoji,filas,fileRef,excelRef)=>{
-    const campo=tipo==="goleadores"?"goles":"asistencias";
+    const campo=CAMPO_POR_TIPO[tipo];
+    const labelCampo={goles:"Goles",asistencias:"Asist.",imbatidos:"Imbat.",rating:"Calif."}[campo];
     return(
       <div style={{background:C.card,borderRadius:9,padding:"10px 12px",border:`1.5px solid ${filas.length>0?compColor:C.border}`}}>
         <div style={{fontSize:11,fontWeight:800,color:compColor,fontFamily:"'DM Sans',sans-serif",marginBottom:6}}>{emoji} {titulo}</div>
@@ -5486,7 +5519,7 @@ function CompetenciaGoleadoresSetup({compId,compName,compColor,setAiMsg}){
                 <tr style={{color:C.textFaint}}>
                   <th style={{textAlign:"left",padding:"3px 4px"}}>Jugador</th>
                   <th style={{textAlign:"left",padding:"3px 4px"}}>Equipo</th>
-                  <th style={{padding:"3px 4px",fontWeight:800}}>{campo==="goles"?"Goles":"Asist."}</th>
+                  <th style={{padding:"3px 4px",fontWeight:800}}>{labelCampo}</th>
                 </tr>
               </thead>
               <tbody>
@@ -5519,7 +5552,7 @@ function CompetenciaGoleadoresSetup({compId,compName,compColor,setAiMsg}){
             ✍️ Manual
           </button>
         </div>
-        <div style={{fontSize:8,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginTop:4,textAlign:"center"}}>Formato Excel: A=Jugador, B=Equipo, C={campo==="goles"?"Goles":"Asistencias"}</div>
+        <div style={{fontSize:8,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginTop:4,textAlign:"center"}}>Formato Excel: A=Jugador, B=Equipo, C={{goles:"Goles",asistencias:"Asistencias",imbatidos:"Imbatidos",rating:"Calificación"}[campo]}</div>
         {/* Vista previa editable */}
         {preview?.tipo===tipo&&(
           <div style={{marginTop:8,padding:8,borderRadius:8,border:`1.5px solid #f0ad4e`,background:"#fff3cd"}}>
@@ -5531,8 +5564,8 @@ function CompetenciaGoleadoresSetup({compId,compName,compColor,setAiMsg}){
                     style={{flex:2,padding:"3px 5px",borderRadius:6,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:9,fontFamily:"'DM Sans',sans-serif"}}/>
                   <input value={f.equipo} onChange={e=>updatePreviewCell(fi,"equipo",e.target.value)} placeholder="Equipo"
                     style={{flex:2,padding:"3px 5px",borderRadius:6,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:9,fontFamily:"'DM Sans',sans-serif"}}/>
-                  <input type="number" value={f[campo]} onChange={e=>updatePreviewCell(fi,campo,e.target.value)}
-                    style={{width:40,padding:"3px 2px",borderRadius:6,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:9,textAlign:"center",fontFamily:"monospace"}}/>
+                  <input type="number" step={campo==="rating"?"0.01":"1"} value={f[campo]} onChange={e=>updatePreviewCell(fi,campo,e.target.value)}
+                    style={{width:campo==="rating"?52:40,padding:"3px 2px",borderRadius:6,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:9,textAlign:"center",fontFamily:"monospace"}}/>
                   <button onClick={()=>removePreviewRow(fi)} style={{background:"transparent",border:"none",color:"#c0392b",fontSize:11,cursor:"pointer"}}>✕</button>
                 </div>
               ))}
@@ -5560,10 +5593,12 @@ function CompetenciaGoleadoresSetup({compId,compName,compColor,setAiMsg}){
   return(
     <div style={{display:"flex",flexDirection:"column",gap:10}}>
       <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>
-        Sube una foto de la tabla general de goleadores o asistencias de FC26 para esta competencia. La IA leerá los datos y podrás corregirlos antes de guardar.
+        Sube una foto de la tabla general de goleadores, asistencias, porteros imbatidos o calificación promedio de FC26 para esta competencia. La IA leerá los datos y podrás corregirlos antes de guardar.
       </div>
       {renderTabla("goleadores","Goleadores","⚽",data.goleadores,fileRefGol,excelRefGol)}
       {renderTabla("asistencias","Asistencias","🎯",data.asistencias,fileRefAsist,excelRefAsist)}
+      {renderTabla("porteros","Porteros imbatidos","🧤",data.porteros,fileRefPort,excelRefPort)}
+      {renderTabla("calificacion","Calificación promedio","⭐",data.calificacion,fileRefCalif,excelRefCalif)}
     </div>
   );
 }
@@ -6767,6 +6802,8 @@ function CompVistaPublica({comp,competenciaData,onClose}){
   const grupos=compData.grupos||[];
   const goleadores=compData.goleadores||[];
   const asistencias=compData.asistencias||[];
+  const porteros=compData.porteros||[];
+  const calificacion=compData.calificacion||[];
   const fixture=compData.fixture||{};
   const[vistaTab,setVistaTab]=useState("tabla");
   const[apuestasComp,setApuestasComp]=useState([]);
@@ -6907,13 +6944,43 @@ function CompVistaPublica({comp,competenciaData,onClose}){
                   <div style={{fontSize:13,fontWeight:800,color:C.textLight,fontFamily:"'DM Sans',sans-serif",marginBottom:10,display:"flex",alignItems:"center",gap:6}}>🎯 Asistencias</div>
                   {asistencias.length===0
                     ? <div style={{textAlign:"center",color:C.textFaint,padding:20,fontFamily:"'DM Sans',sans-serif",fontSize:12}}>Sin datos</div>
-                    : <div style={{background:C.card,borderRadius:12,overflow:"hidden",border:`1px solid ${C.border}`}}>
+                    : <div style={{background:C.card,borderRadius:12,overflow:"hidden",border:`1px solid ${C.border}`,marginBottom:20}}>
                         {asistencias.map((r,i)=>(
                           <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderTop:i>0?`1px solid ${C.border}`:"none"}}>
                             <span style={{fontWeight:900,fontSize:16,color:i===0?"#f39c12":i===1?"#95a5a6":i===2?"#cd7f32":C.textFaint,minWidth:22,textAlign:"center"}}>{i+1}</span>
                             <span style={{flex:1,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif",fontSize:13}}>{r.nombre||r.player||"—"}</span>
                             <span style={{fontSize:11,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>{r.equipo||r.team||""}</span>
                             <span style={{fontWeight:900,fontSize:16,color:"#8e44ad",minWidth:24,textAlign:"right"}}>{r.asistencias||r.assists||r.valor||0}</span>
+                          </div>
+                        ))}
+                      </div>
+                  }
+                  {/* Porteros imbatidos */}
+                  <div style={{fontSize:13,fontWeight:800,color:C.textLight,fontFamily:"'DM Sans',sans-serif",marginBottom:10,display:"flex",alignItems:"center",gap:6}}>🧤 Porteros imbatidos</div>
+                  {porteros.length===0
+                    ? <div style={{textAlign:"center",color:C.textFaint,padding:20,fontFamily:"'DM Sans',sans-serif",fontSize:12}}>Sin datos</div>
+                    : <div style={{background:C.card,borderRadius:12,overflow:"hidden",border:`1px solid ${C.border}`,marginBottom:20}}>
+                        {[...porteros].sort((a,b)=>(b.imbatidos||0)-(a.imbatidos||0)).map((r,i)=>(
+                          <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderTop:i>0?`1px solid ${C.border}`:"none"}}>
+                            <span style={{fontWeight:900,fontSize:16,color:i===0?"#f39c12":i===1?"#95a5a6":i===2?"#cd7f32":C.textFaint,minWidth:22,textAlign:"center"}}>{i+1}</span>
+                            <span style={{flex:1,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif",fontSize:13}}>{r.nombre||"—"}</span>
+                            <span style={{fontSize:11,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>{r.equipo||""}</span>
+                            <span style={{fontWeight:900,fontSize:16,color:"#16a085",minWidth:24,textAlign:"right"}}>{r.imbatidos||0}</span>
+                          </div>
+                        ))}
+                      </div>
+                  }
+                  {/* Calificación promedio */}
+                  <div style={{fontSize:13,fontWeight:800,color:C.textLight,fontFamily:"'DM Sans',sans-serif",marginBottom:10,display:"flex",alignItems:"center",gap:6}}>⭐ Calificación promedio</div>
+                  {calificacion.length===0
+                    ? <div style={{textAlign:"center",color:C.textFaint,padding:20,fontFamily:"'DM Sans',sans-serif",fontSize:12}}>Sin datos</div>
+                    : <div style={{background:C.card,borderRadius:12,overflow:"hidden",border:`1px solid ${C.border}`}}>
+                        {[...calificacion].sort((a,b)=>(b.rating||0)-(a.rating||0)).map((r,i)=>(
+                          <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderTop:i>0?`1px solid ${C.border}`:"none"}}>
+                            <span style={{fontWeight:900,fontSize:16,color:i===0?"#f39c12":i===1?"#95a5a6":i===2?"#cd7f32":C.textFaint,minWidth:22,textAlign:"center"}}>{i+1}</span>
+                            <span style={{flex:1,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif",fontSize:13}}>{r.nombre||"—"}</span>
+                            <span style={{fontSize:11,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>{r.equipo||""}</span>
+                            <span style={{fontWeight:900,fontSize:16,color:"#f1c40f",minWidth:36,textAlign:"right"}}>{(r.rating||0).toFixed(2)}</span>
                           </div>
                         ))}
                       </div>
