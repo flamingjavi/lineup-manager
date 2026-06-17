@@ -26,39 +26,40 @@ function normPlayer(p){
 }
 
 // ─── COLORES ──────────────────────────────────────────────────────────────────
+// ─── PALETA REFINADA · oro editorial premium (cálido, no lima) ───────────────
 const COLORS_LIGHT = {
-  bg:"#f5f6f8",
-  card:"#ffffff",
-  border:"#e8eaed",
-  borderDark:"#d4d8dd",
-  accent:"#F5C518",
-  accentDark:"#d4a800",
-  accentLight:"rgba(245,197,24,0.15)",
-  text:"#16191f",
-  textMid:"#454c56",
-  textLight:"#7a828d",
-  textFaint:"#aeb4bc",
-  inputBg:"#f0f2f5",
-  gold:"#F5C518",
-  goldLight:"rgba(245,197,24,0.12)",
+  bg:"#f1efe9",          // blanco cálido en lugar de gris frío
+  card:"#fffdf8",        // tarjeta marfil
+  border:"#e8e2d4",      // borde hairline cálido
+  borderDark:"#d6cfbc",
+  accent:"#C9A227",      // oro metálico refinado (antes #F5C518 lima)
+  accentDark:"#a8841d",
+  accentLight:"rgba(201,162,39,0.14)",
+  text:"#1a1813",        // casi-negro cálido
+  textMid:"#46402f",
+  textLight:"#8a8474",
+  textFaint:"#b3ac9c",
+  inputBg:"#f6f3ec",
+  gold:"#C9A227",
+  goldLight:"rgba(201,162,39,0.10)",
   dark:false,
 };
 
 const COLORS_DARK = {
-  bg:"#08090c",
-  card:"#13151a",
-  border:"#23262e",
-  borderDark:"#33373f",
-  accent:"#FFD700",
-  accentDark:"#E6BE00",
-  accentLight:"rgba(255,215,0,0.12)",
-  text:"#f5f5f0",
-  textMid:"#c4c4bc",
-  textLight:"#8a8a82",
-  textFaint:"#52524c",
-  inputBg:"#1a1c22",
-  gold:"#FFD700",
-  goldLight:"rgba(255,215,0,0.08)",
+  bg:"#0c0b0d",          // carbón cálido en lugar de negro plano
+  card:"#18161a",
+  border:"#2a2722",
+  borderDark:"#3a352c",
+  accent:"#E9C45E",      // oro cálido brillante (antes #FFD700 amarillo puro)
+  accentDark:"#cda12f",
+  accentLight:"rgba(233,196,94,0.12)",
+  text:"#f4f0e6",        // blanco cálido
+  textMid:"#c4bdae",
+  textLight:"#8b8576",
+  textFaint:"#5a554c",
+  inputBg:"#1e1c20",
+  gold:"#E9C45E",
+  goldLight:"rgba(233,196,94,0.08)",
   dark:true,
 };
 
@@ -7469,6 +7470,8 @@ function MainApp({user,isAdmin,onLogout}){
                 </button>
               </div>
             )}
+              );
+            })()}
             <div style={{fontSize:10,color:C.textLight,marginBottom:9,fontFamily:"'DM Sans',sans-serif"}}>Todas usan los mismos {squad.length} jugadores de la plantilla.</div>
             <div style={{display:"flex",gap:8}}>
               <input value={newLineupName} onChange={e=>setNewLineupName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addLineup()} placeholder="Nueva alineación…"
