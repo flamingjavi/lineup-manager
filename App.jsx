@@ -4130,13 +4130,14 @@ async function addH2H({local,golesLocal,visitante,golesVisitante,competencia,jor
 }
 
 const COMPETENCIAS_AVAILABLE=[
-  {id:"liga1",    name:"Neo League",           icon:"🏆", color:"#1a3a5c", lineupName:"Liga", formato:"liga"},
-  {id:"liga2",    name:"Europe Championship",  icon:"🌍", color:"#27ae60", lineupName:"Liga", formato:"liga"},
-  {id:"copa",     name:"Copa",                 icon:"🏅", color:"#8e44ad", lineupName:"Copa", formato:"grupos"},
-  {id:"champions",name:"Champions",            icon:"⭐", color:"#f39c12", lineupName:"Champions", formato:"grupos"},
-  {id:"europa",   name:"Europa League",        icon:"🟠", color:"#e67e22", lineupName:"Europa League", formato:"grupos"},
-  {id:"conference",name:"Conference",          icon:"🟣", color:"#9b59b6", lineupName:"Conference", formato:"grupos"},
-  {id:"supercopa",name:"SuperCopa",            icon:"👑", color:"#c0392b", lineupName:"SuperCopa", formato:"final"},
+  {id:"liga1",    name:"Neo League",           icon:"🏆", color:"#1a3a5c", lineupName:"Liga", formato:"liga", division:1},
+  {id:"liga2",    name:"Europe Championship",  icon:"🌍", color:"#27ae60", lineupName:"Liga", formato:"liga", division:1},
+  {id:"copa",     name:"Copa",                 icon:"🏅", color:"#8e44ad", lineupName:"Copa", formato:"grupos", division:1},
+  {id:"champions",name:"Champions",            icon:"⭐", color:"#f39c12", lineupName:"Champions", formato:"grupos", division:1},
+  {id:"europa",   name:"Europa League",        icon:"🟠", color:"#e67e22", lineupName:"Europa League", formato:"grupos", division:1},
+  {id:"ascenso",  name:"Liga Ascenso",         icon:"🔼", color:"#16a085", lineupName:"Liga", formato:"liga", division:2},
+  {id:"copaascenso",name:"Copa Ascenso",       icon:"🥈", color:"#7f8c8d", lineupName:"Copa Ascenso", formato:"grupos", division:2},
+  {id:"supercopa",name:"SuperCopa",            icon:"👑", color:"#c0392b", lineupName:"SuperCopa", formato:"final", division:1},
 ];
 
 // ─── PANEL DE TRANSMISIÓN: dueños de equipo envían cambios/instrucciones al admin ───
@@ -4810,38 +4811,6 @@ function CompetenciaGruposSetup({compId,compName,compColor,formato,allTeams,setA
     setAiMsg(`✅ ${g.nombre} guardado (${g.equipos.length} equipos)`);
   };
 
-  const iniciarLiguilla=async()=>{
-    let clasificados=[];
-    let minRequerido=8;
-    if(formato==="liga"){
-      const g=local[0];
-      minRequerido=8;
-      if(!g||(g.tabla||[]).length<minRequerido){setAiMsg(`❌ Se necesitan al menos ${minRequerido} equipos para iniciar la liguilla`);return;}
-      const ordenada=[...(g.tabla||[])].sort((a,b)=>b.pts-a.pts||((b.gf||0)-(b.gc||0))-((a.gf||0)-(a.gc||0)));
-      clasificados=ordenada.slice(0,minRequerido).map(r=>r.equipo);
-    }else if(formato==="grupos"){
-      // Top 2 de cada grupo. Copa→cuartos (4 grupos x2=8), Champions/Europa/Conference→semis (2 grupos x2=4)
-      const gruposConTabla=local.filter(g=>(g.tabla||[]).length>=2);
-      minRequerido=compId==="copa"?16:4;
-      const gruposNecesarios=minRequerido/2;
-      if(gruposConTabla.length<gruposNecesarios){setAiMsg(`❌ Se necesitan al menos ${gruposNecesarios} grupos con tabla (2+ equipos cada uno) para clasificar a ${minRequerido===8?"Cuartos":"Semis"}`);return;}
-      clasificados=gruposConTabla.slice(0,gruposNecesarios).flatMap(g=>{
-        const ordenada=[...(g.tabla||[])].sort((a,b)=>b.pts-a.pts||((b.gf||0)-(b.gc||0))-((a.gf||0)-(a.gc||0)));
-        return ordenada.slice(0,2).map(r=>r.equipo);
-      });
-    }
-    if(clasificados.length===0){setAiMsg("❌ No hay clasificados suficientes");return;}
-    const faseLabel=clasificados.length===16?"Octavos de Final":clasificados.length===8?"Cuartos de Final":clasificados.length===4?"Semifinales":"Liguilla";
-    if(!window.confirm(`¿Iniciar ${faseLabel} de ${compName} con estos equipos?\n\n${clasificados.map((e,i)=>`${i+1}. ${e}`).join("\n")}\n\nLa tabla/grupos regular quedará guardada como historial.`)) return;
-    const ref=doc(db,"config","competenciaData");
-    const snap=await getDoc(ref).catch(()=>null);
-    const current=snap?.exists()?snap.data():{};
-    const compData=current[compId]||{};
-    await setDoc(ref,{...current,[compId]:{...compData,liguillaIniciada:true,liguillaEquipos:clasificados,liguillaPartidos:compData.liguillaPartidos||[]}},{merge:true});
-    await addNoticia(`🏆 ¡Iniciaron ${faseLabel} de ${compName}! Clasificados: ${clasificados.join(", ")}`,"🏆");
-    setAiMsg(`✅ ${faseLabel} iniciada`);
-  };
-
   // ─── Procesar imagen de tabla de clasificación ──────────────────────────
   const processTableImage=async(file,gi)=>{
     setUploadingIdx(gi);
@@ -4996,10 +4965,25 @@ function CompetenciaGruposSetup({compId,compName,compColor,formato,allTeams,setA
                   </tr>
                 </thead>
                 <tbody>
-                  {[...(g.tabla||[])].sort((a,b)=>b.pts-a.pts).map((r,ri)=>(
+                  {[...(g.tabla||[])].sort((a,b)=>b.pts-a.pts).map((r,ri)=>{
+                    const esLiga=formato==="liga";
+                    const esPrimera=compId==="liga1"||compId==="liga2";
+                    const esSegunda=compId==="ascenso";
+                    const pos=ri+1;
+                    let zonaColor=null,zonaIcono="";
+                    if(esLiga&&esPrimera){
+                      if(pos<=4){zonaColor="#f39c12";zonaIcono="⭐";} // Champions
+                      else if(pos<=8){zonaColor="#e67e22";zonaIcono="🟠";} // Europa League
+                      else if(pos===11){zonaColor="#9b59b6";zonaIcono="🔀";} // Playoff
+                      else if(pos===12){zonaColor="#c0392b";zonaIcono="🔻";} // Desciende
+                    }else if(esLiga&&esSegunda){
+                      if(pos<=2){zonaColor="#16a085";zonaIcono="🔼";} // Asciende directo
+                      else if(pos<=4){zonaColor="#9b59b6";zonaIcono="🔀";} // Playoff
+                    }
+                    return(
                     <Fragment key={ri}>
-                      <tr style={{borderTop:`1px solid ${C.border}`,background:formato==="liga"&&ri<8?compColor+"0d":"transparent"}}>
-                        <td style={{padding:"3px 4px",fontWeight:700,color:C.text}}>{formato==="liga"&&ri<8?"🟢 ":""}{r.equipo}</td>
+                      <tr style={{borderTop:`1px solid ${C.border}`,background:zonaColor?zonaColor+"15":"transparent"}}>
+                        <td style={{padding:"3px 4px",fontWeight:700,color:C.text}}>{zonaIcono?zonaIcono+" ":""}{r.equipo}</td>
                         <td style={{padding:"3px 4px",textAlign:"center"}}>{r.pj}</td>
                         <td style={{padding:"3px 4px",textAlign:"center"}}>{r.pg}</td>
                         <td style={{padding:"3px 4px",textAlign:"center"}}>{r.pe}</td>
@@ -5008,11 +4992,21 @@ function CompetenciaGruposSetup({compId,compName,compColor,formato,allTeams,setA
                         <td style={{padding:"3px 4px",textAlign:"center"}}>{r.gc}</td>
                         <td style={{padding:"3px 4px",textAlign:"center",fontWeight:800,color:compColor}}>{r.pts}</td>
                       </tr>
-                      {formato==="liga"&&ri===7&&(
-                        <tr><td colSpan={8} style={{padding:"4px 0",textAlign:"center",fontSize:8,fontWeight:800,color:compColor,borderBottom:`2px dashed ${compColor}`}}>▲ Clasificados a Liguilla</td></tr>
+                      {esLiga&&esPrimera&&pos===4&&(
+                        <tr><td colSpan={8} style={{padding:"4px 0",textAlign:"center",fontSize:8,fontWeight:800,color:"#f39c12",borderBottom:"2px dashed #f39c12"}}>⭐ Champions</td></tr>
+                      )}
+                      {esLiga&&esPrimera&&pos===8&&(
+                        <tr><td colSpan={8} style={{padding:"4px 0",textAlign:"center",fontSize:8,fontWeight:800,color:"#e67e22",borderBottom:"2px dashed #e67e22"}}>🟠 Europa League</td></tr>
+                      )}
+                      {esLiga&&esSegunda&&pos===2&&(
+                        <tr><td colSpan={8} style={{padding:"4px 0",textAlign:"center",fontSize:8,fontWeight:800,color:"#16a085",borderBottom:"2px dashed #16a085"}}>🔼 Ascenso directo</td></tr>
+                      )}
+                      {esLiga&&esSegunda&&pos===4&&(
+                        <tr><td colSpan={8} style={{padding:"4px 0",textAlign:"center",fontSize:8,fontWeight:800,color:"#9b59b6",borderBottom:"2px dashed #9b59b6"}}>🔀 Playoff de ascenso</td></tr>
                       )}
                     </Fragment>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -5070,29 +5064,6 @@ function CompetenciaGruposSetup({compId,compName,compColor,formato,allTeams,setA
           )}
         </div>
       ))}
-      {formato!=="final"&&(()=>{
-        const gruposConTabla=local.filter(g=>(g.tabla||[]).length>=2);
-        const minRequerido=formato==="liga"?8:(compId==="copa"?16:4);
-        const gruposNecesarios=formato==="liga"?1:minRequerido/2;
-        const listo=formato==="liga"?(local[0]?.tabla||[]).length>=8:gruposConTabla.length>=gruposNecesarios;
-        const faseLabel=minRequerido===16?"Octavos de Final":minRequerido===8?"Cuartos de Final":"Semifinales";
-        if(data?.liguillaIniciada){
-          return(
-            <div style={{padding:"8px 10px",borderRadius:9,background:"#e67e2222",border:"1.5px solid #e67e22",color:"#e67e22",fontSize:11,fontWeight:700,fontFamily:"'DM Sans',sans-serif",textAlign:"center",marginBottom:10}}>
-              🏆 {faseLabel} en curso — ve a la pestaña "Liguilla"
-            </div>
-          );
-        }
-        if(listo){
-          return(
-            <button onClick={iniciarLiguilla}
-              style={{width:"100%",padding:"10px",borderRadius:9,background:"#e67e22",color:"#fff",border:"none",fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",marginBottom:10}}>
-              🏁 Iniciar {faseLabel}
-            </button>
-          );
-        }
-        return null;
-      })()}
       {formato!=="liga"&&(
         <button onClick={addGrupo}
           style={{padding:"8px",borderRadius:8,background:"transparent",border:`1.5px dashed ${compColor}`,color:compColor,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
@@ -5582,214 +5553,6 @@ function CompetenciaResultadoSetup({compId,compName,compColor,formato,setAiMsg})
 }
 
 // ─── COMPETENCIA: FIXTURE (calendario por imagen) ────────────────────────────
-// ─── COMPETENCIA: LIGUILLA (eliminación directa post-liga) ──────────────────
-function CompetenciaLiguillaSetup({compId,compName,compColor,setAiMsg}){
-  const[data,setData]=useState(null);
-  const[uploading,setUploading]=useState(false);
-  const[preview,setPreview]=useState(null); // {local,golesLocal,visitante,golesVisitante}
-  const fileRef=useRef(null);
-  const excelRef=useRef(null);
-
-  useEffect(()=>{
-    const unsub=onSnapshot(doc(db,"config","competenciaData"),snap=>{
-      const all=snap.exists()?snap.data():{};
-      setData(all[compId]||{});
-    });
-    return unsub;
-  },[compId]);
-
-  const equipos=data?.liguillaEquipos||[];
-  const partidos=data?.liguillaPartidos||[];
-
-  const guardarPartido=async(local,golesLocal,visitante,golesVisitante,fase)=>{
-    const ref=doc(db,"config","competenciaData");
-    const snap=await getDoc(ref).catch(()=>null);
-    const current=snap?.exists()?snap.data():{};
-    const compData=current[compId]||{};
-    const nuevoPartido={local,golesLocal,visitante,golesVisitante,fase:fase||"",fecha:new Date().toISOString()};
-    const nuevaLista=[...(compData.liguillaPartidos||[]),nuevoPartido];
-    await setDoc(ref,{...current,[compId]:{...compData,liguillaPartidos:nuevaLista}},{merge:true});
-    await addH2H({local,golesLocal,visitante,golesVisitante,competencia:`${compName} (Liguilla)`});
-    const ganador=golesLocal>golesVisitante?local:golesVisitante>golesLocal?visitante:null;
-    const resultadoTxt=ganador?`${ganador} avanza tras ganar ${Math.max(golesLocal,golesVisitante)}-${Math.min(golesLocal,golesVisitante)}`:`${local} y ${visitante} empataron ${golesLocal}-${golesVisitante}`;
-    await addNoticia(`🏆 Liguilla ${compName}: ${resultadoTxt}`,"🏆");
-  };
-
-  const eliminarPartido=async(idx)=>{
-    if(!window.confirm("¿Eliminar este partido de la liguilla?")) return;
-    const ref=doc(db,"config","competenciaData");
-    const snap=await getDoc(ref).catch(()=>null);
-    const current=snap?.exists()?snap.data():{};
-    const compData=current[compId]||{};
-    const nuevaLista=(compData.liguillaPartidos||[]).filter((_,i)=>i!==idx);
-    await setDoc(ref,{...current,[compId]:{...compData,liguillaPartidos:nuevaLista}},{merge:true});
-    setAiMsg("✅ Partido eliminado");
-  };
-
-  const processImage=async(file)=>{
-    setUploading(true);
-    setAiMsg("Leyendo imagen…");
-    try{
-      const b64=await new Promise((res,rej)=>{
-        const r=new FileReader();
-        r.onload=()=>res(r.result.split(",")[1]);
-        r.onerror=()=>rej(new Error("FileReader error"));
-        r.readAsDataURL(file);
-      });
-      setAiMsg("Conectando con Gemini…");
-      const listaEquipos=equipos.join(", ");
-      const prompt=`Analiza esta captura de un resultado de partido de eliminación directa de FC26. Los equipos posibles son: ${listaEquipos}. Identifica el equipo local, el equipo visitante (usa EXACTAMENTE uno de los nombres de la lista que mejor coincida) y el marcador de cada uno. Responde SOLO con JSON sin markdown, sin texto adicional: {"local":"","golesLocal":0,"visitante":"","golesVisitante":0}`;
-      const GEMINI_KEY="AIzaSyAGlxjD12k38Xu9L-8K165iJma1ZwR7tyY";
-      const GEMINI_URL=`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`;
-      const body=JSON.stringify({contents:[{parts:[{inline_data:{mime_type:file.type||"image/jpeg",data:b64}},{text:prompt}]}],generationConfig:{temperature:0,maxOutputTokens:500}});
-      const resp=await fetch(GEMINI_URL,{method:"POST",headers:{"Content-Type":"application/json"},body});
-      if(!resp.ok){
-        const errTxt=await resp.text().catch(()=>"");
-        throw new Error(`HTTP ${resp.status} ${errTxt.slice(0,200)}`);
-      }
-      const respData=await resp.json();
-      if(respData.error) throw new Error(respData.error.message);
-      const raw=respData.candidates?.[0]?.content?.parts?.[0]?.text;
-      if(!raw) throw new Error("Respuesta vacía de Gemini");
-      const cleaned=raw.replace(/```json|```/g,"").trim();
-      let parsed;
-      try{ parsed=JSON.parse(cleaned); }
-      catch{ throw new Error("No se pudo interpretar el JSON: "+cleaned.slice(0,150)); }
-      setPreview({
-        local:parsed.local||"",golesLocal:Number(parsed.golesLocal)||0,
-        visitante:parsed.visitante||"",golesVisitante:Number(parsed.golesVisitante)||0,fase:""
-      });
-      setAiMsg("✅ Resultado leído — revisa y confirma abajo");
-    }catch(e){
-      setAiMsg("❌ "+e.message);
-    }
-    setUploading(false);
-  };
-
-  const processExcelBulk=async(file)=>{
-    setUploading(true);
-    setAiMsg("Leyendo Excel…");
-    try{
-      await new Promise((res,rej)=>{
-        if(window.XLSX){res();return;}
-        const s=document.createElement('script');
-        s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-        s.onload=res; s.onerror=rej;
-        document.head.appendChild(s);
-      });
-      const buf=await file.arrayBuffer();
-      const wb=window.XLSX.read(buf,{type:'array'});
-      const ws=wb.Sheets[wb.SheetNames[0]];
-      const rows=window.XLSX.utils.sheet_to_json(ws,{header:1});
-      let count=0;
-      for(const row of rows){
-        if(!row||row.every(v=>!v&&v!==0)) continue;
-        const local=row[0]?String(row[0]).trim():"";
-        if(!local) continue;
-        if(local.toUpperCase()==="LOCAL"||local.toUpperCase()==="EQUIPO") continue;
-        const visitante=row[2]?String(row[2]).trim():"";
-        const golesLocal=Number(row[1])||0;
-        const golesVisitante=Number(row[3])||0;
-        const fase=row[4]?String(row[4]).trim():"";
-        if(!visitante) continue;
-        await guardarPartido(local,golesLocal,visitante,golesVisitante,fase);
-        count++;
-      }
-      if(count===0) throw new Error("No se encontraron partidos válidos. Usa: A=Local, B=Goles Local, C=Visitante, D=Goles Visitante, E=Fase (opcional).");
-      setAiMsg(`✅ ${count} partidos de liguilla guardados desde Excel`);
-    }catch(e){
-      setAiMsg("❌ "+e.message);
-    }
-    setUploading(false);
-  };
-
-  const confirmPreview=async()=>{
-    if(!preview) return;
-    if(!preview.local||!preview.visitante){setAiMsg("❌ Define ambos equipos");return;}
-    if(preview.local===preview.visitante){setAiMsg("❌ Los equipos no pueden ser el mismo");return;}
-    await guardarPartido(preview.local,Number(preview.golesLocal)||0,preview.visitante,Number(preview.golesVisitante)||0,preview.fase);
-    setAiMsg(`✅ ${preview.local} ${preview.golesLocal} - ${preview.golesVisitante} ${preview.visitante} guardado`);
-    setPreview(null);
-  };
-
-  if(equipos.length===0){
-    return <div style={{textAlign:"center",color:C.textFaint,padding:30,fontFamily:"'DM Sans',sans-serif",fontSize:12}}>La fase eliminatoria todavía no ha iniciado. Ve a la pestaña "Tabla" y presiona el botón de iniciar cuando haya suficientes equipos/grupos clasificados.</div>;
-  }
-
-  return(
-    <div style={{display:"flex",flexDirection:"column",gap:10}}>
-      <div style={{background:C.card,borderRadius:10,padding:"10px 12px",border:`1.5px solid ${compColor}`}}>
-        <div style={{fontSize:11,fontWeight:800,color:compColor,fontFamily:"'DM Sans',sans-serif",marginBottom:6}}>🏆 Equipos clasificados</div>
-        <div style={{fontSize:11,color:C.textMid,fontFamily:"'DM Sans',sans-serif",lineHeight:1.6}}>
-          {equipos.map((e,i)=>`${i+1}. ${e}`).join(" · ")}
-        </div>
-      </div>
-
-      {/* Subir resultado */}
-      <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}}
-        onChange={e=>{const f=e.target.files?.[0];if(f)processImage(f);e.target.value="";}}/>
-      <input ref={excelRef} type="file" accept=".xlsx,.xls" style={{display:"none"}}
-        onChange={e=>{const f=e.target.files?.[0];if(f)processExcelBulk(f);e.target.value="";}}/>
-      <div style={{display:"flex",gap:6}}>
-        <button onClick={()=>fileRef.current?.click()} disabled={uploading}
-          style={{flex:1,padding:"8px",borderRadius:7,background:"transparent",border:`1.5px dashed ${compColor}`,color:compColor,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:uploading?0.5:1}}>
-          {uploading?"Leyendo…":"📷 Foto del resultado"}
-        </button>
-        <button onClick={()=>excelRef.current?.click()} disabled={uploading}
-          style={{flex:1,padding:"8px",borderRadius:7,background:"transparent",border:"1.5px dashed #27ae60",color:"#27ae60",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:uploading?0.5:1}}>
-          {uploading?"Leyendo…":"📋 Excel (varios partidos)"}
-        </button>
-      </div>
-      <div style={{fontSize:8,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",textAlign:"center"}}>Formato Excel: A=Local, B=Goles Local, C=Visitante, D=Goles Visitante, E=Fase (ej. Cuartos, Semis, Final — opcional)</div>
-
-      {/* Preview editable */}
-      {preview&&(
-        <div style={{background:C.card,borderRadius:10,padding:"12px",border:`1.5px solid ${compColor}`,display:"flex",flexDirection:"column",gap:8}}>
-          <div style={{fontSize:11,fontWeight:800,color:compColor,fontFamily:"'DM Sans',sans-serif"}}>Revisa antes de confirmar</div>
-          <input value={preview.fase} onChange={e=>setPreview({...preview,fase:e.target.value})} placeholder="Fase (ej. Cuartos, Semis, Final)"
-            style={{padding:"7px 9px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif"}}/>
-          <div style={{display:"flex",gap:6,alignItems:"center"}}>
-            <select value={preview.local} onChange={e=>setPreview({...preview,local:e.target.value})}
-              style={{flex:1,padding:"7px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif"}}>
-              <option value="">— Local —</option>
-              {equipos.map(eq=><option key={eq} value={eq}>{eq}</option>)}
-            </select>
-            <input type="number" value={preview.golesLocal} onChange={e=>setPreview({...preview,golesLocal:e.target.value})}
-              style={{width:50,padding:"7px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:12,textAlign:"center",fontFamily:"'DM Sans',sans-serif"}}/>
-            <span style={{color:C.textFaint,fontSize:11}}>—</span>
-            <input type="number" value={preview.golesVisitante} onChange={e=>setPreview({...preview,golesVisitante:e.target.value})}
-              style={{width:50,padding:"7px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:12,textAlign:"center",fontFamily:"'DM Sans',sans-serif"}}/>
-            <select value={preview.visitante} onChange={e=>setPreview({...preview,visitante:e.target.value})}
-              style={{flex:1,padding:"7px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif"}}>
-              <option value="">— Visitante —</option>
-              {equipos.map(eq=><option key={eq} value={eq}>{eq}</option>)}
-            </select>
-          </div>
-          <div style={{display:"flex",gap:8}}>
-            <button onClick={()=>setPreview(null)} style={{flex:1,fontSize:11,padding:"7px 0",borderRadius:8,border:`1px solid ${C.border}`,background:"none",color:C.textFaint,fontFamily:"'DM Sans',sans-serif",cursor:"pointer"}}>Cancelar</button>
-            <button onClick={confirmPreview} style={{flex:1,fontSize:11,fontWeight:800,padding:"7px 0",borderRadius:8,border:"none",background:compColor,color:"#fff",fontFamily:"'DM Sans',sans-serif",cursor:"pointer"}}>✅ Confirmar</button>
-          </div>
-        </div>
-      )}
-
-      {/* Historial de partidos */}
-      <div style={{fontSize:11,fontWeight:800,color:C.textLight,fontFamily:"'DM Sans',sans-serif",marginTop:6}}>📋 Partidos registrados</div>
-      {partidos.length===0
-        ? <div style={{textAlign:"center",color:C.textFaint,padding:16,fontFamily:"'DM Sans',sans-serif",fontSize:11}}>Sin partidos aún</div>
-        : partidos.map((p,idx)=>(
-          <div key={idx} style={{display:"flex",alignItems:"center",gap:8,background:C.card,borderRadius:9,padding:"8px 10px",border:`1px solid ${C.border}`}}>
-            {p.fase&&<span style={{fontSize:9,fontWeight:700,color:compColor,background:compColor+"18",padding:"2px 6px",borderRadius:6,fontFamily:"'DM Sans',sans-serif"}}>{p.fase}</span>}
-            <span style={{flex:1,fontSize:11,fontWeight:700,color:C.text,textAlign:"right",fontFamily:"'DM Sans',sans-serif"}}>{p.local}</span>
-            <span style={{fontSize:12,fontWeight:900,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{p.golesLocal} - {p.golesVisitante}</span>
-            <span style={{flex:1,fontSize:11,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{p.visitante}</span>
-            <button onClick={()=>eliminarPartido(idx)} style={{background:"none",border:"none",color:"#c0392b",cursor:"pointer",fontSize:12}}>🗑️</button>
-          </div>
-        ))
-      }
-    </div>
-  );
-}
-
 function CompetenciaFixtureSetup({compId,compColor,setAiMsg}){
   const[grupos,setGrupos]=useState([]);
   const[fixture,setFixture]=useState({}); // {jornadaKey:[{local,visitante}]}
@@ -6169,6 +5932,93 @@ function CompetenciaApuestasSetup({compId,compName,compColor,allTeams,setAiMsg})
 }
 
 // ─── COMPETENCIAS MODAL ───────────────────────────────────────────────────────
+// ─── PLAYOFF DE ASCENSO/DESCENSO: Primera (11°) vs Segunda (3°/4°) ───────────
+function PlayoffAscensoSetup({setAiMsg}){
+  const[data,setData]=useState(null);
+
+  useEffect(()=>{
+    const unsub=onSnapshot(doc(db,"config","playoffAscenso"),snap=>{
+      setData(snap.exists()?snap.data():null);
+    });
+    return unsub;
+  },[]);
+
+  const guardarResultado=async(partidoKey,golesAscenso,golesPrimera)=>{
+    const ref=doc(db,"config","playoffAscenso");
+    const snap=await getDoc(ref).catch(()=>null);
+    const current=snap?.exists()?snap.data():{};
+    const partido=current[partidoKey];
+    if(!partido) return;
+    const subio=golesAscenso>golesPrimera?partido.ascensoEq:golesPrimera>golesAscenso?null:null;
+    const seQueda=golesPrimera>=golesAscenso?partido.primeraEq:null;
+    const ganadorAscenso=golesAscenso>golesPrimera;
+    await setDoc(ref,{...current,[partidoKey]:{...partido,resuelto:true,resultado:{golesAscenso,golesPrimera,ganador:ganadorAscenso?partido.ascensoEq:partido.primeraEq}}},{merge:true});
+    await addH2H({local:partido.ascensoEq,golesLocal:golesAscenso,visitante:partido.primeraEq,golesVisitante:golesPrimera,competencia:"Playoff Ascenso/Descenso"});
+    if(ganadorAscenso){
+      await addNoticia(`🔼 ¡${partido.ascensoEq} ascendió a Primera División tras vencer a ${partido.primeraEq} ${golesAscenso}-${golesPrimera} en el playoff!`,"🔼");
+    }else{
+      await addNoticia(`🛡️ ${partido.primeraEq} se mantiene en Primera División tras vencer/empatar contra ${partido.ascensoEq} ${golesPrimera}-${golesAscenso} en el playoff`,"🛡️");
+    }
+    setAiMsg("✅ Resultado de playoff guardado");
+  };
+
+  const partidos=["partido1","partido2"].map(k=>({key:k,...(data?.[k]||{})})).filter(p=>p.ascensoEq||p.primeraEq);
+
+  if(!data||partidos.length===0){
+    return <div style={{textAlign:"center",color:C.textFaint,padding:30,fontFamily:"'DM Sans',sans-serif",fontSize:12}}>Sin playoffs pendientes. Se generan automáticamente al finalizar la temporada de Neo League, Europe Championship o Liga Ascenso.</div>;
+  }
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:12}}>
+      <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Partido único. El 3° y 4° de Liga Ascenso se cruzan contra el 11° de Neo League / Europe Championship — el cruce se alterna cada temporada.</div>
+      {partidos.map(p=>(
+        <PlayoffPartidoCard key={p.key} partido={p} onGuardar={(gA,gP)=>guardarResultado(p.key,gA,gP)}/>
+      ))}
+    </div>
+  );
+}
+
+function PlayoffPartidoCard({partido,onGuardar}){
+  const[golesAscenso,setGolesAscenso]=useState("");
+  const[golesPrimera,setGolesPrimera]=useState("");
+  const ligaLabel=partido.liga==="liga1"?"Neo League":"Europe Championship";
+
+  if(partido.resuelto){
+    return(
+      <div style={{background:C.card,borderRadius:12,padding:"12px 14px",border:"1.5px solid #27ae60"}}>
+        <div style={{fontSize:9,fontWeight:700,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginBottom:6}}>3°/4° Ascenso vs 11° {ligaLabel}</div>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:10,fontFamily:"'DM Sans',sans-serif"}}>
+          <span style={{fontSize:13,fontWeight:700,color:C.text}}>{partido.ascensoEq}</span>
+          <span style={{fontSize:16,fontWeight:900,color:C.text}}>{partido.resultado.golesAscenso} - {partido.resultado.golesPrimera}</span>
+          <span style={{fontSize:13,fontWeight:700,color:C.text}}>{partido.primeraEq}</span>
+        </div>
+        <div style={{textAlign:"center",fontSize:11,fontWeight:800,color:"#27ae60",fontFamily:"'DM Sans',sans-serif",marginTop:8}}>🏆 {partido.resultado.ganador} avanza/se queda</div>
+      </div>
+    );
+  }
+
+  return(
+    <div style={{background:C.card,borderRadius:12,padding:"12px 14px",border:`1.5px solid ${C.border}`}}>
+      <div style={{fontSize:9,fontWeight:700,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginBottom:8}}>Ascenso (3°/4°) vs 11° {ligaLabel}</div>
+      <div style={{display:"flex",alignItems:"center",gap:8}}>
+        <span style={{flex:1,fontSize:12,fontWeight:700,color:C.text,textAlign:"right",fontFamily:"'DM Sans',sans-serif"}}>{partido.ascensoEq||"—"}</span>
+        <input type="number" value={golesAscenso} onChange={e=>setGolesAscenso(e.target.value)}
+          style={{width:46,padding:"6px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:13,textAlign:"center",fontFamily:"'DM Sans',sans-serif"}}/>
+        <span style={{color:C.textFaint}}>—</span>
+        <input type="number" value={golesPrimera} onChange={e=>setGolesPrimera(e.target.value)}
+          style={{width:46,padding:"6px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:13,textAlign:"center",fontFamily:"'DM Sans',sans-serif"}}/>
+        <span style={{flex:1,fontSize:12,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{partido.primeraEq||"—"}</span>
+      </div>
+      <button onClick={()=>{
+          if(golesAscenso===""||golesPrimera===""){alert("Ingresa el marcador completo");return;}
+          onGuardar(Number(golesAscenso),Number(golesPrimera));
+        }} style={{width:"100%",marginTop:10,padding:"8px",borderRadius:8,background:"#9b59b6",color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+        ✅ Guardar resultado
+      </button>
+    </div>
+  );
+}
+
 function CompetenciasModal({allTeams,onClose}){
   const[comps,setComps]=useState(()=>COMPETENCIAS_AVAILABLE.map(c=>({...c})));
 
@@ -6178,22 +6028,23 @@ function CompetenciasModal({allTeams,onClose}){
   const[aiMsg,setAiMsg]=useState("");
   const[editValue,setEditValue]=useState("");
   const[saving,setSaving]=useState(false);
-  const[liguillaIniciada,setLiguillaIniciada]=useState(false);
 
   const activeComp=comps.find(c=>c.id===selected);
-
-  useEffect(()=>{
-    if(!selected){setLiguillaIniciada(false);return;}
-    const unsub=onSnapshot(doc(db,"config","competenciaData"),snap=>{
-      const all=snap.exists()?snap.data():{};
-      setLiguillaIniciada(!!all[selected]?.liguillaIniciada);
-    });
-    return unsub;
-  },[selected]);
 
   const toggleTeam=async(team)=>{
     const cur=team.competencias||[];
     const hasIt=cur.includes(selected);
+    // Bloquea inscripción cruzada entre Primera y Segunda División
+    if(!hasIt){
+      const compSeleccionada=COMPETENCIAS_AVAILABLE.find(c=>c.id===selected);
+      const divisionDestino=compSeleccionada?.division;
+      const compsActuales=cur.map(id=>COMPETENCIAS_AVAILABLE.find(c=>c.id===id)).filter(Boolean);
+      const tieneOtraDivision=compsActuales.some(c=>c.division&&c.division!==divisionDestino);
+      if(tieneOtraDivision){
+        alert(`❌ ${team.teamName} ya está inscrito en una competencia de ${compsActuales.find(c=>c.division!==divisionDestino).division===1?"Primera":"Segunda"} División. Un equipo no puede jugar en ambas divisiones a la vez.`);
+        return;
+      }
+    }
     const next=hasIt?cur.filter(x=>x!==selected):[...cur,selected];
     await updateDoc(doc(db,"teams",team.uid||team.id),{competencias:next});
     // Si la competencia es formato "liga", sincroniza la Tabla General en Firestore
@@ -6273,6 +6124,50 @@ function CompetenciasModal({allTeams,onClose}){
       await addNoticia(`🏁 Temporada de ${comp.name} finalizada`,"🏁");
     }
 
+    // ── Clasificaciones especiales de fin de temporada para Primera/Segunda División ──
+    if(comp.formato==="liga"&&(compId==="liga1"||compId==="liga2"||compId==="ascenso")){
+      const g=(compData.grupos||[])[0];
+      const ordenada=[...(g?.tabla||[])].sort((a,b)=>b.pts-a.pts||((b.gf||0)-(b.gc||0))-((a.gf||0)-(a.gc||0)));
+      if(compId==="liga1"||compId==="liga2"){
+        const champions=ordenada.slice(0,4).map(r=>r.equipo);
+        const europa=ordenada.slice(4,8).map(r=>r.equipo);
+        const desciende=ordenada[11]?.equipo||null;
+        const playoffEquipo=ordenada[10]?.equipo||null;
+        if(champions.length>0) await addNoticia(`⭐ Clasificados a Champions desde ${comp.name}: ${champions.join(", ")}`,"⭐");
+        if(europa.length>0) await addNoticia(`🟠 Clasificados a Europa League desde ${comp.name}: ${europa.join(", ")}`,"🟠");
+        if(desciende) await addNoticia(`🔻 ${desciende} desciende directo desde ${comp.name}`,"🔻");
+        if(playoffEquipo){
+          const pRef=doc(db,"config","playoffAscenso");
+          const pSnap=await getDoc(pRef).catch(()=>null);
+          const pCurrent=pSnap?.exists()?pSnap.data():{temporada:0};
+          await setDoc(pRef,{...pCurrent,[compId]:{equipo:playoffEquipo,fecha:new Date().toISOString(),resuelto:false,resultado:null}},{merge:true});
+          await addNoticia(`🔀 ${playoffEquipo} (11° de ${comp.name}) jugará el playoff de permanencia/ascenso contra Liga Ascenso`,"🔀");
+        }
+      }
+      if(compId==="ascenso"){
+        const ascensoDirecto=ordenada.slice(0,2).map(r=>r.equipo);
+        const playoffEquipos=ordenada.slice(2,4).map(r=>r.equipo);
+        if(ascensoDirecto.length>0) await addNoticia(`🔼 Ascienden directo a Primera División: ${ascensoDirecto.join(", ")}`,"🔼");
+        if(playoffEquipos.length>0){
+          const pRef=doc(db,"config","playoffAscenso");
+          const pSnap=await getDoc(pRef).catch(()=>null);
+          const pCurrent=pSnap?.exists()?pSnap.data():{temporada:0};
+          const temporadaActual=pCurrent.temporada||0;
+          // Alterna cada temporada: par → 3° vs Neo(liga1)/4° vs EC(liga2); impar → al revés
+          const cruceLiga3=temporadaActual%2===0?"liga1":"liga2";
+          const cruceLiga4=temporadaActual%2===0?"liga2":"liga1";
+          const equipoLiga1=pCurrent.liga1?.equipo||null;
+          const equipoLiga2=pCurrent.liga2?.equipo||null;
+          const partidos={
+            partido1:{ascensoEq:playoffEquipos[0]||null,primeraEq:cruceLiga3==="liga1"?equipoLiga1:equipoLiga2,liga:cruceLiga3,resuelto:false,resultado:null},
+            partido2:{ascensoEq:playoffEquipos[1]||null,primeraEq:cruceLiga4==="liga1"?equipoLiga1:equipoLiga2,liga:cruceLiga4,resuelto:false,resultado:null}
+          };
+          await setDoc(pRef,{...pCurrent,temporada:temporadaActual+1,...partidos},{merge:true});
+          await addNoticia(`🔀 Playoff de ascenso: ${partidos.partido1.ascensoEq||"?"} (3°) vs ${partidos.partido1.primeraEq||"el 11° de "+(cruceLiga3==="liga1"?"Neo League":"Europe Championship")}, y ${partidos.partido2.ascensoEq||"?"} (4°) vs ${partidos.partido2.primeraEq||"el 11° de "+(cruceLiga4==="liga1"?"Neo League":"Europe Championship")}`,"🔀");
+        }
+      }
+    }
+
     // Resetear tabla/fixture/goleadores/asistencias.
     // Liga (tabla única): mantiene la lista de equipos pero todo en 0.
     // Grupos: se vacían los grupos por completo (se reconfiguran cada temporada).
@@ -6309,15 +6204,28 @@ function CompetenciasModal({allTeams,onClose}){
             <button onClick={onClose} style={{background:"rgba(255,255,255,0.2)",border:"none",borderRadius:8,padding:"4px 10px",color:"#fff",fontSize:13,cursor:"pointer"}}>←</button>
           )}
           <span style={{fontSize:15,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1,flex:1}}>
-            {activeComp?activeComp.name:"🏆 COMPETENCIAS"}
+            {selected==="__playoff__"?"🔀 PLAYOFF ASCENSO/DESCENSO":activeComp?activeComp.name:"🏆 COMPETENCIAS"}
           </span>
-          {selected&&<span style={{fontSize:11,color:"rgba(255,255,255,0.8)",fontFamily:"'DM Sans',sans-serif"}}>
+          {selected&&selected!=="__playoff__"&&<span style={{fontSize:11,color:"rgba(255,255,255,0.8)",fontFamily:"'DM Sans',sans-serif"}}>
             {allTeams.filter(t=>(t.competencias||[]).includes(selected)).length} equipos
           </span>}
         </div>
 
         <div style={{padding:16,display:"flex",flexDirection:"column",gap:10}}>
           {/* Vista: lista de competencias */}
+          {!selected&&(
+            <div onClick={()=>setSelected("__playoff__")} style={{background:"#9b59b622",border:"1.5px solid #9b59b6",borderRadius:12,padding:"12px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:10}}>
+              <span style={{fontSize:22,flexShrink:0}}>🔀</span>
+              <div style={{flex:1}}>
+                <div style={{fontSize:14,fontWeight:800,color:"#9b59b6",fontFamily:"'DM Sans',sans-serif"}}>Playoff Ascenso/Descenso</div>
+                <div style={{fontSize:11,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Cruce 11° Primera vs 3°/4° Liga Ascenso</div>
+              </div>
+              <span style={{color:"#9b59b6",fontSize:16}}>›</span>
+            </div>
+          )}
+          {selected==="__playoff__"&&(
+            <PlayoffAscensoSetup setAiMsg={setAiMsg}/>
+          )}
           {!selected&&comps.map(comp=>(
             <div key={comp.id} style={{background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 14px"}}>
               {editingName===comp.id?(
@@ -6383,12 +6291,6 @@ function CompetenciasModal({allTeams,onClose}){
                 style={{flex:1,padding:"7px",borderRadius:8,border:`1.5px solid ${subTab==="apuestas"?activeComp.color:C.border}`,background:subTab==="apuestas"?activeComp.color:C.inputBg,color:subTab==="apuestas"?"#fff":C.textMid,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
                 🎲 Apuestas
               </button>
-              {activeComp.formato!=="final"&&liguillaIniciada&&(
-                <button onClick={()=>setSubTab("liguilla")}
-                  style={{flex:1,padding:"7px",borderRadius:8,border:`1.5px solid ${subTab==="liguilla"?"#e67e22":C.border}`,background:subTab==="liguilla"?"#e67e22":C.inputBg,color:subTab==="liguilla"?"#fff":C.textMid,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
-                  🏆 Liguilla
-                </button>
-              )}
             </div>
           )}
 
@@ -6469,11 +6371,6 @@ function CompetenciasModal({allTeams,onClose}){
           {selected&&subTab==="apuestas"&&(
             <CompetenciaApuestasSetup compId={selected} compName={activeComp.name} compColor={activeComp.color} allTeams={allTeams} setAiMsg={setAiMsg}/>
           )}
-
-          {/* Vista: liguilla (eliminación directa post-liga) */}
-          {selected&&subTab==="liguilla"&&(
-            <CompetenciaLiguillaSetup compId={selected} compName={activeComp.name} compColor="#e67e22" setAiMsg={setAiMsg}/>
-          )}
         </div>
       </div>
     </div>
@@ -6488,9 +6385,6 @@ function CompVistaPublica({comp,competenciaData,onClose}){
   const goleadores=compData.goleadores||[];
   const asistencias=compData.asistencias||[];
   const fixture=compData.fixture||{};
-  const liguillaIniciada=!!compData.liguillaIniciada;
-  const liguillaEquipos=compData.liguillaEquipos||[];
-  const liguillaPartidos=compData.liguillaPartidos||[];
   const[vistaTab,setVistaTab]=useState("tabla");
   const[apuestasComp,setApuestasComp]=useState([]);
   const[h2hLista,setH2hLista]=useState([]);
@@ -6533,7 +6427,7 @@ function CompVistaPublica({comp,competenciaData,onClose}){
       </div>
             {/* Tabs */}
             <div style={{display:"flex",borderBottom:`2px solid ${C.border}`,background:C.card}}>
-              {[["tabla","📊 Tabla"],["goles","⚽ Goles"],["fixture","📅 Fixture"],["apuestas","🎲 Apuestas"],...(comp.formato!=="final"&&liguillaIniciada?[["liguilla","🏆 Liguilla"]]:[])].map(([id,label])=>(
+              {[["tabla","📊 Tabla"],["goles","⚽ Goles"],["fixture","📅 Fixture"],["apuestas","🎲 Apuestas"]].map(([id,label])=>(
                 <button key={id} onClick={()=>setVistaTab(id)} style={{flex:1,padding:"11px 4px",background:"none",border:"none",borderBottom:vistaTab===id?`3px solid ${comp.color||"#1a3a5c"}`:"3px solid transparent",cursor:"pointer",fontSize:11,fontWeight:700,color:vistaTab===id?(comp.color||"#1a3a5c"):C.textFaint,fontFamily:"'DM Sans',sans-serif",transition:"all 0.15s"}}>{label}</button>
               ))}
             </div>
@@ -6550,10 +6444,25 @@ function CompVistaPublica({comp,competenciaData,onClose}){
                         <div style={{display:"grid",gridTemplateColumns:"1fr 32px 32px 32px 32px 32px 32px",gap:0,padding:"7px 10px",background:C.inputBg,fontSize:9,fontWeight:800,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.3}}>
                           <span>Equipo</span><span style={{textAlign:"center"}}>PJ</span><span style={{textAlign:"center"}}>G</span><span style={{textAlign:"center"}}>E</span><span style={{textAlign:"center"}}>P</span><span style={{textAlign:"center"}}>GD</span><span style={{textAlign:"center",fontWeight:900,color:(comp.color||"#1a3a5c")}}>Pts</span>
                         </div>
-                        {[...(g.tabla||[])].sort((a,b)=>(b.pts||0)-(a.pts||0)||((b.gf||0)-(b.gc||0))-((a.gf||0)-(a.gc||0))).map((eq,ei)=>(
+                        {[...(g.tabla||[])].sort((a,b)=>(b.pts||0)-(a.pts||0)||((b.gf||0)-(b.gc||0))-((a.gf||0)-(a.gc||0))).map((eq,ei)=>{
+                          const esLiga=comp.formato==="liga";
+                          const esPrimera=comp.id==="liga1"||comp.id==="liga2";
+                          const esSegunda=comp.id==="ascenso";
+                          const pos=ei+1;
+                          let zonaColor=null,zonaIcono="";
+                          if(esLiga&&esPrimera){
+                            if(pos<=4){zonaColor="#f39c12";zonaIcono="⭐";}
+                            else if(pos<=8){zonaColor="#e67e22";zonaIcono="🟠";}
+                            else if(pos===11){zonaColor="#9b59b6";zonaIcono="🔀";}
+                            else if(pos===12){zonaColor="#c0392b";zonaIcono="🔻";}
+                          }else if(esLiga&&esSegunda){
+                            if(pos<=2){zonaColor="#16a085";zonaIcono="🔼";}
+                            else if(pos<=4){zonaColor="#9b59b6";zonaIcono="🔀";}
+                          }
+                          return(
                           <Fragment key={ei}>
-                            <div style={{display:"grid",gridTemplateColumns:"1fr 32px 32px 32px 32px 32px 32px",gap:0,padding:"9px 10px",borderTop:`1px solid ${C.border}`,fontSize:12,fontFamily:"'DM Sans',sans-serif",alignItems:"center",background:comp.formato==="liga"&&ei<8?(comp.color||"#1a3a5c")+"0d":"transparent"}}>
-                              <span style={{fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{comp.formato==="liga"&&ei<8?"🟢 ":""}{eq.equipo}</span>
+                            <div style={{display:"grid",gridTemplateColumns:"1fr 32px 32px 32px 32px 32px 32px",gap:0,padding:"9px 10px",borderTop:`1px solid ${C.border}`,fontSize:12,fontFamily:"'DM Sans',sans-serif",alignItems:"center",background:zonaColor?zonaColor+"15":"transparent"}}>
+                              <span style={{fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{zonaIcono?zonaIcono+" ":""}{eq.equipo}</span>
                               <span style={{textAlign:"center",color:C.textLight}}>{eq.pj||0}</span>
                               <span style={{textAlign:"center",color:"#27ae60",fontWeight:600}}>{eq.pg||0}</span>
                               <span style={{textAlign:"center",color:C.textLight}}>{eq.pe||0}</span>
@@ -6561,11 +6470,21 @@ function CompVistaPublica({comp,competenciaData,onClose}){
                               <span style={{textAlign:"center",color:C.textLight}}>{(eq.gf||0)-(eq.gc||0)>=0?"+"+((eq.gf||0)-(eq.gc||0)):(eq.gf||0)-(eq.gc||0)}</span>
                               <span style={{textAlign:"center",fontWeight:900,fontSize:14,color:(comp.color||"#1a3a5c")}}>{eq.pts||0}</span>
                             </div>
-                            {comp.formato==="liga"&&ei===7&&(
-                              <div style={{padding:"4px 0",textAlign:"center",fontSize:10,fontWeight:800,color:(comp.color||"#1a3a5c"),borderBottom:`2px dashed ${(comp.color||"#1a3a5c")}`}}>▲ Clasificados a Liguilla</div>
+                            {esLiga&&esPrimera&&pos===4&&(
+                              <div style={{padding:"4px 0",textAlign:"center",fontSize:10,fontWeight:800,color:"#f39c12",borderBottom:"2px dashed #f39c12"}}>⭐ Champions</div>
+                            )}
+                            {esLiga&&esPrimera&&pos===8&&(
+                              <div style={{padding:"4px 0",textAlign:"center",fontSize:10,fontWeight:800,color:"#e67e22",borderBottom:"2px dashed #e67e22"}}>🟠 Europa League</div>
+                            )}
+                            {esLiga&&esSegunda&&pos===2&&(
+                              <div style={{padding:"4px 0",textAlign:"center",fontSize:10,fontWeight:800,color:"#16a085",borderBottom:"2px dashed #16a085"}}>🔼 Ascenso directo</div>
+                            )}
+                            {esLiga&&esSegunda&&pos===4&&(
+                              <div style={{padding:"4px 0",textAlign:"center",fontSize:10,fontWeight:800,color:"#9b59b6",borderBottom:"2px dashed #9b59b6"}}>🔀 Playoff de ascenso</div>
                             )}
                           </Fragment>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   ))
@@ -6680,28 +6599,6 @@ function CompVistaPublica({comp,competenciaData,onClose}){
                       </div>
                     );
                   })
-              )}
-              {/* LIGUILLA */}
-              {vistaTab==="liguilla"&&(
-                <div>
-                  <div style={{background:C.card,borderRadius:12,padding:"12px 14px",border:`1.5px solid #e67e22`,marginBottom:14}}>
-                    <div style={{fontSize:11,fontWeight:800,color:"#e67e22",fontFamily:"'DM Sans',sans-serif",marginBottom:6}}>🏆 Equipos clasificados</div>
-                    <div style={{fontSize:11,color:C.textMid,fontFamily:"'DM Sans',sans-serif",lineHeight:1.6}}>
-                      {liguillaEquipos.map((e,i)=>`${i+1}. ${e}`).join(" · ")}
-                    </div>
-                  </div>
-                  {liguillaPartidos.length===0
-                    ? <div style={{textAlign:"center",color:C.textFaint,padding:30,fontFamily:"'DM Sans',sans-serif",fontSize:12}}>Sin partidos de liguilla registrados aún</div>
-                    : liguillaPartidos.map((p,idx)=>(
-                      <div key={idx} style={{display:"flex",alignItems:"center",gap:8,background:C.card,borderRadius:9,padding:"10px 12px",border:`1px solid ${C.border}`,marginBottom:8}}>
-                        {p.fase&&<span style={{fontSize:9,fontWeight:700,color:"#e67e22",background:"#e67e2218",padding:"2px 6px",borderRadius:6,fontFamily:"'DM Sans',sans-serif"}}>{p.fase}</span>}
-                        <span style={{flex:1,fontSize:12,fontWeight:700,color:C.text,textAlign:"right",fontFamily:"'DM Sans',sans-serif"}}>{p.local}</span>
-                        <span style={{fontSize:13,fontWeight:900,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{p.golesLocal} - {p.golesVisitante}</span>
-                        <span style={{flex:1,fontSize:12,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{p.visitante}</span>
-                      </div>
-                    ))
-                  }
-                </div>
               )}
             </div>
           </div>
@@ -7482,8 +7379,6 @@ function MainApp({user,isAdmin,onLogout}){
                 </button>
               </div>
             )}
-              );
-            })()}
             <div style={{fontSize:10,color:C.textLight,marginBottom:9,fontFamily:"'DM Sans',sans-serif"}}>Todas usan los mismos {squad.length} jugadores de la plantilla.</div>
             <div style={{display:"flex",gap:8}}>
               <input value={newLineupName} onChange={e=>setNewLineupName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addLineup()} placeholder="Nueva alineación…"
