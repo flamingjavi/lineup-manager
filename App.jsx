@@ -1544,10 +1544,16 @@ function CalendarioGeneralAdmin({setAiMsg}){
       <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Sube una foto del calendario general de competiciones. La IA detectará las semanas, fechas y detalle; revisa antes de confirmar.</div>
       <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}}
         onChange={e=>{const f=e.target.files?.[0];if(f)processImage(f);e.target.value="";}}/>
-      <button onClick={()=>fileRef.current?.click()} disabled={uploading}
-        style={{padding:"9px",borderRadius:8,background:"transparent",border:"1.5px dashed #1a3a5c",color:"#1a3a5c",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:uploading?0.5:1}}>
-        {uploading?"Leyendo…":"📷 Subir foto del calendario"}
-      </button>
+      <div style={{display:"flex",gap:6}}>
+        <button onClick={()=>fileRef.current?.click()} disabled={uploading}
+          style={{flex:1,padding:"9px",borderRadius:8,background:"transparent",border:"1.5px dashed #1a3a5c",color:"#1a3a5c",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:uploading?0.5:1}}>
+          {uploading?"Leyendo…":"📷 Subir foto del calendario"}
+        </button>
+        <button onClick={()=>setPreview(semanas.length>0?[...semanas]:[{numero:1,fecha:"",detalle:""}])}
+          style={{flex:1,padding:"9px",borderRadius:8,background:"transparent",border:"1.5px dashed #9b59b6",color:"#9b59b6",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+          ✍️ Manual
+        </button>
+      </div>
 
       {preview&&(
         <div style={{background:C.card,borderRadius:10,padding:"10px 12px",border:"1.5px solid #1a3a5c"}}>
@@ -4488,26 +4494,35 @@ function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial}){
     return unsub;
   },[]);
 
-  // Encuentra el siguiente partido sin jugar del equipo, en su liga principal (formato "liga")
-  const ligaPrincipal=comps.find(c=>c.formato==="liga");
+  // Encuentra el siguiente partido sin jugar del equipo, en CUALQUIER competencia inscrita
   const siguientePartido=(()=>{
-    if(!ligaPrincipal||!teamData?.teamName) return null;
-    const fixture=competenciaData?.[ligaPrincipal.id]?.fixture||{};
-    const jornadasOrdenadas=Object.entries(fixture).sort((a,b)=>{
-      const numA=parseInt((a[1].nombre||a[0]).match(/\d+/)?.[0]||"0");
-      const numB=parseInt((b[1].nombre||b[0]).match(/\d+/)?.[0]||"0");
-      return numA-numB;
-    });
-    for(const [jkey,jornada] of jornadasOrdenadas){
-      for(const p of (jornada.partidos||[])){
-        const esLocal=p.local===teamData.teamName;
-        const esVisitante=p.visitante===teamData.teamName;
-        if((esLocal||esVisitante)&&!p.marcador){
-          return {rival:esLocal?p.visitante:p.local,esLocal,jornada:jornada.nombre||jkey,liga:ligaPrincipal.name};
+    if(!teamData?.teamName) return null;
+    // Busca en todas las competencias del equipo, toma el primer partido sin marcador de cada una
+    // y se queda con el de menor número de jornada/semana detectado (el más cercano)
+    let candidatos=[];
+    for(const comp of comps){
+      const fixture=competenciaData?.[comp.id]?.fixture||{};
+      const jornadasOrdenadas=Object.entries(fixture).sort((a,b)=>{
+        const numA=parseInt((a[1].nombre||a[0]).match(/\d+/)?.[0]||"0");
+        const numB=parseInt((b[1].nombre||b[0]).match(/\d+/)?.[0]||"0");
+        return numA-numB;
+      });
+      for(const [jkey,jornada] of jornadasOrdenadas){
+        const partido=(jornada.partidos||[]).find(p=>(p.local===teamData.teamName||p.visitante===teamData.teamName)&&!p.marcador);
+        if(partido){
+          const numJornada=parseInt((jornada.nombre||jkey).match(/\d+/)?.[0]||"999");
+          candidatos.push({
+            rival:partido.local===teamData.teamName?partido.visitante:partido.local,
+            esLocal:partido.local===teamData.teamName,
+            jornada:jornada.nombre||jkey,liga:comp.name,numJornada
+          });
+          break; // solo el primero sin jugar de esta competencia
         }
       }
     }
-    return null;
+    if(candidatos.length===0) return null;
+    candidatos.sort((a,b)=>a.numJornada-b.numJornada);
+    return candidatos[0];
   })();
 
   useEffect(()=>{
@@ -5248,6 +5263,15 @@ function CompetenciaGruposSetup({compId,compName,compColor,formato,allTeams,setA
                   style={{flex:1,padding:"6px",borderRadius:7,background:"transparent",border:"1px dashed #27ae60",color:"#27ae60",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:uploadingIdx===gi?0.5:1}}>
                   {uploadingIdx===gi?"Leyendo…":"📋 Excel"}
                 </button>
+                <button onClick={()=>{
+                    const filas=(g.equipos||[]).map(eq=>{
+                      const existente=(g.tabla||[]).find(r=>r.equipo===eq);
+                      return existente?{...existente}:{equipo:eq,pj:0,pg:0,pe:0,pp:0,gf:0,gc:0,pts:0};
+                    });
+                    setPreview({grupoIdx:gi,filas});
+                  }} style={{flex:1,padding:"6px",borderRadius:7,background:"transparent",border:"1px dashed #9b59b6",color:"#9b59b6",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                  ✍️ Manual
+                </button>
               </div>
               <div style={{fontSize:8,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginTop:4,textAlign:"center"}}>Formato Excel: A=Equipo, B=PJ, C=PG, D=PE, E=PP, F=GF, G=GC, H=Pts</div>
             </>
@@ -5475,6 +5499,10 @@ function CompetenciaGoleadoresSetup({compId,compName,compColor,setAiMsg}){
           <button onClick={()=>excelRef.current?.click()} disabled={uploading===tipo}
             style={{flex:1,padding:"6px",borderRadius:7,background:"transparent",border:"1px dashed #27ae60",color:"#27ae60",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:uploading===tipo?0.5:1}}>
             {uploading===tipo?"Leyendo…":"📋 Excel"}
+          </button>
+          <button onClick={()=>setPreview({tipo,filas:filas.length>0?[...filas]:[{nombre:"",equipo:"",[campo]:0}]})}
+            style={{flex:1,padding:"6px",borderRadius:7,background:"transparent",border:"1px dashed #9b59b6",color:"#9b59b6",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+            ✍️ Manual
           </button>
         </div>
         <div style={{fontSize:8,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginTop:4,textAlign:"center"}}>Formato Excel: A=Jugador, B=Equipo, C={campo==="goles"?"Goles":"Asistencias"}</div>
@@ -5732,6 +5760,10 @@ function CompetenciaResultadoSetup({compId,compName,compColor,formato,setAiMsg})
             style={{flex:1,padding:"8px",borderRadius:7,background:"transparent",border:"1.5px dashed #27ae60",color:"#27ae60",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:(uploading||todosEquipos.length===0)?0.5:1}}>
             {uploading?"Leyendo…":todosEquipos.length===0?"Primero configura equipos":"📋 Excel (varios partidos)"}
           </button>
+          <button onClick={()=>setPreview({local:"",golesLocal:0,visitante:"",golesVisitante:0})} disabled={todosEquipos.length===0}
+            style={{flex:1,padding:"8px",borderRadius:7,background:"transparent",border:"1.5px dashed #9b59b6",color:"#9b59b6",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:todosEquipos.length===0?0.5:1}}>
+            ✍️ Manual
+          </button>
         </div>
         <div style={{fontSize:8,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginTop:4,textAlign:"center"}}>Formato Excel: A=Local, B=Goles Local, C=Visitante, D=Goles Visitante (una fila por partido, aplica directo sin vista previa)</div>
         {preview&&(
@@ -5943,14 +5975,27 @@ function CompetenciaFixtureSetup({compId,compColor,setAiMsg}){
         </div>
       )}
 
-      {/* Subir imagen */}
+      {/* Subir imagen, Excel o manual */}
       <div style={{background:C.card,borderRadius:9,padding:"10px 12px",border:`1.5px solid ${C.border}`}}>
         <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}}
           onChange={e=>{const f=e.target.files?.[0];if(f)processImage(f);e.target.value="";}}/>
-        <button onClick={()=>fileRef.current?.click()} disabled={uploading||todosEquipos.length===0}
-          style={{width:"100%",padding:"8px",borderRadius:7,background:"transparent",border:`1.5px dashed ${compColor}`,color:compColor,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:(uploading||todosEquipos.length===0)?0.5:1}}>
-          {uploading?"Leyendo…":todosEquipos.length===0?"Primero configura equipos en Tabla":"📷 Subir foto de jornada"}
-        </button>
+        <input ref={excelRef} type="file" accept=".xlsx,.xls" style={{display:"none"}}
+          onChange={e=>{const f=e.target.files?.[0];if(f)processExcelFixture(f);e.target.value="";}}/>
+        <div style={{display:"flex",gap:6}}>
+          <button onClick={()=>fileRef.current?.click()} disabled={uploading||todosEquipos.length===0}
+            style={{flex:1,padding:"8px",borderRadius:7,background:"transparent",border:`1.5px dashed ${compColor}`,color:compColor,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:(uploading||todosEquipos.length===0)?0.5:1}}>
+            {uploading?"Leyendo…":todosEquipos.length===0?"Primero configura equipos":"📷 Foto de jornada"}
+          </button>
+          <button onClick={()=>excelRef.current?.click()} disabled={uploading||todosEquipos.length===0}
+            style={{flex:1,padding:"8px",borderRadius:7,background:"transparent",border:"1.5px dashed #27ae60",color:"#27ae60",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:(uploading||todosEquipos.length===0)?0.5:1}}>
+            {uploading?"Leyendo…":todosEquipos.length===0?"Primero configura equipos":"📋 Excel (varias jornadas)"}
+          </button>
+          <button onClick={()=>setPreview({jornada:"",partidos:[{local:"",visitante:""}]})} disabled={todosEquipos.length===0}
+            style={{flex:1,padding:"8px",borderRadius:7,background:"transparent",border:"1.5px dashed #9b59b6",color:"#9b59b6",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:todosEquipos.length===0?0.5:1}}>
+            ✍️ Manual
+          </button>
+        </div>
+        <div style={{fontSize:8,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginTop:4,textAlign:"center"}}>Formato Excel: A=Jornada, B=Local, C=Visitante (puede incluir varias jornadas en un solo archivo)</div>
 
         {/* Vista previa editable */}
         {preview&&(
