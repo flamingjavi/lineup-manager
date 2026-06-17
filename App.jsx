@@ -4135,8 +4135,8 @@ const COMPETENCIAS_AVAILABLE=[
   {id:"copa",     name:"Copa",                 icon:"🏅", color:"#8e44ad", lineupName:"Copa", formato:"grupos", division:1},
   {id:"champions",name:"Champions",            icon:"⭐", color:"#f39c12", lineupName:"Champions", formato:"grupos", division:1},
   {id:"europa",   name:"Europa League",        icon:"🟠", color:"#e67e22", lineupName:"Europa League", formato:"grupos", division:1},
-  {id:"ascenso",  name:"Liga Ascenso",         icon:"🔼", color:"#16a085", lineupName:"Liga", formato:"liga", division:2},
-  {id:"copaascenso",name:"Copa Ascenso",       icon:"🥈", color:"#7f8c8d", lineupName:"Copa Ascenso", formato:"grupos", division:2},
+  {id:"ascenso",  name:"Brave League",         icon:"🔼", color:"#16a085", lineupName:"Liga", formato:"liga", division:2},
+  {id:"copaascenso",name:"Brave Cup",          icon:"🥈", color:"#7f8c8d", lineupName:"Brave Cup", formato:"grupos", division:2},
   {id:"supercopa",name:"SuperCopa",            icon:"👑", color:"#c0392b", lineupName:"SuperCopa", formato:"final", division:1},
 ];
 
@@ -5965,12 +5965,12 @@ function PlayoffAscensoSetup({setAiMsg}){
   const partidos=["partido1","partido2"].map(k=>({key:k,...(data?.[k]||{})})).filter(p=>p.ascensoEq||p.primeraEq);
 
   if(!data||partidos.length===0){
-    return <div style={{textAlign:"center",color:C.textFaint,padding:30,fontFamily:"'DM Sans',sans-serif",fontSize:12}}>Sin playoffs pendientes. Se generan automáticamente al finalizar la temporada de Neo League, Europe Championship o Liga Ascenso.</div>;
+    return <div style={{textAlign:"center",color:C.textFaint,padding:30,fontFamily:"'DM Sans',sans-serif",fontSize:12}}>Sin playoffs pendientes. Se generan automáticamente al finalizar la temporada de Neo League, Europe Championship o Brave League.</div>;
   }
 
   return(
     <div style={{display:"flex",flexDirection:"column",gap:12}}>
-      <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Partido único. El 3° y 4° de Liga Ascenso se cruzan contra el 11° de Neo League / Europe Championship — el cruce se alterna cada temporada.</div>
+      <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Partido único. El 3° y 4° de Brave League se cruzan contra el 11° de Neo League / Europe Championship — el cruce se alterna cada temporada.</div>
       {partidos.map(p=>(
         <PlayoffPartidoCard key={p.key} partido={p} onGuardar={(gA,gP)=>guardarResultado(p.key,gA,gP)}/>
       ))}
@@ -6034,15 +6034,20 @@ function CompetenciasModal({allTeams,onClose}){
   const toggleTeam=async(team)=>{
     const cur=team.competencias||[];
     const hasIt=cur.includes(selected);
-    // Bloquea inscripción cruzada entre Primera y Segunda División
+    // Grupos de exclusión mutua: solo se puede estar en UNA competencia de cada grupo a la vez
+    const GRUPOS_EXCLUSION=[
+      {ids:["liga1","liga2","ascenso"],label:"una liga (Neo League, Europe Championship o Brave League)"},
+      {ids:["champions","europa"],label:"Champions o Europa League"},
+    ];
     if(!hasIt){
-      const compSeleccionada=COMPETENCIAS_AVAILABLE.find(c=>c.id===selected);
-      const divisionDestino=compSeleccionada?.division;
-      const compsActuales=cur.map(id=>COMPETENCIAS_AVAILABLE.find(c=>c.id===id)).filter(Boolean);
-      const tieneOtraDivision=compsActuales.some(c=>c.division&&c.division!==divisionDestino);
-      if(tieneOtraDivision){
-        alert(`❌ ${team.teamName} ya está inscrito en una competencia de ${compsActuales.find(c=>c.division!==divisionDestino).division===1?"Primera":"Segunda"} División. Un equipo no puede jugar en ambas divisiones a la vez.`);
-        return;
+      const grupo=GRUPOS_EXCLUSION.find(g=>g.ids.includes(selected));
+      if(grupo){
+        const conflicto=cur.find(id=>grupo.ids.includes(id)&&id!==selected);
+        if(conflicto){
+          const nombreConflicto=COMPETENCIAS_AVAILABLE.find(c=>c.id===conflicto)?.name||conflicto;
+          alert(`❌ ${team.teamName} ya está inscrito en ${nombreConflicto}. Solo puede estar en ${grupo.label} a la vez.`);
+          return;
+        }
       }
     }
     const next=hasIt?cur.filter(x=>x!==selected):[...cur,selected];
@@ -6141,7 +6146,7 @@ function CompetenciasModal({allTeams,onClose}){
           const pSnap=await getDoc(pRef).catch(()=>null);
           const pCurrent=pSnap?.exists()?pSnap.data():{temporada:0};
           await setDoc(pRef,{...pCurrent,[compId]:{equipo:playoffEquipo,fecha:new Date().toISOString(),resuelto:false,resultado:null}},{merge:true});
-          await addNoticia(`🔀 ${playoffEquipo} (11° de ${comp.name}) jugará el playoff de permanencia/ascenso contra Liga Ascenso`,"🔀");
+          await addNoticia(`🔀 ${playoffEquipo} (11° de ${comp.name}) jugará el playoff de permanencia/ascenso contra Brave League`,"🔀");
         }
       }
       if(compId==="ascenso"){
@@ -6218,7 +6223,7 @@ function CompetenciasModal({allTeams,onClose}){
               <span style={{fontSize:22,flexShrink:0}}>🔀</span>
               <div style={{flex:1}}>
                 <div style={{fontSize:14,fontWeight:800,color:"#9b59b6",fontFamily:"'DM Sans',sans-serif"}}>Playoff Ascenso/Descenso</div>
-                <div style={{fontSize:11,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Cruce 11° Primera vs 3°/4° Liga Ascenso</div>
+                <div style={{fontSize:11,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Cruce 11° Primera vs 3°/4° Brave League</div>
               </div>
               <span style={{color:"#9b59b6",fontSize:16}}>›</span>
             </div>
