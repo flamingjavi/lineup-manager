@@ -7466,7 +7466,20 @@ function MainApp({user,isAdmin,onLogout}){
                 </div>
               )}
             </div>
-            {viewingTeam&&<AdminTeamEditor teamData={viewingTeam} pool={pool} allTeamsRef={allTeams}/>}
+            {viewingTeam&&(
+              <div onClick={()=>setViewingTeam(null)} style={{position:"fixed",inset:0,zIndex:500,background:"rgba(0,0,0,0.65)",display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"16px 0",overflowY:"auto"}}>
+                <div onClick={e=>e.stopPropagation()} style={{background:C.bg,borderRadius:16,width:"100%",maxWidth:520,margin:"0 12px",maxHeight:"92vh",overflowY:"auto",boxShadow:"0 8px 40px rgba(0,0,0,0.4)"}}>
+                  <div style={{position:"sticky",top:0,zIndex:10,background:C.card,borderBottom:`1.5px solid ${C.border}`,padding:"12px 16px",display:"flex",alignItems:"center",gap:10,borderRadius:"16px 16px 0 0"}}>
+                    <div style={{width:10,height:10,borderRadius:"50%",background:getTeamColor(viewingTeam.teamColor).bg,flexShrink:0,border:"1px solid rgba(0,0,0,0.15)"}}/>
+                    <span style={{fontSize:14,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{viewingTeam.teamName}</span>
+                    <button onClick={()=>setViewingTeam(null)} style={{background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:"50%",width:30,height:30,color:C.textMid,cursor:"pointer",fontSize:15,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>✕</button>
+                  </div>
+                  <div style={{padding:14}}>
+                    <AdminTeamEditor teamData={viewingTeam} pool={pool} allTeamsRef={allTeams}/>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
