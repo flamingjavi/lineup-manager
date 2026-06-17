@@ -4370,16 +4370,15 @@ function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial}){
 
         {comps.map(comp=>(
           <button key={comp.id} onClick={()=>onSelect(comp)}
-            style={{width:"100%",padding:"16px 18px",borderRadius:16,background:`linear-gradient(135deg,${comp.color}ee,${comp.color}88)`,border:`1px solid ${comp.color}`,cursor:"pointer",display:"flex",alignItems:"center",gap:14,boxShadow:`0 4px 24px ${comp.color}33`,textAlign:"left",position:"relative",overflow:"hidden"}}>
-            <div style={{position:"absolute",right:-10,top:-10,fontSize:60,opacity:0.12,lineHeight:1}}>{comp.icon}</div>
-            <div style={{width:44,height:44,borderRadius:12,background:"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            style={{width:"100%",padding:"14px 15px",borderRadius:18,background:C.card,border:`1px solid ${C.border}`,cursor:"pointer",display:"flex",alignItems:"center",gap:13,boxShadow:C.dark?"0 2px 14px rgba(0,0,0,0.35)":"0 4px 16px rgba(40,33,15,0.06)",textAlign:"left",position:"relative",overflow:"hidden",transition:"transform .15s ease"}}>
+            <div style={{width:46,height:46,borderRadius:13,background:`linear-gradient(140deg,${comp.color},${comp.color}cc)`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:`0 4px 12px ${comp.color}44`}}>
               <span style={{fontSize:22}}>{comp.icon}</span>
             </div>
             <div style={{flex:1,zIndex:1}}>
-              <div style={{fontSize:17,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:0.5}}>{comp.name}</div>
-              <div style={{fontSize:10,color:"rgba(255,255,255,0.65)",fontFamily:"'DM Sans',sans-serif",marginTop:1}}>Ver mi alineación</div>
+              <div style={{fontSize:18,fontWeight:800,color:C.text,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:0.5}}>{comp.name}</div>
+              <div style={{fontSize:10.5,color:C.textLight,fontFamily:"'DM Sans',sans-serif",marginTop:1}}>Ver mi alineación</div>
             </div>
-            <span style={{fontSize:18,color:"rgba(255,255,255,0.6)",zIndex:1}}>›</span>
+            <span style={{fontSize:20,color:C.textFaint,zIndex:1}}>›</span>
           </button>
         ))}
 
@@ -4392,47 +4391,44 @@ function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial}){
               updateDoc(doc(db,"teams",teamData.id||teamData.uid),{ultimaVistaMenciones:new Date().toISOString()}).catch(()=>{});
             }
           }}
-          style={{width:"100%",padding:"16px 18px",borderRadius:16,background:"linear-gradient(135deg,#1a1a2eee,#34345688)",border:"1px solid #555",cursor:"pointer",display:"flex",alignItems:"center",gap:14,boxShadow:"0 4px 24px #00000033",textAlign:"left",position:"relative",overflow:"hidden"}}>
-          <div style={{position:"absolute",right:-10,top:-10,fontSize:60,opacity:0.12,lineHeight:1}}>📰</div>
-          <div style={{width:44,height:44,borderRadius:12,background:"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,position:"relative"}}>
+          style={{width:"100%",padding:"14px 15px",borderRadius:18,background:C.card,border:`1px solid ${mencionesNoVistas>0?"#d8a39c":C.border}`,cursor:"pointer",display:"flex",alignItems:"center",gap:13,boxShadow:C.dark?"0 2px 14px rgba(0,0,0,0.35)":"0 4px 16px rgba(40,33,15,0.06)",textAlign:"left",position:"relative",overflow:"hidden"}}>
+          <div style={{width:46,height:46,borderRadius:13,background:"linear-gradient(140deg,#3a3a4e,#26263a)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,position:"relative",boxShadow:"0 4px 12px rgba(38,38,58,0.35)"}}>
             <span style={{fontSize:22}}>📰</span>
             {mencionesNoVistas>0&&(
-              <span style={{position:"absolute",top:-4,right:-4,background:"#e74c3c",color:"#fff",borderRadius:"50%",minWidth:18,height:18,fontSize:10,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'DM Sans',sans-serif",border:"2px solid #1a1a2e"}}>{mencionesNoVistas}</span>
+              <span style={{position:"absolute",top:-5,right:-5,background:"#c0392b",color:"#fff",borderRadius:"50%",minWidth:19,height:19,fontSize:10,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'DM Sans',sans-serif",border:`2px solid ${C.card}`}}>{mencionesNoVistas}</span>
             )}
           </div>
           <div style={{flex:1,zIndex:1}}>
-            <div style={{fontSize:17,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:0.5}}>Noticias</div>
-            <div style={{fontSize:10,color:"rgba(255,255,255,0.65)",fontFamily:"'DM Sans',sans-serif",marginTop:1}}>{mencionesNoVistas>0?`¡Te mencionaron ${mencionesNoVistas} vez${mencionesNoVistas!==1?"ces":""}!`:"Resultados y novedades"}</div>
+            <div style={{fontSize:18,fontWeight:800,color:C.text,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:0.5}}>Noticias</div>
+            <div style={{fontSize:10.5,color:mencionesNoVistas>0?"#c0392b":C.textLight,fontWeight:mencionesNoVistas>0?600:400,fontFamily:"'DM Sans',sans-serif",marginTop:1}}>{mencionesNoVistas>0?`¡Te mencionaron ${mencionesNoVistas} vez${mencionesNoVistas!==1?"ces":""}!`:"Resultados y novedades"}</div>
           </div>
-          <span style={{fontSize:18,color:"rgba(255,255,255,0.6)",zIndex:1}}>›</span>
+          <span style={{fontSize:20,color:C.textFaint,zIndex:1}}>›</span>
         </button>
 
         {/* Mundial */}
         <button onClick={onOpenMundial}
-          style={{width:"100%",padding:"16px 18px",borderRadius:16,background:"linear-gradient(135deg,#4c1d95ee,#7c3aed88)",border:"1px solid #7c3aed",cursor:"pointer",display:"flex",alignItems:"center",gap:14,boxShadow:"0 4px 24px #7c3aed33",textAlign:"left",position:"relative",overflow:"hidden"}}>
-          <div style={{position:"absolute",right:-10,top:-10,fontSize:60,opacity:0.12,lineHeight:1}}>🌍</div>
-          <div style={{width:44,height:44,borderRadius:12,background:"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+          style={{width:"100%",padding:"14px 15px",borderRadius:18,background:C.card,border:`1px solid ${C.border}`,cursor:"pointer",display:"flex",alignItems:"center",gap:13,boxShadow:C.dark?"0 2px 14px rgba(0,0,0,0.35)":"0 4px 16px rgba(40,33,15,0.06)",textAlign:"left",position:"relative",overflow:"hidden"}}>
+          <div style={{width:46,height:46,borderRadius:13,background:"linear-gradient(140deg,#7c3aed,#4c1d95)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 4px 12px rgba(124,58,237,0.35)"}}>
             <span style={{fontSize:22}}>🌍</span>
           </div>
           <div style={{flex:1,zIndex:1}}>
-            <div style={{fontSize:17,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:0.5}}>Mundial</div>
-            <div style={{fontSize:10,color:"rgba(255,255,255,0.65)",fontFamily:"'DM Sans',sans-serif",marginTop:1}}>Selecciones nacionales</div>
+            <div style={{fontSize:18,fontWeight:800,color:C.text,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:0.5}}>Mundial</div>
+            <div style={{fontSize:10.5,color:C.textLight,fontFamily:"'DM Sans',sans-serif",marginTop:1}}>Selecciones nacionales</div>
           </div>
-          <span style={{fontSize:18,color:"rgba(255,255,255,0.6)",zIndex:1}}>›</span>
+          <span style={{fontSize:20,color:C.textFaint,zIndex:1}}>›</span>
         </button>
 
         {/* Mi Equipo */}
         <button onClick={()=>onSelect(null)}
-          style={{width:"100%",padding:"16px 18px",borderRadius:16,background:`linear-gradient(135deg,${tc.dark}ee,${tc.bg}88)`,border:`1px solid ${tc.dark}`,cursor:"pointer",display:"flex",alignItems:"center",gap:14,boxShadow:`0 4px 24px ${tc.dark}33`,textAlign:"left",position:"relative",overflow:"hidden"}}>
-          <div style={{position:"absolute",right:-10,top:-10,fontSize:60,opacity:0.12,lineHeight:1}}>👕</div>
-          <div style={{width:44,height:44,borderRadius:12,background:"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+          style={{width:"100%",padding:"14px 15px",borderRadius:18,background:C.card,border:`1px solid ${C.accent}`,cursor:"pointer",display:"flex",alignItems:"center",gap:13,boxShadow:C.dark?"0 2px 16px rgba(233,196,94,0.12)":"0 4px 18px rgba(201,162,39,0.14)",textAlign:"left",position:"relative",overflow:"hidden"}}>
+          <div style={{width:46,height:46,borderRadius:13,background:`linear-gradient(140deg,${tc.dark},${tc.bg})`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:`0 4px 12px ${tc.dark}44`}}>
             <span style={{fontSize:22}}>👕</span>
           </div>
           <div style={{flex:1,zIndex:1}}>
-            <div style={{fontSize:17,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:0.5}}>Mi Equipo</div>
-            <div style={{fontSize:10,color:"rgba(255,255,255,0.65)",fontFamily:"'DM Sans',sans-serif",marginTop:1}}>Campo y plantilla</div>
+            <div style={{fontSize:18,fontWeight:800,color:C.text,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:0.5}}>Mi Equipo</div>
+            <div style={{fontSize:10.5,color:C.textLight,fontFamily:"'DM Sans',sans-serif",marginTop:1}}>Campo y plantilla</div>
           </div>
-          <span style={{fontSize:18,color:"rgba(255,255,255,0.6)",zIndex:1}}>›</span>
+          <span style={{fontSize:20,color:C.accent,zIndex:1}}>›</span>
         </button>
 
       </div>
