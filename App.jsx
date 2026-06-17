@@ -7018,6 +7018,7 @@ function MainApp({user,isAdmin,onLogout}){
   const[showLiveAdmin,setShowLiveAdmin]=useState(false);
   const[showNoticiasAdmin,setShowNoticiasAdmin]=useState(false);
   const[showCalendarioAdmin,setShowCalendarioAdmin]=useState(false);
+  const[aiMsg,setAiMsg]=useState("");
   const[showPresidents,setShowPresidents]=useState(false);
   const[showImport,setShowImport]=useState(false);
   const[showSelecciones,setShowSelecciones]=useState(false);
@@ -7692,6 +7693,9 @@ function MainApp({user,isAdmin,onLogout}){
                   <span style={{fontSize:11,color:C.textLight}}>{showCalendarioAdmin?"▲":"▼"}</span>
                 </button>
                 {showCalendarioAdmin&&<div style={{marginTop:8}}><CalendarioGeneralAdmin setAiMsg={setAiMsg}/></div>}
+                {showCalendarioAdmin&&aiMsg&&(
+                  <div style={{marginTop:8,padding:"7px 10px",borderRadius:8,background:C.inputBg,border:`1px solid ${C.border}`,fontSize:11,color:C.textMid,fontFamily:"'DM Sans',sans-serif"}}>{aiMsg}</div>
+                )}
               </div>
               {/* Collapsible teams list */}
               {showTeamsList&&(
