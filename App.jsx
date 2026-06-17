@@ -5777,46 +5777,81 @@ function CompetenciaFixtureSetup({compId,compColor,setAiMsg}){
 }
 
 // ─── COMPETENCIA: APUESTAS ENTRE EQUIPOS ──────────────────────────────────────
-function CompetenciaApuestasSetup({compId,compName,compColor,allTeams,setAiMsg}){
+function CompetenciaApuestasSetup({allTeams,setAiMsg}){
   const[apuestas,setApuestas]=useState([]);
+  const[competenciaData,setCompetenciaData]=useState({});
   const[creando,setCreando]=useState(false);
-  const[form,setForm]=useState({equipoA:"",equipoB:"",condicion:"",metrica:"posicion"});
+  const[form,setForm]=useState({equipoA:"",equipoB:"",condicion:"",metrica:"posicion",metricaCustom:""});
   const[saving,setSaving]=useState(false);
 
-  const eligibles=allTeams.filter(t=>(t.competencias||[]).includes(compId));
+  // Solo competencias formato "liga" tienen tabla comparable (Neo, EC, Brave League)
+  const LIGAS_IDS=["liga1","liga2","ascenso"];
+  const ligasConEquipos=LIGAS_IDS.map(id=>({
+    comp:COMPETENCIAS_AVAILABLE.find(c=>c.id===id),
+    equipos:allTeams.filter(t=>(t.competencias||[]).includes(id))
+  })).filter(l=>l.comp&&l.equipos.length>0);
 
   useEffect(()=>{
     const unsub=onSnapshot(doc(db,"config","apuestas"),snap=>{
       const all=snap.exists()?snap.data():{};
-      setApuestas((all.lista||[]).filter(a=>a.compId===compId));
+      setApuestas(all.lista||[]);
     });
     return unsub;
-  },[compId]);
+  },[]);
+
+  useEffect(()=>{
+    const unsub=onSnapshot(doc(db,"config","competenciaData"),snap=>{
+      setCompetenciaData(snap.exists()?snap.data():{});
+    });
+    return unsub;
+  },[]);
+
+  // Encuentra en qué liga juega un equipo y su fila de tabla
+  const datosDeEquipo=(nombreEquipo)=>{
+    for(const ligaId of LIGAS_IDS){
+      const grupos=competenciaData?.[ligaId]?.grupos||[];
+      const fila=(grupos[0]?.tabla||[]).find(r=>r.equipo===nombreEquipo);
+      if(fila){
+        const ligaComp=COMPETENCIAS_AVAILABLE.find(c=>c.id===ligaId);
+        return {ligaId,ligaNombre:ligaComp?.name||ligaId,fila};
+      }
+    }
+    return null;
+  };
 
   const saveApuestas=async(nuevaLista)=>{
     const ref=doc(db,"config","apuestas");
-    const snap=await getDoc(ref).catch(()=>null);
-    const current=snap?.exists()?snap.data():{};
-    const otras=(current.lista||[]).filter(a=>a.compId!==compId);
-    await setDoc(ref,{lista:[...otras,...nuevaLista]},{merge:true});
+    await setDoc(ref,{lista:nuevaLista},{merge:true});
   };
 
   const crearApuesta=async()=>{
     if(!form.equipoA||!form.equipoB){setAiMsg("❌ Selecciona ambos equipos");return;}
     if(form.equipoA===form.equipoB){setAiMsg("❌ Los equipos no pueden ser el mismo");return;}
     if(!form.condicion.trim()){setAiMsg("❌ Escribe la condición de la apuesta");return;}
+    if(form.metrica==="custom"&&!form.metricaCustom.trim()){setAiMsg("❌ Escribe el nombre del formato de apuesta personalizado");return;}
     setSaving(true);
     const nueva={
-      id:`bet_${Date.now()}`,compId,equipoA:form.equipoA,equipoB:form.equipoB,
-      condicion:form.condicion.trim(),metrica:form.metrica,estado:"activa",ganador:null,
+      id:`bet_${Date.now()}`,equipoA:form.equipoA,equipoB:form.equipoB,
+      condicion:form.condicion.trim(),metrica:form.metrica,
+      metricaCustomLabel:form.metrica==="custom"?form.metricaCustom.trim():null,
+      progresoCustomA:"",progresoCustomB:"",
+      estado:"activa",ganador:null,
       fecha:new Date().toISOString()
     };
     await saveApuestas([...apuestas,nueva]);
-    await addNoticia(`🎲 Nueva apuesta en ${compName}: ${form.equipoA} vs ${form.equipoB} — ${form.condicion.trim()}`,"🎲");
-    setForm({equipoA:"",equipoB:"",condicion:"",metrica:"posicion"});
+    await addNoticia(`🎲 Nueva apuesta: ${form.equipoA} vs ${form.equipoB} — ${form.condicion.trim()}`,"🎲");
+    setForm({equipoA:"",equipoB:"",condicion:"",metrica:"posicion",metricaCustom:""});
     setCreando(false);
     setAiMsg("✅ Apuesta creada");
     setSaving(false);
+  };
+
+  const actualizarProgresoCustom=async(apId,campo,valor)=>{
+    const nuevaLista=apuestas.map(a=>a.id===apId?{...a,[campo]:valor}:a);
+    setApuestas(nuevaLista); // optimista, se guarda al perder foco
+  };
+  const guardarProgresoCustom=async()=>{
+    await saveApuestas(apuestas);
   };
 
   const marcarGanador=async(apId,ganador)=>{
@@ -5825,9 +5860,9 @@ function CompetenciaApuestasSetup({compId,compName,compColor,allTeams,setAiMsg})
     const nuevaLista=apuestas.map(a=>a.id===apId?{...a,estado:"cerrada",ganador}:a);
     await saveApuestas(nuevaLista);
     if(ganador){
-      await addNoticia(`🎲 ${ganador} ganó la apuesta contra ${ganador===ap.equipoA?ap.equipoB:ap.equipoA} en ${compName}: ${ap.condicion}`,"🏆");
+      await addNoticia(`🎲 ${ganador} ganó la apuesta contra ${ganador===ap.equipoA?ap.equipoB:ap.equipoA}: ${ap.condicion}`,"🏆");
     }else{
-      await addNoticia(`🎲 Apuesta cerrada sin ganador en ${compName}: ${ap.condicion}`,"🎲");
+      await addNoticia(`🎲 Apuesta cerrada sin ganador: ${ap.condicion}`,"🎲");
     }
     setAiMsg("✅ Apuesta cerrada");
   };
@@ -5838,33 +5873,64 @@ function CompetenciaApuestasSetup({compId,compName,compColor,allTeams,setAiMsg})
     setAiMsg("✅ Apuesta eliminada");
   };
 
-  const metricaLabel={posicion:"Posición en tabla",puntos:"Puntos",gd:"Diferencia de goles",h2h:"Resultado directo (H2H)"};
+  const metricaLabel={posicion:"Posición en tabla",puntos:"Puntos (% si son ligas distintas)",gd:"Diferencia de goles",h2h:"Resultado directo (H2H)",custom:"✏️ Otro (personalizado)"};
+
+  // Calcula el progreso a mostrar para un equipo según la métrica
+  const calcularProgreso=(nombreEquipo,metrica,mismaLiga)=>{
+    const d=datosDeEquipo(nombreEquipo);
+    if(!d) return "—";
+    if(metrica==="posicion"){
+      const grupos=competenciaData?.[d.ligaId]?.grupos||[];
+      const ordenada=[...(grupos[0]?.tabla||[])].sort((a,b)=>b.pts-a.pts);
+      const idx=ordenada.findIndex(r=>r.equipo===nombreEquipo);
+      return idx>=0?`#${idx+1} (${d.ligaNombre})`:"—";
+    }
+    if(metrica==="puntos"){
+      if(mismaLiga) return `${d.fila.pts||0} pts`;
+      const pj=d.fila.pj||0;
+      const pct=pj>0?Math.round(((d.fila.pts||0)/(pj*3))*100):0;
+      return `${pct}% (${d.fila.pts||0}/${pj*3} pts · ${d.ligaNombre})`;
+    }
+    if(metrica==="gd"){
+      const gd=(d.fila.gf||0)-(d.fila.gc||0);
+      return `${gd>=0?"+":""}${gd} (${d.ligaNombre})`;
+    }
+    return "—";
+  };
 
   return(
     <div style={{display:"flex",flexDirection:"column",gap:10}}>
       <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>
-        Crea apuestas entre equipos con la condición que pactaron. El progreso se muestra en vivo según la métrica elegida; tú decides manualmente quién ganó al cerrarla.
+        Crea apuestas entre equipos de cualquier liga (Neo League, EC o Brave League). Si son de ligas distintas, "Puntos" se compara como % de puntos posibles. Tú decides manualmente quién ganó al cerrarla.
       </div>
 
       {!creando&&(
         <button onClick={()=>setCreando(true)}
-          style={{padding:"9px",borderRadius:8,background:compColor,color:"#fff",border:"none",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+          style={{padding:"9px",borderRadius:8,background:"#1a3a5c",color:"#fff",border:"none",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
           + Nueva apuesta
         </button>
       )}
 
       {creando&&(
-        <div style={{background:C.card,borderRadius:10,padding:"12px",border:`1.5px solid ${compColor}`,display:"flex",flexDirection:"column",gap:8}}>
+        <div style={{background:C.card,borderRadius:10,padding:"12px",border:"1.5px solid #1a3a5c",display:"flex",flexDirection:"column",gap:8}}>
           <div style={{display:"flex",gap:6}}>
             <select value={form.equipoA} onChange={e=>setForm({...form,equipoA:e.target.value})}
               style={{flex:1,padding:"7px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif"}}>
               <option value="">— Equipo A —</option>
-              {eligibles.map(t=><option key={t.uid||t.id} value={t.teamName}>{t.teamName}</option>)}
+              {ligasConEquipos.map(({comp,equipos})=>(
+                <optgroup key={comp.id} label={comp.name}>
+                  {equipos.map(t=><option key={t.uid||t.id} value={t.teamName}>{t.teamName}</option>)}
+                </optgroup>
+              ))}
             </select>
             <select value={form.equipoB} onChange={e=>setForm({...form,equipoB:e.target.value})}
               style={{flex:1,padding:"7px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif"}}>
               <option value="">— Equipo B —</option>
-              {eligibles.map(t=><option key={t.uid||t.id} value={t.teamName}>{t.teamName}</option>)}
+              {ligasConEquipos.map(({comp,equipos})=>(
+                <optgroup key={comp.id} label={comp.name}>
+                  {equipos.map(t=><option key={t.uid||t.id} value={t.teamName}>{t.teamName}</option>)}
+                </optgroup>
+              ))}
             </select>
           </div>
           <textarea value={form.condicion} onChange={e=>setForm({...form,condicion:e.target.value})} placeholder='Condición de la apuesta (ej: "El que termine más abajo paga la cena")'
@@ -5874,18 +5940,22 @@ function CompetenciaApuestasSetup({compId,compName,compColor,allTeams,setAiMsg})
             <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
               {Object.entries(metricaLabel).map(([key,label])=>(
                 <button key={key} onClick={()=>setForm({...form,metrica:key})}
-                  style={{padding:"5px 10px",borderRadius:20,border:`1.5px solid ${form.metrica===key?compColor:C.borderDark}`,background:form.metrica===key?compColor+"22":C.inputBg,color:form.metrica===key?compColor:C.textMid,fontSize:9,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                  style={{padding:"5px 10px",borderRadius:20,border:`1.5px solid ${form.metrica===key?"#1a3a5c":C.borderDark}`,background:form.metrica===key?"#1a3a5c22":C.inputBg,color:form.metrica===key?"#1a3a5c":C.textMid,fontSize:9,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
                   {label}
                 </button>
               ))}
             </div>
           </div>
+          {form.metrica==="custom"&&(
+            <input value={form.metricaCustom} onChange={e=>setForm({...form,metricaCustom:e.target.value})} placeholder='Nombre del formato (ej: "Quién llega más lejos en Copa")'
+              style={{padding:"8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif"}}/>
+          )}
           <div style={{display:"flex",gap:6}}>
             <button onClick={crearApuesta} disabled={saving}
               style={{flex:1,padding:"8px",borderRadius:7,background:"#27ae60",color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:saving?0.6:1}}>
               {saving?"Guardando…":"✅ Crear apuesta"}
             </button>
-            <button onClick={()=>{setCreando(false);setForm({equipoA:"",equipoB:"",condicion:"",metrica:"posicion"});}}
+            <button onClick={()=>{setCreando(false);setForm({equipoA:"",equipoB:"",condicion:"",metrica:"posicion",metricaCustom:""});}}
               style={{padding:"8px 14px",borderRadius:7,background:C.inputBg,color:C.textMid,border:`1px solid ${C.border}`,fontSize:11,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
               Cancelar
             </button>
@@ -5897,14 +5967,41 @@ function CompetenciaApuestasSetup({compId,compName,compColor,allTeams,setAiMsg})
         <div style={{textAlign:"center",color:C.textFaint,padding:20,fontFamily:"'DM Sans',sans-serif",fontSize:11}}>Sin apuestas todavía</div>
       )}
 
-      {apuestas.map(ap=>(
-        <div key={ap.id} style={{background:C.card,borderRadius:10,padding:"10px 12px",border:`1.5px solid ${ap.estado==="activa"?compColor:C.border}`,opacity:ap.estado==="cerrada"?0.7:1}}>
+      {apuestas.map(ap=>{
+        const dA=datosDeEquipo(ap.equipoA);
+        const dB=datosDeEquipo(ap.equipoB);
+        const mismaLiga=dA&&dB&&dA.ligaId===dB.ligaId;
+        return(
+        <div key={ap.id} style={{background:C.card,borderRadius:10,padding:"10px 12px",border:`1.5px solid ${ap.estado==="activa"?"#1a3a5c":C.border}`,opacity:ap.estado==="cerrada"?0.7:1}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:6,marginBottom:6}}>
             <span style={{fontSize:12,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{ap.equipoA} 🆚 {ap.equipoB}</span>
             <button onClick={()=>eliminarApuesta(ap.id)} style={{background:"none",border:"none",color:"#c0392b",cursor:"pointer",fontSize:12}}>🗑️</button>
           </div>
           <div style={{fontSize:11,color:C.textMid,fontFamily:"'DM Sans',sans-serif",marginBottom:8,fontStyle:"italic"}}>"{ap.condicion}"</div>
-          <div style={{fontSize:9,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginBottom:8}}>Métrica: {metricaLabel[ap.metrica]||ap.metrica}</div>
+          <div style={{fontSize:9,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginBottom:8}}>Métrica: {ap.metrica==="custom"?ap.metricaCustomLabel:metricaLabel[ap.metrica]}</div>
+
+          {ap.metrica!=="custom"&&ap.metrica!=="h2h"&&(
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginBottom:8,fontSize:11,fontFamily:"'DM Sans',sans-serif"}}>
+              <span style={{fontWeight:700,color:C.text}}>{ap.equipoA}: <span style={{color:"#1a3a5c",fontWeight:800}}>{calcularProgreso(ap.equipoA,ap.metrica,mismaLiga)}</span></span>
+              <span style={{fontWeight:700,color:C.text}}>{ap.equipoB}: <span style={{color:"#1a3a5c",fontWeight:800}}>{calcularProgreso(ap.equipoB,ap.metrica,mismaLiga)}</span></span>
+            </div>
+          )}
+
+          {ap.metrica==="custom"&&(
+            <div style={{display:"flex",gap:6,marginBottom:8}}>
+              <div style={{flex:1}}>
+                <div style={{fontSize:9,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginBottom:3}}>{ap.equipoA}</div>
+                <input value={ap.progresoCustomA||""} onChange={e=>actualizarProgresoCustom(ap.id,"progresoCustomA",e.target.value)} onBlur={guardarProgresoCustom} placeholder="Progreso actual"
+                  style={{width:"100%",padding:"6px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif"}}/>
+              </div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:9,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginBottom:3}}>{ap.equipoB}</div>
+                <input value={ap.progresoCustomB||""} onChange={e=>actualizarProgresoCustom(ap.id,"progresoCustomB",e.target.value)} onBlur={guardarProgresoCustom} placeholder="Progreso actual"
+                  style={{width:"100%",padding:"6px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif"}}/>
+              </div>
+            </div>
+          )}
+
           {ap.estado==="cerrada"?(
             <div style={{fontSize:11,fontWeight:800,color:"#27ae60",fontFamily:"'DM Sans',sans-serif"}}>
               {ap.ganador?`🏆 Ganó: ${ap.ganador}`:"Cerrada sin ganador"}
@@ -5926,7 +6023,8 @@ function CompetenciaApuestasSetup({compId,compName,compColor,allTeams,setAiMsg})
             </div>
           )}
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -6374,7 +6472,7 @@ function CompetenciasModal({allTeams,onClose}){
 
           {/* Vista: apuestas entre equipos */}
           {selected&&subTab==="apuestas"&&(
-            <CompetenciaApuestasSetup compId={selected} compName={activeComp.name} compColor={activeComp.color} allTeams={allTeams} setAiMsg={setAiMsg}/>
+            <CompetenciaApuestasSetup allTeams={allTeams} setAiMsg={setAiMsg}/>
           )}
         </div>
       </div>
@@ -6396,7 +6494,8 @@ function CompVistaPublica({comp,competenciaData,onClose}){
   useEffect(()=>{
     const unsub1=onSnapshot(doc(db,"config","apuestas"),snap=>{
       const all=snap.exists()?snap.data():{};
-      setApuestasComp((all.lista||[]).filter(a=>a.compId===compId));
+      const equiposDeEstaComp=(grupos||[]).flatMap(g=>g.equipos||[]);
+      setApuestasComp((all.lista||[]).filter(a=>equiposDeEstaComp.includes(a.equipoA)||equiposDeEstaComp.includes(a.equipoB)));
     });
     const unsub2=onSnapshot(doc(db,"config","h2hHistorial"),snap=>{
       const all=snap.exists()?snap.data():{};
@@ -6410,11 +6509,23 @@ function CompVistaPublica({comp,competenciaData,onClose}){
       const fila=(g.tabla||[]).find(r=>r.equipo===nombre);
       if(fila) return fila;
     }
+    // Busca en otras ligas (Neo/EC/Brave League) si no se encontró en esta competencia
+    for(const ligaId of ["liga1","liga2","ascenso"]){
+      const otrosGrupos=competenciaData?.[ligaId]?.grupos||[];
+      const fila=(otrosGrupos[0]?.tabla||[]).find(r=>r.equipo===nombre);
+      if(fila) return fila;
+    }
     return null;
   };
   const posicionDeEquipo=(nombre)=>{
     for(const g of grupos){
       const ordenada=[...(g.tabla||[])].sort((a,b)=>b.pts-a.pts);
+      const idx=ordenada.findIndex(r=>r.equipo===nombre);
+      if(idx>=0) return idx+1;
+    }
+    for(const ligaId of ["liga1","liga2","ascenso"]){
+      const otrosGrupos=competenciaData?.[ligaId]?.grupos||[];
+      const ordenada=[...(otrosGrupos[0]?.tabla||[])].sort((a,b)=>b.pts-a.pts);
       const idx=ordenada.findIndex(r=>r.equipo===nombre);
       if(idx>=0) return idx+1;
     }
