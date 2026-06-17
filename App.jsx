@@ -25,6 +25,20 @@ function normPlayer(p){
   return{...p,pos,primaryPos:primary,secondaryPos:parts.slice(1).join('/')||null};
 }
 
+// ─── FORMATO DE DINERO (131150000 → 131.2M) ─────────────────────────
+function fmtPresu(v){
+  if(v===undefined||v===null||v==="") return "";
+  const s=String(v).trim().replace(/,/g,"");
+  let n;
+  if(s.toUpperCase().endsWith("M")) n=parseFloat(s)*1000000;
+  else if(s.toUpperCase().endsWith("K")) n=parseFloat(s)*1000;
+  else n=Number(s);
+  if(!isFinite(n)||n===0) return String(v);
+  if(Math.abs(n)>=1000000){const m=n/1000000;return (m===Math.round(m)?String(m):m.toFixed(1))+"M";}
+  if(Math.abs(n)>=1000){const k=n/1000;return (k===Math.round(k)?String(k):k.toFixed(1))+"K";}
+  return String(n);
+}
+
 // ─── COLORES ──────────────────────────────────────────────────────────────────
 // ─── PALETA REFINADA · oro editorial premium (cálido, no lima) ───────────────
 const COLORS_LIGHT = {
@@ -284,9 +298,11 @@ function Avatar({name,size=50,colorId,overall}){
   const color=getTeamColor(colorId);
   const label=overall?String(overall):i;
   const fontSize=overall?size*0.36:size*0.32;
+  const elite=overall&&Number(overall)>=83;
   return(
-    <div style={{width:size,height:size,borderRadius:"50%",background:`linear-gradient(135deg,${color.dark},${color.bg})`,border:"2.5px solid rgba(255,255,255,0.9)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 3px 10px rgba(0,0,0,0.15)",flexShrink:0}}>
-      <span style={{fontSize,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:overall?0:0.5}}>{label}</span>
+    <div style={{position:"relative",width:size,height:size,borderRadius:"50%",background:`linear-gradient(135deg,${color.dark},${color.bg})`,border:elite?"2.5px solid #E9C45E":"2.5px solid rgba(255,255,255,0.9)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:elite?"0 3px 14px rgba(233,196,94,0.5)":"0 3px 10px rgba(0,0,0,0.15)",flexShrink:0,overflow:"hidden"}}>
+      <div style={{position:"absolute",top:0,left:0,right:0,height:"52%",background:"linear-gradient(180deg,rgba(255,255,255,0.30),rgba(255,255,255,0))",pointerEvents:"none"}}/>
+      <span style={{position:"relative",fontSize,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:overall?0:0.5,textShadow:"0 1px 2px rgba(0,0,0,0.35)"}}>{label}</span>
     </div>
   );
 }
@@ -571,7 +587,7 @@ function PlayerSpot({pos,player,readOnly,onClick,onRemove,isDragOver,onDragOver,
               </div>
             )}
           </div>
-            <div style={{background:"rgba(26,20,8,0.78)",backdropFilter:"blur(4px)",borderRadius:5,padding:"2px 7px",textAlign:"center",maxWidth:72}}
+            <div style={{background:"rgba(26,20,8,0.82)",backdropFilter:"blur(4px)",borderRadius:5,padding:"2px 7px",textAlign:"center",maxWidth:72,border:"1px solid rgba(233,196,94,0.38)",boxShadow:"0 2px 6px rgba(0,0,0,0.3)"}}
             onClick={readOnly?undefined:e=>{e.stopPropagation();setShowMenu(v=>!v);}}>
             <div style={{color:"#fff",fontSize:8,fontWeight:800,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",letterSpacing:0.3,fontFamily:"'Bebas Neue',sans-serif"}}>{player.name.split(" ").slice(-1)[0].toUpperCase()}</div>
             <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:2}}>
@@ -647,7 +663,7 @@ function Bench({subs,readOnly,onClickSub,onDragStart,teamColor}){
       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
         <div style={{width:3,height:16,background:C.accent,borderRadius:2}}/>
         <span style={{fontSize:13,fontWeight:800,color:C.text,letterSpacing:1.5,fontFamily:"'Bebas Neue',sans-serif"}}>BANCA</span>
-        <span style={{marginLeft:"auto",fontSize:10,color:"#fff",background:accent,padding:"2px 8px",borderRadius:20,fontWeight:700,fontFamily:"'DM Sans',sans-serif",border:`1px solid ${accentDark}`}}>{(subs||[]).filter(Boolean).length}/7</span>
+        <span style={{marginLeft:"auto",fontSize:10,color:"#1a1205",background:C.accent,padding:"2px 9px",borderRadius:20,fontWeight:800,fontFamily:"'DM Sans',sans-serif",border:`1px solid ${C.accentDark}`,boxShadow:`0 1px 6px ${C.accentLight}`}}>{(subs||[]).filter(Boolean).length}/7</span>
         {!readOnly&&<span style={{fontSize:9,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Toca para asignar</span>}
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:6}}>
@@ -4350,7 +4366,7 @@ function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial}){
         <div style={{textAlign:"center",zIndex:1}}>
           <div style={{fontSize:22,fontWeight:900,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>{teamData?.teamName}</div>
           <div style={{fontSize:11,color:"rgba(255,255,255,0.65)",fontFamily:"'DM Sans',sans-serif",marginTop:2}}>
-            {comps.length>0?`${comps.length} competicion${comps.length>1?"es":""}  activa${comps.length>1?"s":""}`:""} · {teamData?.presupuesto?`💰 ${teamData.presupuesto}`:""}
+            {comps.length>0?`${comps.length} competicion${comps.length>1?"es":""}  activa${comps.length>1?"s":""}`:""} · {teamData?.presupuesto?`💰 ${fmtPresu(teamData.presupuesto)}`:""}
           </div>
         </div>
       </div>
@@ -7160,7 +7176,7 @@ function MainApp({user,isAdmin,onLogout}){
         <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
           {saving&&<span style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>Guardando…</span>}
           {saved&&<span style={{fontSize:10,color:"#27ae60",fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>✓</span>}
-          {teamData.presupuesto&&<span style={{fontSize:11,fontWeight:800,color:C.accent,background:C.goldLight,padding:"3px 8px",borderRadius:8,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:0.5,border:`1px solid ${TA.accent}44`}}>💰 {teamData.presupuesto}</span>}
+          {teamData.presupuesto&&<span style={{fontSize:11,fontWeight:800,color:C.accent,background:C.goldLight,padding:"3px 8px",borderRadius:8,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:0.5,border:`1px solid ${TA.accent}44`}}>💰 {fmtPresu(teamData.presupuesto)}</span>}
           <span style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{filled}/11</span>
           {btn(showLineupPanel,()=>{setShowLineupPanel(v=>!v);setShowFormations(false);setShowSettings(false);setShowHamburger(false);},`${activeLineup?.name} ▾`)}
           <button onClick={()=>{if(!isSel){setShowFormations(v=>!v);setShowLineupPanel(false);setShowSettings(false);setShowHamburger(false);}}}
