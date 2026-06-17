@@ -7671,16 +7671,6 @@ function MainApp({user,isAdmin,onLogout}){
                         <div onClick={()=>{setShowPool(true);setShowAdminMenu(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:C.text}}>
                           🌍 <span>Pool</span>
                         </div>
-                        <div onClick={async()=>{
-                          setShowAdminMenu(false);
-                          if(!window.confirm(`¿Activar el Mundial para los ${allTeams.length} equipos?`)) return;
-                          for(const t of allTeams){
-                            await updateDoc(doc(db,"teams",t.uid||t.id),{betaAccess:true});
-                          }
-                          alert("✅ Mundial activado para todos");
-                        }} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:"#9b59b6"}}>
-                          🌍 <span>Activar Mundial para todos</span>
-                        </div>
                         <div onClick={()=>{setShowSelecciones(true);setShowAdminMenu(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:"#2980b9"}}>
                           🏳️ <span>Selecciones</span>
                         </div>
@@ -7710,26 +7700,6 @@ function MainApp({user,isAdmin,onLogout}){
                           alert(`✅ ${fixed} equipos limpiados.`);
                         }} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:"#e67e22"}}>
                           🧹 <span>Limpiar duplicados</span>
-                        </div>
-                        <div onClick={async()=>{
-                          setShowAdminMenu(false);
-                          if(!window.confirm("¿Crear alineaciones faltantes para todos los equipos según sus competencias actuales?")) return;
-                          let fixed=0,creadas=0;
-                          for(const t of allTeams){
-                            const comps=(t.competencias||[]).map(id=>COMPETENCIAS_AVAILABLE.find(c=>c.id===id)).filter(Boolean);
-                            const lineups=[...(t.lineups||[])];
-                            let changed=false;
-                            for(const comp of comps){
-                              if(!lineups.some(l=>l.name===comp.lineupName)){
-                                lineups.push({id:`${comp.id}_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,name:comp.lineupName,formation:"4-3-3",starters:{},subs:Array(7).fill(null),code:""});
-                                changed=true;creadas++;
-                              }
-                            }
-                            if(changed){await updateDoc(doc(db,"teams",t.id||t.uid),{lineups});fixed++;}
-                          }
-                          alert(`✅ ${creadas} alineaciones creadas en ${fixed} equipos.`);
-                        }} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:"#16a085"}}>
-                          🛠️ <span>Crear alineaciones faltantes</span>
                         </div>
                         <div onClick={async()=>{
                           setShowAdminMenu(false);
