@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, Fragment } from "react";
 import { auth, db } from "./firebase";
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile } from "firebase/auth";
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile, sendPasswordResetEmail } from "firebase/auth";
 import { doc, getDoc, setDoc, updateDoc, onSnapshot, collection, getDocs, deleteDoc, addDoc, serverTimestamp, deleteField } from "firebase/firestore";
 
 // Expose db for admin import scripts
@@ -193,6 +193,8 @@ function AuthScreen({onAuth}){
   const[confirmPw,setConfirmPw]=useState("");
   const[loading,setLoading]=useState(false);
   const[error,setError]=useState("");
+  const[resetSent,setResetSent]=useState(false);
+  const[resetLoading,setResetLoading]=useState(false);
 
   const handleSubmit=async()=>{
     setError("");setLoading(true);
@@ -217,6 +219,20 @@ function AuthScreen({onAuth}){
     setLoading(false);
   };
 
+  const handleForgotPassword=async()=>{
+    setError("");
+    if(!email.trim()){setError("Escribe tu correo electrónico arriba primero.");return;}
+    setResetLoading(true);
+    try{
+      await sendPasswordResetEmail(auth,email.trim());
+      setResetSent(true);
+    }catch(e){
+      const msgs={"auth/invalid-email":"Email inválido.","auth/user-not-found":"No existe una cuenta con ese correo."};
+      setError(msgs[e.code]||"Error: "+e.message);
+    }
+    setResetLoading(false);
+  };
+
   const inp={width:"100%",padding:"11px 14px",borderRadius:10,border:`1.5px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:14,outline:"none",fontFamily:"'DM Sans',sans-serif",marginBottom:12};
 
   return(
@@ -230,7 +246,7 @@ function AuthScreen({onAuth}){
         </div>
         <div style={{display:"flex",background:C.inputBg,borderRadius:12,padding:4,marginBottom:24,border:`1px solid ${C.border}`}}>
           {["login","register"].map(m=>(
-            <button key={m} onClick={()=>{setMode(m);setError("");}}
+            <button key={m} onClick={()=>{setMode(m);setError("");setResetSent(false);}}
               style={{flex:1,padding:"9px 0",borderRadius:9,border:"none",background:mode===m?C.accent:"transparent",color:mode===m?"#fff":C.textMid,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",transition:"all .2s"}}>
               {m==="login"?"Iniciar sesión":"Registrarse"}
             </button>
@@ -247,6 +263,18 @@ function AuthScreen({onAuth}){
         <input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="correo@ejemplo.com" style={inp} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.borderDark} onKeyDown={e=>e.key==="Enter"&&handleSubmit()}/>
         <label style={{fontSize:11,fontWeight:600,color:C.textLight,display:"block",marginBottom:5,textTransform:"uppercase",letterSpacing:0.5,fontFamily:"'DM Sans',sans-serif"}}>Contraseña</label>
         <input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="Mínimo 6 caracteres" style={inp} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.borderDark} onKeyDown={e=>e.key==="Enter"&&handleSubmit()}/>
+        {mode==="login"&&(
+          <div style={{textAlign:"right",marginTop:-8,marginBottom:6}}>
+            {resetSent?(
+              <span style={{fontSize:11,color:"#1e8449",fontFamily:"'DM Sans',sans-serif",fontWeight:600}}>✓ Correo de recuperación enviado</span>
+            ):(
+              <button onClick={handleForgotPassword} disabled={resetLoading}
+                style={{background:"none",border:"none",color:C.textLight,fontSize:11,fontFamily:"'DM Sans',sans-serif",cursor:"pointer",textDecoration:"underline",padding:0,opacity:resetLoading?0.6:1}}>
+                {resetLoading?"Enviando…":"¿Olvidaste tu contraseña?"}
+              </button>
+            )}
+          </div>
+        )}
         {mode==="register"&&(
           <><label style={{fontSize:11,fontWeight:600,color:C.textLight,display:"block",marginBottom:5,textTransform:"uppercase",letterSpacing:0.5,fontFamily:"'DM Sans',sans-serif"}}>Confirmar contraseña</label>
           <input type="password" value={confirmPw} onChange={e=>setConfirmPw(e.target.value)} placeholder="Repite la contraseña" style={{...inp,marginBottom:0}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.borderDark} onKeyDown={e=>e.key==="Enter"&&handleSubmit()}/></>
