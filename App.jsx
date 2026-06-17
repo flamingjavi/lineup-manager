@@ -313,6 +313,168 @@ function Avatar({name,size=50,colorId,overall}){
   );
 }
 
+// ─── RESUMEN DEL EQUIPO · Valoración · Química · Logros · Recomendación ───────
+function EquipoResumen({lineup,squad,positions,mercadoAbierto,isSel}){
+  const[open,setOpen]=useState(true);
+  if(isSel||!lineup) return null;
+  const getFull=base=>(squad||[]).find(s=>s.name===base?.name)||base||{};
+  const starterEntries=Object.entries(lineup.starters||{}).filter(([k,v])=>v);
+  const starters=starterEntries.map(([k,v])=>getFull(v));
+  if(starters.length<3) return null;
+  const withOv=starters.filter(p=>p.overall);
+  const avg=arr=>arr.length?Math.round(arr.reduce((s,p)=>s+Number(p.overall||0),0)/arr.length):0;
+  const getP=p=>String(p.primaryPos||p.pos||"").split("/")[0].toUpperCase().trim();
+  const DEF=["POR","DFC","DFD","DFI"],MED=["MCD","MC","MCO","MD","MI","PIV"],ATA=["ED","EI","DC","SD","DEL","EXT"];
+  const defP=withOv.filter(p=>DEF.includes(getP(p)));
+  const medP=withOv.filter(p=>MED.includes(getP(p)));
+  const ataP=withOv.filter(p=>ATA.includes(getP(p)));
+  const media=avg(withOv),ataque=avg(ataP),medio=avg(medP),defensa=avg(defP);
+
+  // Química
+  const labelById={};(positions||[]).forEach(p=>labelById[p.id]=p.label);
+  const countryCount={};starters.forEach(p=>{const c=(p.country||"").trim().toLowerCase();if(c)countryCount[c]=(countryCount[c]||0)+1;});
+  let chemSum=0,inPosCount=0,linkedCount=0;
+  starterEntries.forEach(([k,v])=>{
+    const full=getFull(v);let c=4;
+    const slot=(labelById[k]||"").toUpperCase();
+    const posList=String(full.primaryPos||full.pos||"").toUpperCase().split("/").map(s=>s.trim());
+    if(slot&&posList.includes(slot)){c+=4;inPosCount++;}
+    const cc=(full.country||"").trim().toLowerCase();
+    if(cc&&countryCount[cc]>1){c+=2;linkedCount++;}
+    chemSum+=Math.min(c,10);
+  });
+  const chem=starters.length?Math.round((chemSum/(starters.length*10))*100):0;
+  const RC=2*Math.PI*34;
+
+  // Logros
+  const oroCount=withOv.filter(p=>Number(p.overall)>=80).length;
+  const maxOv=withOv.length?Math.max(...withOv.map(p=>Number(p.overall))):0;
+  const logros=[
+    {icon:"🏆",t:"Plantilla de oro",d:"11 titulares ≥ 80 media",cur:oroCount,goal:11,suf:""},
+    {icon:"🧩",t:"Química perfecta",d:"Química del equipo ≥ 90",cur:chem,goal:90,suf:""},
+    {icon:"⭐",t:"Estrella mundial",d:"Un titular ≥ 88 media",cur:maxOv,goal:88,suf:""},
+  ];
+
+  // Recomendación de fichaje (solo con mercado abierto)
+  let reco=null;
+  if(mercadoAbierto){
+    const lineas=[
+      {lbl:"la defensa",v:defensa,players:defP},
+      {lbl:"el mediocampo",v:medio,players:medP},
+      {lbl:"el ataque",v:ataque,players:ataP},
+    ].filter(l=>l.players.length);
+    if(lineas.length){
+      const weak=[...lineas].sort((a,b)=>a.v-b.v)[0];
+      const worst=[...withOv].sort((a,b)=>Number(a.overall)-Number(b.overall))[0];
+      reco={linea:weak.lbl,media:weak.v,player:worst};
+    }
+  }
+
+  const tile=(lbl,val,strong)=>(
+    <div style={{flex:1,background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:13,padding:"11px 8px",textAlign:"center"}}>
+      <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:30,lineHeight:1,color:strong?C.accent:C.text}}>{val||"—"}</div>
+      <div style={{fontSize:9,fontWeight:800,color:C.textLight,letterSpacing:0.6,marginTop:3,textTransform:"uppercase",fontFamily:"'DM Sans',sans-serif"}}>{lbl}</div>
+    </div>
+  );
+  const bar=(lbl,val)=>(
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:C.textLight,fontWeight:700,marginBottom:3,fontFamily:"'DM Sans',sans-serif"}}><span>{lbl}</span><span>{val||"—"}</span></div>
+      <div style={{height:6,background:C.border,borderRadius:3,overflow:"hidden"}}><div style={{width:`${Math.min(val,99)}%`,height:"100%",background:C.accentGrad,borderRadius:3}}/></div>
+    </div>
+  );
+
+  return(
+    <div style={{position:"relative",borderBottom:`1px solid ${C.border}`,background:C.card}}>
+      <button onClick={()=>setOpen(v=>!v)}
+        style={{width:"100%",padding:"8px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",background:"transparent",border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+        <span style={{fontSize:11,fontWeight:800,color:C.text,display:"flex",alignItems:"center",gap:7}}>
+          📊 Resumen del equipo
+          <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:15,color:C.accent,letterSpacing:0.5}}>· {media||"—"} MEDIA</span>
+          <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:15,color:chem>=85?"#27ae60":chem>=70?C.accent:"#e67e22",letterSpacing:0.5}}>· {chem} QUÍM.</span>
+        </span>
+        <span style={{fontSize:11,color:C.textLight}}>{open?"▲":"▼"}</span>
+      </button>
+      {open&&(
+        <div style={{padding:"2px 16px 16px",display:"flex",flexDirection:"column",gap:14}}>
+
+          {/* Valoración */}
+          <div>
+            <div style={{fontSize:9,fontWeight:800,color:C.textFaint,letterSpacing:1,marginBottom:7,textTransform:"uppercase",fontFamily:"'DM Sans',sans-serif"}}>Valoración del once</div>
+            <div style={{display:"flex",gap:8,marginBottom:10}}>
+              {tile("Media",media,true)}{tile("Ataque",ataque)}{tile("Medio",medio)}{tile("Defensa",defensa)}
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:7}}>
+              {bar("Ataque",ataque)}{bar("Mediocampo",medio)}{bar("Defensa",defensa)}
+            </div>
+          </div>
+
+          {/* Química */}
+          <div>
+            <div style={{fontSize:9,fontWeight:800,color:C.textFaint,letterSpacing:1,marginBottom:7,textTransform:"uppercase",fontFamily:"'DM Sans',sans-serif"}}>Química del equipo</div>
+            <div style={{display:"flex",alignItems:"center",gap:18}}>
+              <div style={{position:"relative",width:84,height:84,flexShrink:0}}>
+                <svg width="84" height="84" viewBox="0 0 84 84" style={{transform:"rotate(-90deg)"}}>
+                  <circle cx="42" cy="42" r="34" fill="none" stroke={C.border} strokeWidth="8"/>
+                  <circle cx="42" cy="42" r="34" fill="none" stroke={C.accent} strokeWidth="8" strokeLinecap="round" strokeDasharray={RC} strokeDashoffset={RC*(1-chem/100)}/>
+                </svg>
+                <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
+                  <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:28,lineHeight:1,color:C.accent}}>{chem}</span>
+                  <span style={{fontSize:7,fontWeight:800,color:C.textLight,letterSpacing:1,fontFamily:"'DM Sans',sans-serif"}}>QUÍMICA</span>
+                </div>
+              </div>
+              <div style={{flex:1,display:"flex",flexDirection:"column",gap:8}}>
+                <div style={{display:"flex",alignItems:"center",gap:8}}><span style={{width:8,height:8,borderRadius:"50%",background:inPosCount>=8?"#27ae60":inPosCount>=5?C.accent:"#e67e22",flexShrink:0}}/><span style={{fontSize:11,color:C.textMid,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>{inPosCount}/{starters.length} en su posición natural</span></div>
+                <div style={{display:"flex",alignItems:"center",gap:8}}><span style={{width:8,height:8,borderRadius:"50%",background:linkedCount>=4?"#27ae60":linkedCount>=2?C.accent:"#e67e22",flexShrink:0}}/><span style={{fontSize:11,color:C.textMid,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>{linkedCount} con compatriotas en el once</span></div>
+                <div style={{fontSize:10,color:C.textLight,lineHeight:1.4,fontFamily:"'DM Sans',sans-serif"}}>Coloca jugadores en su posición y junta compatriotas para subir la química.</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Logros */}
+          <div>
+            <div style={{fontSize:9,fontWeight:800,color:C.textFaint,letterSpacing:1,marginBottom:7,textTransform:"uppercase",fontFamily:"'DM Sans',sans-serif"}}>Logros</div>
+            <div style={{display:"flex",flexDirection:"column",gap:7}}>
+              {logros.map((l,i)=>{const done=l.cur>=l.goal;return(
+                <div key={i} style={{display:"flex",alignItems:"center",gap:11,padding:"9px 11px",background:C.inputBg,border:`1px solid ${done?C.accent:C.border}`,borderRadius:11,opacity:done?1:0.92}}>
+                  <div style={{width:34,height:34,borderRadius:9,background:done?C.accentGrad:C.border,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0,boxShadow:done?C.accentShadow:"none"}}>{l.icon}</div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:12,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{l.t}</div>
+                    <div style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{l.d}</div>
+                  </div>
+                  {done
+                    ?<span style={{fontSize:14,color:C.accent,fontWeight:800}}>✓</span>
+                    :<span style={{fontSize:10,fontWeight:800,color:C.textLight,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:0.5}}>{l.cur}/{l.goal}</span>}
+                </div>
+              );})}
+            </div>
+          </div>
+
+          {/* Recomendación de fichaje · solo con mercado abierto */}
+          {reco&&(
+            <div>
+              <div style={{fontSize:9,fontWeight:800,color:C.textFaint,letterSpacing:1,marginBottom:7,textTransform:"uppercase",fontFamily:"'DM Sans',sans-serif"}}>Recomendación de fichaje</div>
+              <div style={{position:"relative",borderRadius:13,overflow:"hidden",background:C.dark?"linear-gradient(135deg,#1a1208,#2a1f0a)":"linear-gradient(135deg,#fff8e6,#fbefc9)",border:`1px solid ${C.accent}`,padding:"13px 14px"}}>
+                <div style={{position:"absolute",top:0,right:0,background:C.accentGrad,color:C.accentInk,fontSize:8.5,fontWeight:800,padding:"3px 9px",borderRadius:"0 0 0 9px",letterSpacing:0.5,fontFamily:"'DM Sans',sans-serif"}}>MERCADO ABIERTO</div>
+                <div style={{fontSize:12,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif",paddingRight:90}}>Refuerza <span style={{color:C.accentDark}}>{reco.linea}</span> — tu línea más débil ({reco.media} media).</div>
+                {reco.player&&reco.player.name&&(
+                  <div style={{display:"flex",alignItems:"center",gap:10,marginTop:11,paddingTop:11,borderTop:`1px solid ${C.accent}33`}}>
+                    <div style={{width:40,height:40,borderRadius:"50%",background:C.accentGrad,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Bebas Neue',sans-serif",fontSize:16,color:C.accentInk,flexShrink:0,boxShadow:C.accentShadow}}>{reco.player.overall||"?"}</div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:9,fontWeight:800,color:C.textLight,letterSpacing:0.5,fontFamily:"'DM Sans',sans-serif"}}>PRIORIDAD DE REFUERZO</div>
+                      <div style={{fontSize:13,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{reco.player.name} <span style={{color:C.textLight,fontWeight:600}}>· {getP(reco.player)}</span></div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── ADD PLAYER MODAL ─────────────────────────────────────────────────────────
 function AddPlayerModal({onAdd,onClose,currentCount,pool,teamName,editPlayer,onSaveEdit,isAdmin}){
   const isEdit=!!editPlayer;
@@ -7629,6 +7791,9 @@ function MainApp({user,isAdmin,onLogout}){
           )}
         </div>
       )}
+
+      {/* 📊 Resumen del equipo · Valoración · Química · Logros · Recomendación */}
+      <EquipoResumen lineup={activeLineup} squad={squad} positions={positions} mercadoAbierto={mercadoAbierto} isSel={isSel}/>
 
       {/* MAINTENANCE STRIP - admin only */}
       {isAdmin&&(
