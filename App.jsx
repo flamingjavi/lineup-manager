@@ -32,7 +32,7 @@ const COLORS_LIGHT = {
   card:"#fffdf8",        // tarjeta marfil
   border:"#e8e2d4",      // borde hairline cálido
   borderDark:"#d6cfbc",
-  accent:"#C9A227",      // oro metálico refinado (antes #F5C518 lima)
+  accent:"#C9A227",      // oro metálico refinado (cálido)
   accentDark:"#a8841d",
   accentLight:"rgba(201,162,39,0.14)",
   text:"#1a1813",        // casi-negro cálido
@@ -50,7 +50,7 @@ const COLORS_DARK = {
   card:"#18161a",
   border:"#2a2722",
   borderDark:"#3a352c",
-  accent:"#E9C45E",      // oro cálido brillante (antes #FFD700 amarillo puro)
+  accent:"#E9C45E",      // oro cálido brillante
   accentDark:"#cda12f",
   accentLight:"rgba(233,196,94,0.12)",
   text:"#f4f0e6",        // blanco cálido
@@ -580,8 +580,8 @@ function PlayerSpot({pos,player,readOnly,onClick,onRemove,isDragOver,onDragOver,
                 const allPlayerPos=player.pos?.split("/")||[];
                 const isOutOfPos=!allPlayerPos.includes(pos.label)&&playerPrimaryPos!==pos.label;
                 return(<>
-                  {isOutOfPos&&<span style={{fontSize:7,color:"#FFD700"}}>⚠</span>}
-                  <span style={{color:isOutOfPos?"#FFD700":C.gold,fontSize:7.5,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>{pos.label}</span>
+                  {isOutOfPos&&<span style={{fontSize:7,color:"#E9C45E"}}>⚠</span>}
+                  <span style={{color:isOutOfPos?"#E9C45E":C.gold,fontSize:7.5,fontWeight:600,fontFamily:"'DM Sans',sans-serif"}}>{pos.label}</span>
                 </>);
               })()}
             </div>
@@ -655,7 +655,7 @@ function Bench({subs,readOnly,onClickSub,onDragStart,teamColor}){
           <div key={i} draggable={!!sub&&!readOnly} onDragStart={()=>{onDragStart&&onDragStart(i);}}
             onClick={readOnly?undefined:()=>onClickSub&&onClickSub(i)}
             style={{display:"flex",flexDirection:"column",alignItems:"center",background:sub?C.inputBg:C.bg,border:`1px solid ${sub?C.borderDark:C.border}`,borderRadius:10,padding:"8px 2px 7px",cursor:readOnly?"default":"pointer",transition:"all .15s",userSelect:"none",gap:4}}
-            onMouseEnter={e=>{if(!readOnly){e.currentTarget.style.background="#f0e5c0";e.currentTarget.style.borderColor=C.accent;}}}
+            onMouseEnter={e=>{if(!readOnly){e.currentTarget.style.background=C.accentLight;e.currentTarget.style.borderColor=C.accent;}}}
             onMouseLeave={e=>{e.currentTarget.style.background=sub?C.inputBg:C.bg;e.currentTarget.style.borderColor=sub?C.borderDark:C.border;}}>
             {sub?(
               <>
@@ -2087,7 +2087,7 @@ function SeleccionesModal({onClose,lockedCountry,isAdmin,allSels:allSelsProp}){
 
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:2000,display:"flex",alignItems:"stretch",justifyContent:"center",backdropFilter:"blur(8px)"}} onClick={onClose}>
-      <div style={{background:C.card,width:"100%",maxWidth:520,display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 0 60px rgba(0,0,0,0.3)"}} onClick={e=>e.stopPropagation()}>
+      <div style={{background:C.card,width:"100%",maxWidth:520,display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 28px 80px rgba(20,16,8,0.45)"}} onClick={e=>e.stopPropagation()}>
         <div style={{padding:"12px 16px",background:"#1a3a5c",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
           <span style={{fontSize:14,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>{lockedCountry?"🏳️ MI SELECCIÓN":"🏳️ SELECCIONES NACIONALES"}</span>
           {saving&&<span style={{fontSize:10,color:"#f39c12",fontFamily:"'DM Sans',sans-serif"}}>Guardando…</span>}
@@ -2577,7 +2577,7 @@ function MercadoModal({onClose,teamData,saveTeam,allTeams,embedded=false}){
 
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:2000,display:"flex",alignItems:"stretch",justifyContent:"center",backdropFilter:"blur(8px)"}} onClick={onClose}>
-      <div style={{background:C.card,width:"100%",maxWidth:520,display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 0 60px rgba(0,0,0,0.3)"}} onClick={e=>e.stopPropagation()}>
+      <div style={{background:C.card,width:"100%",maxWidth:520,display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 28px 80px rgba(20,16,8,0.45)"}} onClick={e=>e.stopPropagation()}>
         <div style={{padding:"12px 16px",background:"#1a3a5c",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
           <span style={{fontSize:14,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>📊 CALCULADORA DE MERCADO</span>
           {done&&<span style={{fontSize:10,background:"#27ae60",color:"#fff",padding:"2px 8px",borderRadius:20,fontFamily:"'DM Sans',sans-serif",fontWeight:700}}>FINALIZADO</span>}
@@ -3061,7 +3061,7 @@ function TransferCenter({onClose,user,isAdmin,teamData,allTeams,pool,embedded=fa
 
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:2000,display:"flex",alignItems:"stretch",justifyContent:"center",backdropFilter:"blur(8px)"}} onClick={onClose}>
-      <div style={{background:C.card,width:"100%",maxWidth:520,display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 0 60px rgba(0,0,0,0.3)"}} onClick={e=>e.stopPropagation()}>
+      <div style={{background:C.card,width:"100%",maxWidth:520,display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 28px 80px rgba(20,16,8,0.45)"}} onClick={e=>e.stopPropagation()}>
         <div style={{padding:"12px 16px",background:"#1a3a5c",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
           <span style={{fontSize:14,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>🔄 MERCADO DE TRANSFERENCIAS</span>
           <button onClick={onClose} style={{marginLeft:"auto",background:"rgba(255,255,255,0.15)",border:"none",borderRadius:"50%",width:28,height:28,color:"#fff",cursor:"pointer",fontSize:15,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
@@ -3816,7 +3816,7 @@ function MundialModal({onClose,user,isAdmin,allSels,pool,teamData,initialTab="mi
 
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:2000,display:"flex",alignItems:"stretch",justifyContent:"center",backdropFilter:"blur(10px)"}} onClick={onClose}>
-      <div style={{background:C.card,width:"100%",maxWidth:520,display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 0 80px rgba(124,58,237,0.3)"}} onClick={e=>e.stopPropagation()}>
+      <div style={{background:C.card,width:"100%",maxWidth:520,display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 28px 80px rgba(76,29,149,0.4)"}} onClick={e=>e.stopPropagation()}>
         {/* Header */}
         <div style={{padding:"12px 16px",background:"linear-gradient(135deg,#4c1d95,#7c3aed)",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
           <span style={{fontSize:15,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>🌍 MUNDIAL DE SELECCIONES</span>
@@ -3831,7 +3831,7 @@ function MundialModal({onClose,user,isAdmin,allSels,pool,teamData,initialTab="mi
                 <span style={{fontSize:11,fontWeight:700,color:"#fff",fontFamily:"'DM Sans',sans-serif",flex:1}}>
                   {userSelName} — Fase de grupos completada
                 </span>
-                <span style={{fontSize:12,fontWeight:800,color:"#FFD700",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:0.5}}>
+                <span style={{fontSize:12,fontWeight:800,color:"#E9C45E",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:0.5}}>
                   {userPos===1?"🥇":userPos===2?"🥈":userPos===3?"🥉":`${userPos}°`} del {userGrupo?.nombre}
                 </span>
               </>
@@ -3842,8 +3842,8 @@ function MundialModal({onClose,user,isAdmin,allSels,pool,teamData,initialTab="mi
                   <div style={{fontSize:9,color:"rgba(255,255,255,0.7)",fontFamily:"'DM Sans',sans-serif"}}>{nextMatch.jornada} · {userGrupo?.nombre}</div>
                   <div style={{fontSize:12,fontWeight:800,color:"#fff",fontFamily:"'DM Sans',sans-serif"}}>
                     {nextMatch.local===userSelName
-                      ?<>{userSelName} <span style={{color:"#FFD700"}}>vs</span> {nextMatch.visitante}</>
-                      :<>{nextMatch.local} <span style={{color:"#FFD700"}}>vs</span> {userSelName}</>
+                      ?<>{userSelName} <span style={{color:"#E9C45E"}}>vs</span> {nextMatch.visitante}</>
+                      :<>{nextMatch.local} <span style={{color:"#E9C45E"}}>vs</span> {userSelName}</>
                     }
                   </div>
                 </div>
@@ -3883,7 +3883,7 @@ function MundialModal({onClose,user,isAdmin,allSels,pool,teamData,initialTab="mi
                     {userGrupo&&<div style={{fontSize:10,color:"rgba(255,255,255,0.7)",fontFamily:"'DM Sans',sans-serif"}}>Grupo {userGrupo.nombre}</div>}
                   </div>
                   {userGrupo&&userPos&&(
-                    <div style={{marginLeft:"auto",fontSize:22,fontWeight:800,color:"#FFD700",fontFamily:"'Bebas Neue',sans-serif"}}>
+                    <div style={{marginLeft:"auto",fontSize:22,fontWeight:800,color:"#E9C45E",fontFamily:"'Bebas Neue',sans-serif"}}>
                       {userPos===1?"🥇":userPos===2?"🥈":userPos===3?"🥉":`${userPos}°`}
                     </div>
                   )}
@@ -8567,7 +8567,7 @@ export default function App(){
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;700;800&display=swap');*{box-sizing:border-box}`}</style>
       <div style={{textAlign:"center",maxWidth:380}}>
         <div style={{fontSize:64,marginBottom:16}}>🔒</div>
-        <h1 style={{fontSize:32,fontWeight:800,color:"#F5C518",margin:"0 0 10px",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:2}}>LIGA CERRADA</h1>
+        <h1 style={{fontSize:32,fontWeight:800,color:"#E9C45E",margin:"0 0 10px",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:2}}>LIGA CERRADA</h1>
         <p style={{fontSize:14,color:"rgba(255,255,255,0.6)",fontFamily:"'DM Sans',sans-serif",lineHeight:1.6,marginBottom:24}}>La Federación Liga Simulada está en mantenimiento. Vuelve pronto.</p>
         {user&&<button onClick={()=>signOut(auth)} style={{padding:"10px 24px",borderRadius:10,border:"1px solid rgba(255,255,255,0.2)",background:"transparent",color:"rgba(255,255,255,0.5)",fontSize:12,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Cerrar sesión</button>}
       </div>
