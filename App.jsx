@@ -28,38 +28,38 @@ function normPlayer(p){
 // ─── COLORES ──────────────────────────────────────────────────────────────────
 // ─── PALETA REFINADA · oro editorial premium (cálido, no lima) ───────────────
 const COLORS_LIGHT = {
-  bg:"#f1efe9",          // blanco cálido en lugar de gris frío
-  card:"#fffdf8",        // tarjeta marfil
-  border:"#e8e2d4",      // borde hairline cálido
-  borderDark:"#d6cfbc",
-  accent:"#C9A227",      // oro metálico refinado (cálido)
+  bg:"#eae4d6",          // pergamino cálido (claramente distinto del gris frío)
+  card:"#fffdf7",        // marfil
+  border:"#ded5c1",      // borde cálido visible
+  borderDark:"#cabfa6",
+  accent:"#C9A227",      // oro metálico refinado
   accentDark:"#a8841d",
-  accentLight:"rgba(201,162,39,0.14)",
-  text:"#1a1813",        // casi-negro cálido
-  textMid:"#46402f",
-  textLight:"#8a8474",
-  textFaint:"#b3ac9c",
-  inputBg:"#f6f3ec",
+  accentLight:"rgba(201,162,39,0.16)",
+  text:"#1c1812",
+  textMid:"#48402f",
+  textLight:"#8a8172",
+  textFaint:"#b0a692",
+  inputBg:"#f4efe3",
   gold:"#C9A227",
-  goldLight:"rgba(201,162,39,0.10)",
+  goldLight:"rgba(201,162,39,0.12)",
   dark:false,
 };
 
 const COLORS_DARK = {
-  bg:"#0c0b0d",          // carbón cálido en lugar de negro plano
-  card:"#18161a",
-  border:"#2a2722",
-  borderDark:"#3a352c",
+  bg:"#100d09",          // carbón cálido (marrón-negro, no negro plano)
+  card:"#1d1812",        // tarjeta cálida claramente distinta
+  border:"#352d20",
+  borderDark:"#473c2a",
   accent:"#E9C45E",      // oro cálido brillante
   accentDark:"#cda12f",
-  accentLight:"rgba(233,196,94,0.12)",
-  text:"#f4f0e6",        // blanco cálido
-  textMid:"#c4bdae",
-  textLight:"#8b8576",
-  textFaint:"#5a554c",
-  inputBg:"#1e1c20",
+  accentLight:"rgba(233,196,94,0.14)",
+  text:"#f6f1e4",
+  textMid:"#c9bfa9",
+  textLight:"#938a76",
+  textFaint:"#615844",
+  inputBg:"#241e16",
   gold:"#E9C45E",
-  goldLight:"rgba(233,196,94,0.08)",
+  goldLight:"rgba(233,196,94,0.09)",
   dark:true,
 };
 
