@@ -4684,6 +4684,20 @@ function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial}){
           <span style={{fontSize:20,color:C.accent,zIndex:1}}>›</span>
         </button>
 
+        {isAdmin&&(
+          <button onClick={()=>onSelect(null)}
+            style={{width:"100%",padding:"14px 15px",borderRadius:18,background:"linear-gradient(135deg,#1a1a2e,#34345b)",border:"1px solid #9b59b6",cursor:"pointer",display:"flex",alignItems:"center",gap:13,boxShadow:"0 4px 18px rgba(155,89,182,0.25)",textAlign:"left",position:"relative",overflow:"hidden"}}>
+            <div style={{width:46,height:46,borderRadius:13,background:"linear-gradient(140deg,#9b59b6,#6c3483)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 4px 12px rgba(155,89,182,0.4)"}}>
+              <span style={{fontSize:22}}>👑</span>
+            </div>
+            <div style={{flex:1,zIndex:1}}>
+              <div style={{fontSize:18,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:0.5}}>Admin</div>
+              <div style={{fontSize:10.5,color:"rgba(255,255,255,0.65)",fontFamily:"'DM Sans',sans-serif",marginTop:1}}>Equipos, transmisión, noticias, calendario</div>
+            </div>
+            <span style={{fontSize:20,color:"#fff",zIndex:1}}>›</span>
+          </button>
+        )}
+
       </div>
       {showNoticias&&<NoticiasModal teamData={teamData} allTeams={allTeams} isAdmin={isAdmin} onClose={()=>setShowNoticias(false)}/>}
     </div>
@@ -7003,6 +7017,7 @@ function MainApp({user,isAdmin,onLogout}){
   const[showTeamsList,setShowTeamsList]=useState(false);
   const[showLiveAdmin,setShowLiveAdmin]=useState(false);
   const[showNoticiasAdmin,setShowNoticiasAdmin]=useState(false);
+  const[showCalendarioAdmin,setShowCalendarioAdmin]=useState(false);
   const[showPresidents,setShowPresidents]=useState(false);
   const[showImport,setShowImport]=useState(false);
   const[showSelecciones,setShowSelecciones]=useState(false);
@@ -7668,6 +7683,15 @@ function MainApp({user,isAdmin,onLogout}){
                   <span style={{fontSize:11,color:C.textLight}}>{showNoticiasAdmin?"▲":"▼"}</span>
                 </button>
                 {showNoticiasAdmin&&<div style={{marginTop:8}}><NoticiasAdmin/></div>}
+              </div>
+              {/* Collapsible Calendario general admin */}
+              <div style={{marginTop:10}}>
+                <button onClick={()=>setShowCalendarioAdmin(v=>!v)}
+                  style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 12px",borderRadius:8,background:"none",border:`1px solid ${C.border}`,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                  <span style={{fontSize:10,fontWeight:700,color:C.textLight,textTransform:"uppercase",letterSpacing:0.5}}>📅 Calendario general</span>
+                  <span style={{fontSize:11,color:C.textLight}}>{showCalendarioAdmin?"▲":"▼"}</span>
+                </button>
+                {showCalendarioAdmin&&<div style={{marginTop:8}}><CalendarioGeneralAdmin setAiMsg={setAiMsg}/></div>}
               </div>
               {/* Collapsible teams list */}
               {showTeamsList&&(
