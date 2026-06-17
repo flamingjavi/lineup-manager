@@ -7299,6 +7299,7 @@ function CompVistaPublica({comp,competenciaData,onClose}){
 
 function MainApp({user,isAdmin,onLogout}){
   const[teamData,setTeamData]=useState(null);
+  const[myTeamDocId,setMyTeamDocId]=useState(null); // resuelve el ID real del equipo del usuario (puede diferir de user.uid si fue transferido)
   const[allTeams,setAllTeams]=useState([]);
   const[pool,setPool]=useState({});
   const[showPool,setShowPool]=useState(false);
@@ -7365,7 +7366,24 @@ function MainApp({user,isAdmin,onLogout}){
   const dragFromPosId=useRef(null);
 
   useEffect(()=>{
-    const ref=doc(db,"teams",user.uid);
+    const resolveTeamDocId=async()=>{
+      // Primero intenta el caso normal (docId === uid, equipo creado por el propio usuario)
+      const directSnap=await getDoc(doc(db,"teams",user.uid));
+      if(directSnap.exists()&&directSnap.data().uid===user.uid){
+        setMyTeamDocId(user.uid);
+        return;
+      }
+      // Si no coincide (equipo transferido a este usuario, con otro docId), búscalo por el campo uid
+      const allSnap=await getDocs(collection(db,"teams"));
+      const found=allSnap.docs.find(d=>d.data().uid===user.uid);
+      setMyTeamDocId(found?found.id:user.uid);
+    };
+    resolveTeamDocId();
+  },[user.uid]);
+
+  useEffect(()=>{
+    if(!myTeamDocId) return; // espera a que se resuelva el ID real del equipo
+    const ref=doc(db,"teams",myTeamDocId);
     let saveScheduled=false;
     const unsub=onSnapshot(ref,snap=>{
       if(snap.exists()){
@@ -7410,7 +7428,7 @@ function MainApp({user,isAdmin,onLogout}){
       }
     });
     return unsub;
-  },[user.uid]);
+  },[myTeamDocId]);
 
   useEffect(()=>{
     if(!user) return;
@@ -7462,7 +7480,7 @@ function MainApp({user,isAdmin,onLogout}){
 
   const saveTeam=async patch=>{
     setSaving(true);
-    await updateDoc(doc(db,"teams",user.uid),patch);
+    await updateDoc(doc(db,"teams",myTeamDocId||user.uid),patch);
     if(patch.teamName){
       try{
         const pSnap=await getDoc(doc(db,"pool","players"));
@@ -8518,11 +8536,7 @@ function MainApp({user,isAdmin,onLogout}){
                   <div key={t.id||t.uid} onClick={async()=>{
                     if(!window.confirm(`¿Asignar "${transferTeam.teamName}" a ${t.email}?`)) return;
                     const teamDocId=transferTeam.id||transferTeam.uid;
-                    // Quitar dueño del equipo anterior del nuevo presidente
-                    const prevTeamSnap=await getDocs(collection(db,"teams"));
-                    const prevTeamDoc=prevTeamSnap.docs.find(d=>d.data().uid===t.uid&&d.id!==teamDocId);
-                    if(prevTeamDoc) await updateDoc(doc(db,"teams",prevTeamDoc.id),{uid:"",email:""});
-                    // Asignar nuevo dueño
+                    // Asignar nuevo dueño (sin tocar ningún otro equipo que esta persona ya tuviera)
                     await updateDoc(doc(db,"teams",teamDocId),{uid:t.uid,email:t.email});
                     // Actualizar pool
                     const poolRef=doc(db,"pool","players");
@@ -8569,9 +8583,7 @@ function MainApp({user,isAdmin,onLogout}){
                     if(!targetUid){alert(`No se encontró ningún usuario con el correo "${emailInput}"`);return;}
                     if(!window.confirm(`¿Asignar "${transferTeam.teamName}" a ${targetEmail}?`)) return;
                     const teamDocId=transferTeam.id||transferTeam.uid;
-                    // Remove from previous team
-                    const prevDoc=teamsSnap.docs.find(d=>d.data().uid===targetUid&&d.id!==teamDocId);
-                    if(prevDoc) await updateDoc(doc(db,"teams",prevDoc.id),{uid:"",email:""});
+                    // Asignar nuevo dueño (sin tocar ningún otro equipo que esta persona ya tuviera)
                     await updateDoc(doc(db,"teams",teamDocId),{uid:targetUid,email:targetEmail});
                     setTransferTeam(null);
                     alert(`✅ "${transferTeam.teamName}" asignado a ${targetEmail}`);
