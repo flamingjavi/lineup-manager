@@ -4489,7 +4489,9 @@ function TransmisionPanel({teamData,lineupName,esMundial,onClose}){
 
 function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial}){
   const tc=getTeamColor(teamData?.teamColor||"blue");
-  const comps=(teamData?.competencias||[]).map(id=>COMPETENCIAS_AVAILABLE.find(c=>c.id===id)).filter(Boolean);
+  const ORDEN_CATEGORIA={liga1:0,liga2:0,ascenso:0,champions:1,europa:1,copa:2,copaascenso:2,supercopa:3};
+  const comps=(teamData?.competencias||[]).map(id=>COMPETENCIAS_AVAILABLE.find(c=>c.id===id)).filter(Boolean)
+    .sort((a,b)=>(ORDEN_CATEGORIA[a.id]??9)-(ORDEN_CATEGORIA[b.id]??9));
   const teamInitials=(teamData?.teamName||"?").slice(0,2).toUpperCase();
   const[showNoticias,setShowNoticias]=useState(false);
   const[transmision,setTransmision]=useState(null);
@@ -6464,7 +6466,18 @@ function CompetenciasModal({allTeams,onClose}){
       }
     }
     const next=hasIt?cur.filter(x=>x!==selected):[...cur,selected];
-    await updateDoc(doc(db,"teams",team.uid||team.id),{competencias:next});
+    const updates={competencias:next};
+    // Al inscribir (no al desinscribir): crea automáticamente la alineación de esta competencia si no existe ya
+    if(!hasIt){
+      const lineupName=activeComp.lineupName;
+      const lineups=team.lineups||[];
+      const yaExiste=lineups.some(l=>l.name===lineupName);
+      if(!yaExiste){
+        const nuevaLineup={id:`${selected}_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,name:lineupName,formation:"4-3-3",starters:{},subs:Array(7).fill(null),code:""};
+        updates.lineups=[...lineups,nuevaLineup];
+      }
+    }
+    await updateDoc(doc(db,"teams",team.uid||team.id),updates);
     // Si la competencia es formato "liga", sincroniza la Tabla General en Firestore
     // (Resultado/Fixture leen directo de config/competenciaData, no solo del estado local de Tabla)
     if(activeComp.formato==="liga"){
@@ -7697,6 +7710,26 @@ function MainApp({user,isAdmin,onLogout}){
                           alert(`✅ ${fixed} equipos limpiados.`);
                         }} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:"#e67e22"}}>
                           🧹 <span>Limpiar duplicados</span>
+                        </div>
+                        <div onClick={async()=>{
+                          setShowAdminMenu(false);
+                          if(!window.confirm("¿Crear alineaciones faltantes para todos los equipos según sus competencias actuales?")) return;
+                          let fixed=0,creadas=0;
+                          for(const t of allTeams){
+                            const comps=(t.competencias||[]).map(id=>COMPETENCIAS_AVAILABLE.find(c=>c.id===id)).filter(Boolean);
+                            const lineups=[...(t.lineups||[])];
+                            let changed=false;
+                            for(const comp of comps){
+                              if(!lineups.some(l=>l.name===comp.lineupName)){
+                                lineups.push({id:`${comp.id}_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,name:comp.lineupName,formation:"4-3-3",starters:{},subs:Array(7).fill(null),code:""});
+                                changed=true;creadas++;
+                              }
+                            }
+                            if(changed){await updateDoc(doc(db,"teams",t.id||t.uid),{lineups});fixed++;}
+                          }
+                          alert(`✅ ${creadas} alineaciones creadas en ${fixed} equipos.`);
+                        }} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:"#16a085"}}>
+                          🛠️ <span>Crear alineaciones faltantes</span>
                         </div>
                         <div onClick={async()=>{
                           setShowAdminMenu(false);
