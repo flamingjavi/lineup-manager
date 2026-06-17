@@ -1460,6 +1460,168 @@ function MercadoToggle(){
 }
 
 // ─── EN VIVO + AVISO (compartido: Home y Formaciones) ─────────────────────────
+// ─── CALENDARIO GENERAL: semana actual + próximas (admin sube foto) ─────────
+function CalendarioGeneralAdmin({setAiMsg}){
+  const[semanas,setSemanas]=useState([]);
+  const[semanaActual,setSemanaActual]=useState(null);
+  const[preview,setPreview]=useState(null);
+  const[uploading,setUploading]=useState(false);
+  const fileRef=useRef(null);
+
+  useEffect(()=>{
+    const unsub=onSnapshot(doc(db,"config","calendarioGeneral"),snap=>{
+      const data=snap.exists()?snap.data():{};
+      setSemanas(data.semanas||[]);
+      setSemanaActual(data.semanaActual||null);
+    });
+    return unsub;
+  },[]);
+
+  const processImage=async(file)=>{
+    setUploading(true);
+    setAiMsg("Leyendo imagen…");
+    try{
+      const b64=await new Promise((res,rej)=>{
+        const r=new FileReader();
+        r.onload=()=>res(r.result.split(",")[1]);
+        r.onerror=()=>rej(new Error("FileReader error"));
+        r.readAsDataURL(file);
+      });
+      setAiMsg("Conectando con Gemini…");
+      const prompt=`Analiza esta captura de un calendario semanal de competiciones de fútbol. Para cada semana extrae: número de semana, fecha (o rango de fechas), y el detalle de qué competiciones/jornadas juegan esa semana (texto libre, ej: "Neo League jornada 3, Champions jornada 2"). Responde SOLO con JSON sin markdown, sin texto adicional: {"semanas":[{"numero":1,"fecha":"","detalle":""}]}`;
+      const GEMINI_KEY="AIzaSyAGlxjD12k38Xu9L-8K165iJma1ZwR7tyY";
+      const GEMINI_URL=`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`;
+      const body=JSON.stringify({contents:[{parts:[{inline_data:{mime_type:file.type||"image/jpeg",data:b64}},{text:prompt}]}],generationConfig:{temperature:0,maxOutputTokens:2000}});
+      const resp=await fetch(GEMINI_URL,{method:"POST",headers:{"Content-Type":"application/json"},body});
+      if(!resp.ok){
+        const errTxt=await resp.text().catch(()=>"");
+        throw new Error(`HTTP ${resp.status} ${errTxt.slice(0,200)}`);
+      }
+      const respData=await resp.json();
+      if(respData.error) throw new Error(respData.error.message);
+      const raw=respData.candidates?.[0]?.content?.parts?.[0]?.text;
+      if(!raw) throw new Error("Respuesta vacía de Gemini");
+      const cleaned=raw.replace(/```json|```/g,"").trim();
+      let parsed;
+      try{ parsed=JSON.parse(cleaned); }
+      catch{ throw new Error("No se pudo interpretar el JSON: "+cleaned.slice(0,150)); }
+      const filas=(parsed.semanas||[]).map(s=>({numero:Number(s.numero)||0,fecha:s.fecha||"",detalle:s.detalle||""}));
+      if(filas.length===0) throw new Error("No se detectaron semanas en la imagen");
+      setPreview(filas);
+      setAiMsg(`✅ ${filas.length} semanas leídas — revisa y confirma abajo`);
+    }catch(e){
+      setAiMsg("❌ "+e.message);
+    }
+    setUploading(false);
+  };
+
+  const confirmar=async()=>{
+    if(!preview) return;
+    const ordenadas=[...preview].sort((a,b)=>a.numero-b.numero);
+    await setDoc(doc(db,"config","calendarioGeneral"),{semanas:ordenadas},{merge:true});
+    await addNoticia(`📅 Calendario actualizado: ${ordenadas.length} semanas cargadas`,"📅");
+    setAiMsg("✅ Calendario guardado");
+    setPreview(null);
+  };
+
+  const marcarSemanaActual=async(numero)=>{
+    await setDoc(doc(db,"config","calendarioGeneral"),{semanaActual:numero},{merge:true});
+    const sem=semanas.find(s=>s.numero===numero);
+    if(sem) await addNoticia(`📅 Ahora estamos en la Semana ${numero}: ${sem.detalle}`,"📅");
+    setAiMsg(`✅ Semana ${numero} marcada como actual`);
+  };
+
+  const updateCell=(i,field,val)=>{
+    const next=[...preview];
+    next[i]={...next[i],[field]:field==="numero"?Number(val):val};
+    setPreview(next);
+  };
+  const addRow=()=>setPreview([...(preview||[]),{numero:(preview?.length||0)+1,fecha:"",detalle:""}]);
+  const removeRow=(i)=>setPreview(preview.filter((_,idx)=>idx!==i));
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+      <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Sube una foto del calendario general de competiciones. La IA detectará las semanas, fechas y detalle; revisa antes de confirmar.</div>
+      <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}}
+        onChange={e=>{const f=e.target.files?.[0];if(f)processImage(f);e.target.value="";}}/>
+      <button onClick={()=>fileRef.current?.click()} disabled={uploading}
+        style={{padding:"9px",borderRadius:8,background:"transparent",border:"1.5px dashed #1a3a5c",color:"#1a3a5c",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:uploading?0.5:1}}>
+        {uploading?"Leyendo…":"📷 Subir foto del calendario"}
+      </button>
+
+      {preview&&(
+        <div style={{background:C.card,borderRadius:10,padding:"10px 12px",border:"1.5px solid #1a3a5c"}}>
+          <div style={{fontSize:11,fontWeight:800,color:"#1a3a5c",fontFamily:"'DM Sans',sans-serif",marginBottom:8}}>Revisa antes de confirmar</div>
+          <div style={{maxHeight:280,overflowY:"auto",display:"flex",flexDirection:"column",gap:6,marginBottom:8}}>
+            {preview.map((s,i)=>(
+              <div key={i} style={{display:"flex",gap:5,alignItems:"flex-start"}}>
+                <input type="number" value={s.numero} onChange={e=>updateCell(i,"numero",e.target.value)} placeholder="N°"
+                  style={{width:42,padding:"5px 6px",borderRadius:6,border:`1px solid ${C.border}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif",textAlign:"center"}}/>
+                <input value={s.fecha} onChange={e=>updateCell(i,"fecha",e.target.value)} placeholder="Fecha"
+                  style={{width:90,padding:"5px 6px",borderRadius:6,border:`1px solid ${C.border}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif"}}/>
+                <input value={s.detalle} onChange={e=>updateCell(i,"detalle",e.target.value)} placeholder="Detalle (competencias/jornadas)"
+                  style={{flex:1,padding:"5px 6px",borderRadius:6,border:`1px solid ${C.border}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif"}}/>
+                <button onClick={()=>removeRow(i)} style={{background:"none",border:"none",color:"#e74c3c",cursor:"pointer",fontSize:13}}>✕</button>
+              </div>
+            ))}
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={addRow} style={{flex:1,fontSize:11,padding:"7px 0",borderRadius:8,border:`1px solid ${C.border}`,background:C.inputBg,color:C.textMid,fontFamily:"'DM Sans',sans-serif",cursor:"pointer"}}>+ Agregar semana</button>
+            <button onClick={()=>setPreview(null)} style={{flex:1,fontSize:11,padding:"7px 0",borderRadius:8,border:`1px solid ${C.border}`,background:"none",color:C.textFaint,fontFamily:"'DM Sans',sans-serif",cursor:"pointer"}}>Cancelar</button>
+            <button onClick={confirmar} style={{flex:1,fontSize:11,fontWeight:800,padding:"7px 0",borderRadius:8,border:"none",background:"#1a3a5c",color:"#fff",fontFamily:"'DM Sans',sans-serif",cursor:"pointer"}}>✅ Confirmar</button>
+          </div>
+        </div>
+      )}
+
+      {semanas.length>0&&(
+        <div>
+          <div style={{fontSize:10,fontWeight:800,color:C.textLight,fontFamily:"'DM Sans',sans-serif",marginBottom:6}}>Marcar semana actual:</div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+            {semanas.map(s=>(
+              <button key={s.numero} onClick={()=>marcarSemanaActual(s.numero)}
+                style={{padding:"5px 10px",borderRadius:20,border:`1.5px solid ${semanaActual===s.numero?"#1a3a5c":C.border}`,background:semanaActual===s.numero?"#1a3a5c":C.inputBg,color:semanaActual===s.numero?"#fff":C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                Semana {s.numero}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CalendarioWidget(){
+  const[data,setData]=useState(null);
+  useEffect(()=>{
+    const unsub=onSnapshot(doc(db,"config","calendarioGeneral"),snap=>{
+      setData(snap.exists()?snap.data():null);
+    });
+    return unsub;
+  },[]);
+
+  if(!data||!data.semanaActual) return null;
+  const actual=data.semanas?.find(s=>s.numero===data.semanaActual);
+  if(!actual) return null;
+  const siguiente=data.semanas?.find(s=>s.numero===data.semanaActual+1);
+
+  return(
+    <div style={{margin:"10px 16px 0",padding:"11px 16px",borderRadius:14,background:C.card,border:`1.5px solid ${C.border}`}}>
+      <div style={{display:"flex",alignItems:"center",gap:10}}>
+        <span style={{fontSize:18}}>📅</span>
+        <div style={{flex:1}}>
+          <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Semana {actual.numero}{actual.fecha?` · ${actual.fecha}`:""}</div>
+          <div style={{fontSize:13,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{actual.detalle}</div>
+        </div>
+      </div>
+      {siguiente&&(
+        <div style={{marginTop:6,paddingTop:6,borderTop:`1px solid ${C.border}`,fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>
+          Próxima: Semana {siguiente.numero}{siguiente.fecha?` (${siguiente.fecha})`:""} — {siguiente.detalle}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function LiveAndAviso(){
   const[mundial,setMundial]=useState(null);
   const[showTwitch,setShowTwitch]=useState(false);
@@ -4317,6 +4479,36 @@ function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial}){
   const[showTransmisionPanel,setShowTransmisionPanel]=useState(false);
   const[miSeleccionCountry,setMiSeleccionCountry]=useState(null);
   const[noticiasUsuario,setNoticiasUsuario]=useState([]);
+  const[competenciaData,setCompetenciaData]=useState({});
+
+  useEffect(()=>{
+    const unsub=onSnapshot(doc(db,"config","competenciaData"),snap=>{
+      setCompetenciaData(snap.exists()?snap.data():{});
+    });
+    return unsub;
+  },[]);
+
+  // Encuentra el siguiente partido sin jugar del equipo, en su liga principal (formato "liga")
+  const ligaPrincipal=comps.find(c=>c.formato==="liga");
+  const siguientePartido=(()=>{
+    if(!ligaPrincipal||!teamData?.teamName) return null;
+    const fixture=competenciaData?.[ligaPrincipal.id]?.fixture||{};
+    const jornadasOrdenadas=Object.entries(fixture).sort((a,b)=>{
+      const numA=parseInt((a[1].nombre||a[0]).match(/\d+/)?.[0]||"0");
+      const numB=parseInt((b[1].nombre||b[0]).match(/\d+/)?.[0]||"0");
+      return numA-numB;
+    });
+    for(const [jkey,jornada] of jornadasOrdenadas){
+      for(const p of (jornada.partidos||[])){
+        const esLocal=p.local===teamData.teamName;
+        const esVisitante=p.visitante===teamData.teamName;
+        if((esLocal||esVisitante)&&!p.marcador){
+          return {rival:esLocal?p.visitante:p.local,esLocal,jornada:jornada.nombre||jkey,liga:ligaPrincipal.name};
+        }
+      }
+    }
+    return null;
+  })();
 
   useEffect(()=>{
     const unsub=onSnapshot(doc(db,"config","noticiasUsuario"),snap=>{
@@ -4367,6 +4559,22 @@ function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial}){
         </button>
       )}
       {showTransmisionPanel&&<TransmisionPanel teamData={teamData} lineupName={transmision?.lineupName||"Liga"} esMundial={!!transmision?.esMundial} miSeleccionCountry={miSeleccionCountry} onClose={()=>setShowTransmisionPanel(false)}/>}
+
+      {siguientePartido&&(
+        <div style={{margin:"10px 16px 0",padding:"11px 16px",borderRadius:14,background:C.card,border:`1.5px solid ${C.border}`,display:"flex",alignItems:"center",gap:10}}>
+          <span style={{fontSize:18}}>📅</span>
+          <div style={{flex:1}}>
+            <div style={{fontSize:11,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Tu siguiente partido es vs</div>
+            <div style={{fontSize:14,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{siguientePartido.rival} {siguientePartido.esLocal?"(en casa)":"(visitante)"}</div>
+          </div>
+          <div style={{textAlign:"right"}}>
+            <div style={{fontSize:9,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>{siguientePartido.liga}</div>
+            <div style={{fontSize:10,fontWeight:700,color:C.accent,fontFamily:"'DM Sans',sans-serif"}}>{siguientePartido.jornada}</div>
+          </div>
+        </div>
+      )}
+
+      <CalendarioWidget/>
 
       {/* Hero header */}
       <div style={{background:`linear-gradient(160deg,${tc.dark} 0%,${tc.bg} 100%)`,padding:"32px 20px 24px",display:"flex",flexDirection:"column",alignItems:"center",gap:12,position:"relative",overflow:"hidden"}}>
