@@ -56,6 +56,9 @@ const COLORS_LIGHT = {
   inputBg:"#f4efe3",
   gold:"#C9A227",
   goldLight:"rgba(201,162,39,0.12)",
+  accentGrad:"linear-gradient(145deg,#E4BC44 0%,#C9A227 55%,#B08D1C 100%)",
+  accentInk:"#3a2c05",
+  accentShadow:"0 4px 14px rgba(201,162,39,0.35),inset 0 1px 0 rgba(255,255,255,0.35)",
   dark:false,
 };
 
@@ -74,6 +77,9 @@ const COLORS_DARK = {
   inputBg:"#241e16",
   gold:"#E9C45E",
   goldLight:"rgba(233,196,94,0.09)",
+  accentGrad:"linear-gradient(145deg,#F4D67D 0%,#E9C45E 55%,#CDA12F 100%)",
+  accentInk:"#2a1f04",
+  accentShadow:"0 4px 16px rgba(233,196,94,0.3),inset 0 1px 0 rgba(255,255,255,0.3)",
   dark:true,
 };
 
@@ -247,7 +253,7 @@ function AuthScreen({onAuth}){
         )}
         {error&&<p style={{color:"#c0392b",fontSize:12,margin:"10px 0 0",fontFamily:"'DM Sans',sans-serif",fontWeight:600}}>⚠ {error}</p>}
         <button onClick={handleSubmit} disabled={loading}
-          style={{width:"100%",padding:"14px",background:C.accent,color:"#fff",border:"none",borderRadius:12,fontSize:15,fontWeight:800,cursor:"pointer",marginTop:18,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:2,opacity:loading?0.6:1,boxShadow:`0 4px 20px ${C.goldLight}`}}>
+          style={{width:"100%",padding:"14px",background:C.accentGrad,color:C.accentInk,boxShadow:C.accentShadow,border:"none",borderRadius:12,fontSize:15,fontWeight:800,cursor:"pointer",marginTop:18,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:2,opacity:loading?0.6:1,boxShadow:`0 4px 20px ${C.goldLight}`}}>
           {loading?"...":(mode==="login"?"ENTRAR":"CREAR CUENTA")}
         </button>
       </div>
@@ -619,23 +625,30 @@ function PlayerSpot({pos,player,readOnly,onClick,onRemove,isDragOver,onDragOver,
 // ─── FIELD ────────────────────────────────────────────────────────────────────
 function Field({positions,lineup,readOnly,onClickPos,onRemovePos,dragOverPos,onDragOver,onDragLeave,onDrop,onDragStartPos,teamColor}){
   return(
-    <div style={{position:"relative",width:"100%",paddingBottom:"133%",borderRadius:16,overflow:"hidden",boxShadow:"0 16px 48px rgba(0,0,0,0.18)"}}>
+    <div style={{position:"relative",width:"100%",paddingBottom:"133%",borderRadius:18,overflow:"hidden",boxShadow:"0 20px 56px rgba(0,0,0,0.28),inset 0 0 0 1px rgba(255,255,255,0.06)"}}>
       {lineup?.code&&(
         <div style={{position:"absolute",top:8,right:8,zIndex:20,background:"rgba(0,0,0,0.55)",borderRadius:6,padding:"2px 8px",backdropFilter:"blur(4px)"}}>
           <span style={{fontSize:9,fontWeight:700,color:"rgba(255,255,255,0.9)",fontFamily:"monospace",letterSpacing:1}}>{lineup.code}</span>
         </div>
       )}
-      <div style={{position:"absolute",inset:0,background:"linear-gradient(180deg,#1a5c2a 0%,#1e6b30 25%,#1a5c2a 50%,#1e6b30 75%,#1a5c2a 100%)"}}/>
+      <div style={{position:"absolute",inset:0,background:"linear-gradient(180deg,#1d6831 0%,#218a3c 25%,#1d6831 50%,#218a3c 75%,#1d6831 100%)"}}/>
+      <div style={{position:"absolute",inset:0,background:"radial-gradient(120% 75% at 50% 38%,rgba(255,255,255,0.16),rgba(0,0,0,0) 55%),radial-gradient(140% 100% at 50% 100%,rgba(0,0,0,0.34),rgba(0,0,0,0) 60%)",pointerEvents:"none"}}/>
       <svg style={{position:"absolute",top:0,left:0,width:"100%",height:"100%"}} viewBox="0 0 100 133" preserveAspectRatio="none">
-        {[0,1,2,3,4,5,6,7,8,9,10,11,12].map(i=><rect key={i} x="0" y={i*10.25} width="100" height="10.25" fill={i%2===0?"rgba(0,0,0,0.06)":"rgba(255,255,255,0.03)"}/>)}
-        <rect x="4" y="2.5" width="92" height="128" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="0.7"/>
-        <line x1="4" y1="66" x2="96" y2="66" stroke="rgba(255,255,255,0.5)" strokeWidth="0.7"/>
-        <circle cx="50" cy="66" r="13" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="0.7"/>
-        <circle cx="50" cy="66" r="1" fill="rgba(255,255,255,0.6)"/>
-        <rect x="22" y="2.5" width="56" height="20" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="0.6"/>
-        <rect x="36" y="2.5" width="28" height="8" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="0.5"/>
-        <rect x="22" y="110.5" width="56" height="20" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="0.6"/>
-        <rect x="36" y="122.5" width="28" height="8" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="0.5"/>
+        {[0,1,2,3,4,5,6,7,8,9,10,11,12].map(i=><rect key={i} x="0" y={i*10.25} width="100" height="10.25" fill={i%2===0?"rgba(0,0,0,0.07)":"rgba(255,255,255,0.04)"}/>)}
+        <rect x="4" y="2.5" width="92" height="128" fill="none" stroke="rgba(255,255,255,0.55)" strokeWidth="0.7"/>
+        <line x1="4" y1="66" x2="96" y2="66" stroke="rgba(255,255,255,0.55)" strokeWidth="0.7"/>
+        <circle cx="50" cy="66" r="13" fill="none" stroke="rgba(255,255,255,0.55)" strokeWidth="0.7"/>
+        <circle cx="50" cy="66" r="1" fill="rgba(255,255,255,0.7)"/>
+        <rect x="22" y="2.5" width="56" height="20" fill="none" stroke="rgba(255,255,255,0.45)" strokeWidth="0.6"/>
+        <rect x="36" y="2.5" width="28" height="8" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="0.5"/>
+        <path d="M 40 22.5 A 11 11 0 0 0 60 22.5" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="0.55"/>
+        <rect x="22" y="110.5" width="56" height="20" fill="none" stroke="rgba(255,255,255,0.45)" strokeWidth="0.6"/>
+        <rect x="36" y="122.5" width="28" height="8" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="0.5"/>
+        <path d="M 40 110.5 A 11 11 0 0 1 60 110.5" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="0.55"/>
+        <path d="M 4 6.5 A 4 4 0 0 1 8 2.5" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="0.5"/>
+        <path d="M 92 2.5 A 4 4 0 0 1 96 6.5" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="0.5"/>
+        <path d="M 4 126.5 A 4 4 0 0 0 8 130.5" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="0.5"/>
+        <path d="M 96 126.5 A 4 4 0 0 1 92 130.5" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="0.5"/>
       </svg>
       {positions.map(pos=>(
         <PlayerSpot key={pos.id} pos={pos} player={lineup?.starters?.[pos.id]} readOnly={readOnly}
@@ -953,7 +966,7 @@ function AdminTeamEditor({teamData,pool,allTeamsRef}){
             placeholder="+ Nueva…"
             style={{padding:"3px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:10,outline:"none",fontFamily:"'DM Sans',sans-serif",width:75}}
             onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.borderDark}/>
-          <button onClick={addAdminLineup} style={{padding:"3px 8px",borderRadius:7,background:C.accent,color:"#fff",border:"none",cursor:"pointer",fontSize:10,fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>+ Crear</button>
+          <button onClick={addAdminLineup} style={{padding:"3px 8px",borderRadius:7,background:C.accentGrad,color:C.accentInk,boxShadow:C.accentShadow,border:"none",cursor:"pointer",fontSize:10,fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>+ Crear</button>
         </div>
         {/* 🏆 Requisitos del desafío (Liga/Copa) — vista admin */}
         {erroresAlineacionAdmin.length>0&&(
@@ -1010,7 +1023,7 @@ function AdminTeamEditor({teamData,pool,allTeamsRef}){
               <span style={{marginLeft:"auto",fontSize:9,color:C.textFaint,fontFamily:"monospace"}}>{squad.length}/26</span>
             </div>
             <button onClick={()=>setShowAddPlayer(true)}
-              style={{width:"100%",padding:"7px",background:C.accent,color:"#fff",border:"none",borderRadius:8,fontSize:11,fontWeight:700,cursor:"pointer",marginBottom:8,fontFamily:"'DM Sans',sans-serif"}}>
+              style={{width:"100%",padding:"7px",background:C.accentGrad,color:C.accentInk,boxShadow:C.accentShadow,border:"none",borderRadius:8,fontSize:11,fontWeight:700,cursor:"pointer",marginBottom:8,fontFamily:"'DM Sans',sans-serif"}}>
               + Agregar jugador
             </button>
             <div style={{maxHeight:160,overflowY:"auto",display:"flex",flexDirection:"column",gap:3}}>
@@ -1394,7 +1407,7 @@ function ImportButton({allTeams,pool,user,onDone}){
             {log.map((l,i)=><div key={i}>{l}</div>)}
           </div>
           <button onClick={onDone}
-            style={{width:"100%",padding:"11px",background:C.accent,color:"#fff",border:"none",borderRadius:11,fontSize:14,fontWeight:800,cursor:"pointer",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>
+            style={{width:"100%",padding:"11px",background:C.accentGrad,color:C.accentInk,boxShadow:C.accentShadow,border:"none",borderRadius:11,fontSize:14,fontWeight:800,cursor:"pointer",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>
             CERRAR
           </button>
         </div>
@@ -3174,7 +3187,7 @@ function MercadoUnificado({onClose,user,isAdmin,teamData,saveTeam,allTeams,pool}
                           style={{width:48,padding:"4px 6px",borderRadius:6,border:`1px solid #e74c3c`,background:C.inputBg,color:C.text,fontSize:12,textAlign:"center"}}/>
                       </div>
                       <button onClick={saveSlots} disabled={savingSlots}
-                        style={{padding:"5px 10px",borderRadius:7,background:C.accent,color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                        style={{padding:"5px 10px",borderRadius:7,background:C.accentGrad,color:C.accentInk,boxShadow:C.accentShadow,border:"none",fontSize:11,fontWeight:700,cursor:"pointer"}}>
                         {savingSlots?"…":"✓"}
                       </button>
                       <button onClick={()=>setSlotTeam(null)}
@@ -7825,7 +7838,7 @@ function MainApp({user,isAdmin,onLogout}){
                     await setDoc(doc(db,"admins",foundUid),{email,uid:foundUid});
                     document.getElementById("newAdminEmailInput").value="";
                     alert("✅ Admin agregado.");
-                  }} style={{padding:"8px 14px",borderRadius:9,background:C.accent,color:"#fff",border:"none",cursor:"pointer",fontSize:12,fontWeight:800,fontFamily:"'DM Sans',sans-serif"}}>
+                  }} style={{padding:"8px 14px",borderRadius:9,background:C.accentGrad,color:C.accentInk,boxShadow:C.accentShadow,border:"none",cursor:"pointer",fontSize:12,fontWeight:800,fontFamily:"'DM Sans',sans-serif"}}>
                     + Admin
                   </button>
                 </div>
@@ -7980,7 +7993,7 @@ function MainApp({user,isAdmin,onLogout}){
                     await updateDoc(doc(db,"teams",teamDocId),{uid:targetUid,email:targetEmail});
                     setTransferTeam(null);
                     alert(`✅ "${transferTeam.teamName}" asignado a ${targetEmail}`);
-                  }} style={{padding:"8px 14px",borderRadius:9,background:C.accent,color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                  }} style={{padding:"8px 14px",borderRadius:9,background:C.accentGrad,color:C.accentInk,boxShadow:C.accentShadow,border:"none",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
                     Asignar
                   </button>
                 </div>
@@ -8017,7 +8030,7 @@ function MainApp({user,isAdmin,onLogout}){
                 await setDoc(doc(db,"teams",id),{uid:"",email:"",teamName:name,squad:[],lineups:[{id:"a",name:"Liga",formation:"4-3-3",starters:{},subs:Array(7).fill(null)},{id:"b",name:"Copa",formation:"4-3-3",starters:{},subs:Array(7).fill(null)}],createdAt:new Date().toISOString()});
                 setShowCreateTeam(false);
                 alert(`✅ Equipo "${name}" creado`);
-              }} style={{width:"100%",padding:"13px",background:C.accent,color:"#fff",border:"none",borderRadius:11,fontSize:15,fontWeight:800,cursor:"pointer",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:2}}>
+              }} style={{width:"100%",padding:"13px",background:C.accentGrad,color:C.accentInk,boxShadow:C.accentShadow,border:"none",borderRadius:11,fontSize:15,fontWeight:800,cursor:"pointer",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:2}}>
                 CREAR EQUIPO
               </button>
             </div>
@@ -8393,7 +8406,7 @@ function MainApp({user,isAdmin,onLogout}){
               <span style={{fontSize:15,fontWeight:800,color:C.text,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>PLANTILLA</span>
               <span style={{fontSize:11,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{squad.length}/26</span>
               <button onClick={()=>{setShowSquadManager(false);setShowAddPlayer(true);}}
-                style={{marginLeft:"auto",padding:"7px 14px",background:C.accent,color:"#fff",border:"none",borderRadius:9,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                style={{marginLeft:"auto",padding:"7px 14px",background:C.accentGrad,color:C.accentInk,boxShadow:C.accentShadow,border:"none",borderRadius:9,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
                 + Agregar
               </button>
               <button onClick={()=>setShowSquadManager(false)}
@@ -8519,7 +8532,7 @@ function TeamSelectionScreen({user,onDone}){
               <div style={{marginBottom:12}}><ColorPicker selected={newTeamColor} onChange={setNewTeamColor}/></div>
               {error&&<p style={{color:"#c0392b",fontSize:12,margin:"0 0 8px",fontFamily:"'DM Sans',sans-serif"}}>⚠ {error}</p>}
               <button onClick={createTeam} disabled={creating}
-                style={{width:"100%",padding:"13px",background:C.accent,color:"#fff",border:"none",borderRadius:11,fontSize:15,fontWeight:800,cursor:"pointer",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:2,opacity:creating?0.6:1}}>
+                style={{width:"100%",padding:"13px",background:C.accentGrad,color:C.accentInk,boxShadow:C.accentShadow,border:"none",borderRadius:11,fontSize:15,fontWeight:800,cursor:"pointer",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:2,opacity:creating?0.6:1}}>
                 {creating?"CREANDO…":"CREAR EQUIPO"}
               </button>
             </div>
