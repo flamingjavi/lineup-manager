@@ -4794,6 +4794,7 @@ function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial}){
     .sort((a,b)=>(ORDEN_CATEGORIA[a.id]??9)-(ORDEN_CATEGORIA[b.id]??9));
   const teamInitials=(teamData?.teamName||"?").slice(0,2).toUpperCase();
   const[showNoticias,setShowNoticias]=useState(false);
+  const[homeTab,setHomeTab]=useState("inicio");
   const[transmision,setTransmision]=useState(null);
   const[showTransmisionPanel,setShowTransmisionPanel]=useState(false);
   const[miSeleccionCountry,setMiSeleccionCountry]=useState(null);
@@ -4888,7 +4889,7 @@ function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial}){
       )}
       {showTransmisionPanel&&<TransmisionPanel teamData={teamData} lineupName={transmision?.lineupName||"Liga"} esMundial={!!transmision?.esMundial} miSeleccionCountry={miSeleccionCountry} onClose={()=>setShowTransmisionPanel(false)}/>}
 
-      {siguientePartido&&(
+      {homeTab==="inicio"&&siguientePartido&&(
         <div style={{margin:"10px 16px 0",padding:"11px 16px",borderRadius:14,background:C.card,border:`1.5px solid ${C.border}`,display:"flex",alignItems:"center",gap:10}}>
           <span style={{fontSize:18}}>📅</span>
           <div style={{flex:1}}>
@@ -4902,7 +4903,7 @@ function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial}){
         </div>
       )}
 
-      <CalendarioWidget/>
+      {homeTab==="inicio"&&<CalendarioWidget/>}
 
       {/* Hero header */}
       <div style={{background:`linear-gradient(160deg,${tc.dark} 0%,${tc.bg} 100%)`,padding:"32px 20px 24px",display:"flex",flexDirection:"column",alignItems:"center",gap:12,position:"relative",overflow:"hidden"}}>
@@ -4921,9 +4922,10 @@ function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial}){
         </div>
       </div>
 
-      {/* Cards */}
-      <div style={{flex:1,padding:"20px 16px",display:"flex",flexDirection:"column",gap:12,overflowY:"auto"}}>
+      {/* Cards · separadas en pestañas para no volcar todo de golpe */}
+      <div style={{flex:1,padding:"18px 16px",display:"flex",flexDirection:"column",gap:12,overflowY:"auto"}}>
 
+        {homeTab==="inicio"&&(<>
         {comps.length===0&&(
           <div style={{textAlign:"center",color:C.textFaint,fontSize:12,fontFamily:"'DM Sans',sans-serif",padding:"40px 0"}}>
             ⚽ El admin aún no asignó tus competiciones
@@ -4948,7 +4950,24 @@ function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial}){
           </button>
         ))}
 
-        <div style={{fontSize:10,fontWeight:700,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.8,marginTop:comps.length>0?8:0,marginBottom:2}}>Más</div>
+        <div style={{fontSize:10,fontWeight:700,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.8,marginTop:comps.length>0?8:0,marginBottom:2}}>Mi equipo</div>
+
+        {/* Mi Equipo */}
+        <button onClick={()=>onSelect(null)}
+          style={{width:"100%",padding:"14px 15px",borderRadius:18,background:C.card,border:`1px solid ${C.accent}`,cursor:"pointer",display:"flex",alignItems:"center",gap:13,boxShadow:C.dark?"0 2px 16px rgba(233,196,94,0.12)":"0 4px 18px rgba(201,162,39,0.14)",textAlign:"left",position:"relative",overflow:"hidden"}}>
+          <div style={{width:46,height:46,borderRadius:13,background:`linear-gradient(140deg,${tc.dark},${tc.bg})`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:`0 4px 12px ${tc.dark}44`}}>
+            <span style={{fontSize:22}}>👕</span>
+          </div>
+          <div style={{flex:1,zIndex:1}}>
+            <div style={{fontSize:18,fontWeight:800,color:C.text,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:0.5}}>Mi Equipo</div>
+            <div style={{fontSize:10.5,color:C.textLight,fontFamily:"'DM Sans',sans-serif",marginTop:1}}>Campo y plantilla</div>
+          </div>
+          <span style={{fontSize:20,color:C.accent,zIndex:1}}>›</span>
+        </button>
+        </>)}
+
+        {homeTab==="mas"&&(<>
+        <div style={{fontSize:10,fontWeight:700,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.8,marginBottom:2}}>Más</div>
 
         {/* Noticias */}
         <button onClick={()=>{
@@ -4984,19 +5003,6 @@ function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial}){
           <span style={{fontSize:20,color:C.textFaint,zIndex:1}}>›</span>
         </button>
 
-        {/* Mi Equipo */}
-        <button onClick={()=>onSelect(null)}
-          style={{width:"100%",padding:"14px 15px",borderRadius:18,background:C.card,border:`1px solid ${C.accent}`,cursor:"pointer",display:"flex",alignItems:"center",gap:13,boxShadow:C.dark?"0 2px 16px rgba(233,196,94,0.12)":"0 4px 18px rgba(201,162,39,0.14)",textAlign:"left",position:"relative",overflow:"hidden"}}>
-          <div style={{width:46,height:46,borderRadius:13,background:`linear-gradient(140deg,${tc.dark},${tc.bg})`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:`0 4px 12px ${tc.dark}44`}}>
-            <span style={{fontSize:22}}>👕</span>
-          </div>
-          <div style={{flex:1,zIndex:1}}>
-            <div style={{fontSize:18,fontWeight:800,color:C.text,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:0.5}}>Mi Equipo</div>
-            <div style={{fontSize:10.5,color:C.textLight,fontFamily:"'DM Sans',sans-serif",marginTop:1}}>Campo y plantilla</div>
-          </div>
-          <span style={{fontSize:20,color:C.accent,zIndex:1}}>›</span>
-        </button>
-
         {isAdmin&&(
           <button onClick={()=>onSelect(null)}
             style={{width:"100%",padding:"14px 15px",borderRadius:18,background:"linear-gradient(135deg,#1a1a2e,#34345b)",border:"1px solid #9b59b6",cursor:"pointer",display:"flex",alignItems:"center",gap:13,boxShadow:"0 4px 18px rgba(155,89,182,0.25)",textAlign:"left",position:"relative",overflow:"hidden"}}>
@@ -5010,7 +5016,24 @@ function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial}){
             <span style={{fontSize:20,color:"#fff",zIndex:1}}>›</span>
           </button>
         )}
+        </>)}
 
+      </div>
+
+      {/* Barra de pestañas inferior */}
+      <div style={{flexShrink:0,display:"flex",padding:"8px 6px 12px",background:C.card,borderTop:`1px solid ${C.border}`,boxShadow:C.dark?"0 -2px 16px rgba(0,0,0,0.4)":"0 -2px 14px rgba(40,33,15,0.06)"}}>
+        {[
+          {id:"inicio",icon:"🏠",label:"Inicio",onClick:()=>setHomeTab("inicio"),active:homeTab==="inicio"},
+          {id:"equipo",icon:"👕",label:"Equipo",onClick:()=>onSelect(null),active:false},
+          {id:"mundial",icon:"🌍",label:"Mundial",onClick:onOpenMundial,active:false},
+          {id:"mas",icon:"⋯",label:"Más",onClick:()=>setHomeTab("mas"),active:homeTab==="mas"},
+        ].map(it=>(
+          <button key={it.id} onClick={it.onClick}
+            style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:"none",border:"none",cursor:"pointer",padding:"4px 0",opacity:it.active?1:0.55}}>
+            <span style={{fontSize:19}}>{it.icon}</span>
+            <span style={{fontSize:9,fontWeight:it.active?800:600,color:it.active?C.accent:C.textMid,fontFamily:"'DM Sans',sans-serif"}}>{it.label}</span>
+          </button>
+        ))}
       </div>
       {showNoticias&&<NoticiasModal teamData={teamData} allTeams={allTeams} isAdmin={isAdmin} onClose={()=>setShowNoticias(false)}/>}
     </div>
