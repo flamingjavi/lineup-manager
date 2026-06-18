@@ -342,7 +342,7 @@ function Avatar({name,size=50,colorId,overall}){
 }
 
 // ─── RESUMEN DEL EQUIPO · Valoración · Logros · Recomendación ───────
-function EquipoResumen({lineup,squad,positions,mercadoAbierto,isSel,isAdmin,allTeams,teamData,mode="bar",onOpen,onClose}){
+function EquipoResumen({lineup,squad,positions,mercadoAbierto,isSel,isAdmin,allTeams,teamData,mode="bar",onOpen,onClose,onContact}){
   const[open,setOpen]=useState(true);
   const[cfgLogros,setCfgLogros]=useState(null);
   const[editLogros,setEditLogros]=useState(false);
@@ -403,6 +403,21 @@ function EquipoResumen({lineup,squad,positions,mercadoAbierto,isSel,isAdmin,allT
   // (se muestra siempre, aunque el mercado esté cerrado)
   let reco=null;
   {
+    // Presupuesto del equipo (admite "150M", "150000000", etc.)
+    const parseBudget=v=>{
+      if(!v) return 0;
+      const s=String(v).trim().replace(/,/g,"");
+      if(s.toUpperCase().endsWith("M")) return parseFloat(s)*1000000;
+      if(s.toUpperCase().endsWith("K")) return parseFloat(s)*1000;
+      return Number(s)||0;
+    };
+    const priceVal=p=>{
+      const v=Number(p?.price?.value);
+      if(!v) return 0;
+      const u=String(p?.price?.unit||"M").toUpperCase();
+      return u==="K"?v*1000:v*1000000;
+    };
+    const budget=parseBudget(teamData?.presupuesto);
     const lineas=[
       {lbl:"la defensa",v:defensa,arr:DEF,players:defP},
       {lbl:"el mediocampo",v:medio,arr:MED,players:medP},
@@ -420,11 +435,14 @@ function EquipoResumen({lineup,squad,positions,mercadoAbierto,isSel,isAdmin,allT
         (t.squad||[]).forEach(p=>{
           if(!p.overall) return;
           const pos=String(p.primaryPos||p.pos||"").split("/")[0].toUpperCase().trim();
-          if(weak.arr.includes(pos)&&Number(p.overall)>weak.v) cands.push({...p,fromTeam:t.teamName||"Otro equipo"});
+          if(weak.arr.includes(pos)&&Number(p.overall)>weak.v) cands.push({...p,fromTeam:t.teamName||"Otro equipo",fromUid:tUid,priceReal:priceVal(p)});
         });
       });
       cands.sort((a,b)=>Number(b.overall)-Number(a.overall));
-      reco={linea:weak.lbl,media:weak.v,player:cands[0]||null};
+      // Solo recomendamos fichajes que CABEN en tu presupuesto (si hay uno definido)
+      const enPresupuesto=budget>0?cands.filter(c=>c.priceReal>0&&c.priceReal<=budget):cands;
+      const player=enPresupuesto[0]||null;
+      reco={linea:weak.lbl,media:weak.v,player,budget,hayMejores:cands.length>0,fueraPresupuesto:budget>0&&!player&&cands.length>0};
     }
   }
 
@@ -517,14 +535,16 @@ function EquipoResumen({lineup,squad,positions,mercadoAbierto,isSel,isAdmin,allT
             </div>
           </div>
 
-          {/* Recomendación de fichaje · solo con mercado abierto */}
+          {/* Recomendación de fichaje · filtrada por tu presupuesto */}
           {reco&&(
             <div>
               <div style={{fontSize:9,fontWeight:800,color:C.textFaint,letterSpacing:1,marginBottom:7,textTransform:"uppercase",fontFamily:"'DM Sans',sans-serif"}}>Recomendación de fichaje</div>
               <div style={{position:"relative",borderRadius:13,overflow:"hidden",background:C.dark?"linear-gradient(135deg,#1a1208,#2a1f0a)":"linear-gradient(135deg,#fff8e6,#fbefc9)",border:`1px solid ${C.accent}`,padding:"13px 14px"}}>
                 <div style={{position:"absolute",top:0,right:0,background:C.accentGrad,color:C.accentInk,fontSize:8.5,fontWeight:800,padding:"3px 9px",borderRadius:"0 0 0 9px",letterSpacing:0.5,fontFamily:"'DM Sans',sans-serif"}}>REFUERZO SUGERIDO</div>
                 <div style={{fontSize:12,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif",paddingRight:90}}>Refuerza <span style={{color:C.accentDark}}>{reco.linea}</span> — tu línea más débil ({reco.media} media).</div>
+                {reco.budget>0&&<div style={{fontSize:9.5,color:C.textLight,marginTop:3,fontFamily:"'DM Sans',sans-serif"}}>Filtrado por tu presupuesto · {fmtPresu(teamData?.presupuesto)}</div>}
                 {reco.player&&reco.player.name?(
+                  <>
                   <div style={{display:"flex",alignItems:"center",gap:10,marginTop:11,paddingTop:11,borderTop:`1px solid ${C.accent}33`}}>
                     <div style={{width:40,height:40,borderRadius:"50%",background:C.accentGrad,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Bebas Neue',sans-serif",fontSize:16,color:C.accentInk,flexShrink:0,boxShadow:C.accentShadow}}>{reco.player.overall||"?"}</div>
                     <div style={{flex:1,minWidth:0}}>
@@ -532,7 +552,22 @@ function EquipoResumen({lineup,squad,positions,mercadoAbierto,isSel,isAdmin,allT
                       <div style={{fontSize:13,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{reco.player.name} <span style={{color:C.textLight,fontWeight:600}}>· {getP(reco.player)}</span></div>
                       <div style={{fontSize:10,color:C.accentDark,fontWeight:700,fontFamily:"'DM Sans',sans-serif",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>de {reco.player.fromTeam}</div>
                     </div>
+                    {reco.player.price&&reco.player.price.value?(
+                      <div style={{textAlign:"right",flexShrink:0}}>
+                        <div style={{fontSize:13,fontWeight:800,color:"#27ae60",fontFamily:"monospace"}}>💰 {reco.player.price.value}{reco.player.price.unit||"M"}</div>
+                        {reco.budget>0&&<div style={{fontSize:8,fontWeight:800,color:"#27ae60",letterSpacing:0.4,fontFamily:"'DM Sans',sans-serif"}}>✓ ENCAJA</div>}
+                      </div>
+                    ):null}
                   </div>
+                  {onContact&&(
+                    <button onClick={()=>onContact(reco.player)}
+                      style={{width:"100%",marginTop:11,padding:"10px",borderRadius:10,border:"none",background:C.accentGrad,color:C.accentInk,boxShadow:C.accentShadow,cursor:"pointer",fontSize:12,fontWeight:800,fontFamily:"'DM Sans',sans-serif"}}>
+                      💬 Mensaje al dueño · negociar
+                    </button>
+                  )}
+                  </>
+                ):reco.fueraPresupuesto?(
+                  <div style={{fontSize:10.5,color:C.textLight,marginTop:9,paddingTop:9,borderTop:`1px solid ${C.accent}33`,fontFamily:"'DM Sans',sans-serif",lineHeight:1.4}}>Hay refuerzos para esta línea, pero superan tu presupuesto actual ({fmtPresu(teamData?.presupuesto)}).</div>
                 ):(
                   <div style={{fontSize:10.5,color:C.textLight,marginTop:9,paddingTop:9,borderTop:`1px solid ${C.accent}33`,fontFamily:"'DM Sans',sans-serif",lineHeight:1.4}}>Ningún jugador de otros equipos mejora esta línea ahora mismo.</div>
                 )}
@@ -7916,7 +7951,7 @@ function MainApp({user,isAdmin,onLogout}){
 
       {/* 📊 Resumen del equipo · barra compacta → pantalla aparte (descongestiona el campo) */}
       <EquipoResumen mode="bar" onOpen={()=>setShowResumen(true)} lineup={activeLineup} squad={squad} positions={positions} mercadoAbierto={mercadoAbierto} isSel={isSel} isAdmin={isAdmin} allTeams={allTeams} teamData={teamData}/>
-      {showResumen&&<EquipoResumen mode="screen" onClose={()=>setShowResumen(false)} lineup={activeLineup} squad={squad} positions={positions} mercadoAbierto={mercadoAbierto} isSel={isSel} isAdmin={isAdmin} allTeams={allTeams} teamData={teamData}/>}
+      {showResumen&&<EquipoResumen mode="screen" onClose={()=>setShowResumen(false)} onContact={()=>{setShowResumen(false);if(!mercadoAbierto&&!isAdmin){alert("🔒 No es momento de mercado. El admin habilitará el acceso para negociar próximamente.");return;}setShowMercado(true);}} lineup={activeLineup} squad={squad} positions={positions} mercadoAbierto={mercadoAbierto} isSel={isSel} isAdmin={isAdmin} allTeams={allTeams} teamData={teamData}/>}
 
       {/* MAINTENANCE STRIP - admin only */}
       {isAdmin&&(
