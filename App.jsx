@@ -342,7 +342,7 @@ function Avatar({name,size=50,colorId,overall}){
 }
 
 // ─── RESUMEN DEL EQUIPO · Valoración · Logros · Recomendación ───────
-function EquipoResumen({lineup,squad,positions,mercadoAbierto,isSel,isAdmin,allTeams,teamData}){
+function EquipoResumen({lineup,squad,positions,mercadoAbierto,isSel,isAdmin,allTeams,teamData,mode="bar",onOpen,onClose}){
   const[open,setOpen]=useState(true);
   const[cfgLogros,setCfgLogros]=useState(null);
   const[editLogros,setEditLogros]=useState(false);
@@ -441,17 +441,7 @@ function EquipoResumen({lineup,squad,positions,mercadoAbierto,isSel,isAdmin,allT
     </div>
   );
 
-  return(
-    <div style={{position:"relative",borderBottom:`1px solid ${C.border}`,background:C.card}}>
-      <button onClick={()=>setOpen(v=>!v)}
-        style={{width:"100%",padding:"8px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",background:"transparent",border:"none",cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
-        <span style={{fontSize:11,fontWeight:800,color:C.text,display:"flex",alignItems:"center",gap:7}}>
-          📊 Resumen del equipo
-          <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:15,color:C.accent,letterSpacing:0.5}}>· {media||"—"} MEDIA</span>
-        </span>
-        <span style={{fontSize:11,color:C.textLight}}>{open?"▲":"▼"}</span>
-      </button>
-      {open&&(
+  const content=(
         <div style={{padding:"2px 16px 16px",display:"flex",flexDirection:"column",gap:14}}>
 
           {/* Valoración */}
@@ -551,7 +541,39 @@ function EquipoResumen({lineup,squad,positions,mercadoAbierto,isSel,isAdmin,allT
           )}
 
         </div>
-      )}
+  );
+
+  // Barra compacta: vive en la pantalla del equipo, abre el detalle en pantalla aparte
+  if(mode==="bar"){
+    return(
+      <button onClick={onOpen}
+        style={{width:"100%",padding:"11px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",background:C.card,border:"none",borderBottom:`1px solid ${C.border}`,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+        <span style={{fontSize:11,fontWeight:800,color:C.text,display:"flex",alignItems:"center",gap:7}}>
+          📊 Resumen del equipo
+          <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:15,color:C.accent,letterSpacing:0.5}}>· {media||"—"} MEDIA</span>
+        </span>
+        <span style={{display:"flex",alignItems:"center",gap:8}}>
+          <span style={{fontSize:9,fontWeight:700,color:C.textFaint,letterSpacing:0.5,textTransform:"uppercase",fontFamily:"'DM Sans',sans-serif"}}>Ver detalle</span>
+          <span style={{fontSize:17,color:C.textLight}}>›</span>
+        </span>
+      </button>
+    );
+  }
+
+  // Pantalla aparte: valoración, logros y recomendación a pantalla completa
+  return(
+    <div style={{position:"fixed",inset:0,zIndex:400,background:C.bg,display:"flex",flexDirection:"column"}}>
+      <div style={{flexShrink:0,display:"flex",alignItems:"center",gap:10,padding:"13px 16px",background:C.card,borderBottom:`1px solid ${C.border}`}}>
+        <button onClick={onClose} style={{width:34,height:34,borderRadius:9,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.textMid,fontSize:17,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>←</button>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:15,fontWeight:800,color:C.text,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1,lineHeight:1}}>RESUMEN DEL EQUIPO</div>
+          <div style={{fontSize:10,color:C.textLight,fontFamily:"'DM Sans',sans-serif",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{teamData?.teamName||""}</div>
+        </div>
+        <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:24,color:C.accent,letterSpacing:0.5,flexShrink:0}}>{media||"—"}<span style={{fontSize:10,color:C.textLight,marginLeft:4,letterSpacing:1}}>MEDIA</span></span>
+      </div>
+      <div style={{flex:1,overflowY:"auto"}}>
+        <div style={{maxWidth:1060,width:"100%",margin:"0 auto"}}>{content}</div>
+      </div>
     </div>
   );
 }
@@ -7381,6 +7403,7 @@ function MainApp({user,isAdmin,onLogout}){
   const[showSettings,setShowSettings]=useState(false);
   const[showSquadManager,setShowSquadManager]=useState(false);
   const[showSquadList,setShowSquadList]=useState(false);
+  const[showResumen,setShowResumen]=useState(false);
   const[editingPlayer,setEditingPlayer]=useState(null);
   const[showPublicPool,setShowPublicPool]=useState(false);
   const[shareLineup,setShareLineup]=useState(false);
@@ -7891,8 +7914,9 @@ function MainApp({user,isAdmin,onLogout}){
         </div>
       )}
 
-      {/* 📊 Resumen del equipo · Valoración · Logros · Recomendación */}
-      <EquipoResumen lineup={activeLineup} squad={squad} positions={positions} mercadoAbierto={mercadoAbierto} isSel={isSel} isAdmin={isAdmin} allTeams={allTeams} teamData={teamData}/>
+      {/* 📊 Resumen del equipo · barra compacta → pantalla aparte (descongestiona el campo) */}
+      <EquipoResumen mode="bar" onOpen={()=>setShowResumen(true)} lineup={activeLineup} squad={squad} positions={positions} mercadoAbierto={mercadoAbierto} isSel={isSel} isAdmin={isAdmin} allTeams={allTeams} teamData={teamData}/>
+      {showResumen&&<EquipoResumen mode="screen" onClose={()=>setShowResumen(false)} lineup={activeLineup} squad={squad} positions={positions} mercadoAbierto={mercadoAbierto} isSel={isSel} isAdmin={isAdmin} allTeams={allTeams} teamData={teamData}/>}
 
       {/* MAINTENANCE STRIP - admin only */}
       {isAdmin&&(
