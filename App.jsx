@@ -4704,6 +4704,205 @@ function TransmisionPanel({teamData,lineupName,esMundial,onClose}){
 }
 
 
+// ─── CHAT ENTRE PRESIDENTES: General + Directos (privado) ────────────────────
+function ChatModal({teamData,allTeams,onClose}){
+  const[tab,setTab]=useState("general"); // general | directos
+  const[chatGeneral,setChatGeneral]=useState([]);
+  const[equipoSel,setEquipoSel]=useState(null); // equipo con el que chateas en directo
+  const[mensajesDirecto,setMensajesDirecto]=useState([]);
+  const[texto,setTexto]=useState("");
+  const[ultimosDirectos,setUltimosDirectos]=useState({}); // {teamId: {ultimoMsg, noLeido}}
+  const myId=teamData?.id||teamData?.uid;
+  const myName=teamData?.teamName||"";
+  const scrollRef=useRef(null);
+
+  const chatKey=(idA,idB)=>[idA,idB].sort().join("__");
+
+  useEffect(()=>{
+    const unsub=onSnapshot(doc(db,"chatGeneral","mensajes"),snap=>{
+      setChatGeneral(snap.exists()?(snap.data().lista||[]):[]);
+    });
+    return unsub;
+  },[]);
+
+  useEffect(()=>{
+    if(!equipoSel||!myId) return;
+    const key=chatKey(myId,equipoSel.id||equipoSel.uid);
+    const unsub=onSnapshot(doc(db,"chatsDirectos",key),snap=>{
+      setMensajesDirecto(snap.exists()?(snap.data().mensajes||[]):[]);
+    });
+    return unsub;
+  },[equipoSel,myId]);
+
+  // Escucha todos los chats directos donde participo, para mostrar lista de conversaciones + no leídos
+  useEffect(()=>{
+    if(!myId) return;
+    const unsub=onSnapshot(collection(db,"chatsDirectos"),snap=>{
+      const map={};
+      snap.docs.forEach(d=>{
+        if(!d.id.includes(myId)) return;
+        const mensajes=d.data().mensajes||[];
+        if(mensajes.length===0) return;
+        const otroId=d.id.split("__").find(x=>x!==myId);
+        const ultimo=mensajes[mensajes.length-1];
+        const ultimaVista=teamData?.[`ultimaVistaChat_${otroId}`]||null;
+        const noLeido=ultimo.de!==myId&&(!ultimaVista||new Date(ultimo.fecha)>new Date(ultimaVista));
+        map[otroId]={ultimoMsg:ultimo,noLeido};
+      });
+      setUltimosDirectos(map);
+    });
+    return unsub;
+  },[myId,teamData]);
+
+  useEffect(()=>{
+    scrollRef.current?.scrollTo({top:scrollRef.current.scrollHeight});
+  },[chatGeneral,mensajesDirecto,tab,equipoSel]);
+
+  const enviarGeneral=async()=>{
+    if(!texto.trim()) return;
+    const ref=doc(db,"chatGeneral","mensajes");
+    const snap=await getDoc(ref).catch(()=>null);
+    const current=snap?.exists()?snap.data():{lista:[]};
+    const nuevo={de:myId,nombre:myName,texto:texto.trim(),fecha:new Date().toISOString()};
+    await setDoc(ref,{lista:[...(current.lista||[]),nuevo].slice(-200)},{merge:true});
+    setTexto("");
+  };
+
+  const enviarDirecto=async()=>{
+    if(!texto.trim()||!equipoSel) return;
+    const otroId=equipoSel.id||equipoSel.uid;
+    const key=chatKey(myId,otroId);
+    const ref=doc(db,"chatsDirectos",key);
+    const snap=await getDoc(ref).catch(()=>null);
+    const current=snap?.exists()?snap.data():{mensajes:[]};
+    const nuevo={de:myId,nombre:myName,texto:texto.trim(),fecha:new Date().toISOString()};
+    await setDoc(ref,{mensajes:[...(current.mensajes||[]),nuevo].slice(-300),participantes:[myId,otroId]},{merge:true});
+    setTexto("");
+  };
+
+  const abrirDirecto=async(equipo)=>{
+    setEquipoSel(equipo);
+    const otroId=equipo.id||equipo.uid;
+    if(myId){
+      await updateDoc(doc(db,"teams",myId),{[`ultimaVistaChat_${otroId}`]:new Date().toISOString()}).catch(()=>{});
+    }
+  };
+
+  const formatFecha=(iso)=>{
+    try{
+      const d=new Date(iso);
+      return d.toLocaleDateString("es-GT",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"});
+    }catch{return "";}
+  };
+
+  const totalNoLeidos=Object.values(ultimosDirectos).filter(v=>v.noLeido).length;
+
+  return(
+    <div style={{position:"fixed",inset:0,zIndex:200,background:"rgba(0,0,0,0.7)",display:"flex",flexDirection:"column"}}>
+      <div style={{background:C.card,flex:1,display:"flex",flexDirection:"column",maxHeight:"100vh"}}>
+        <div style={{padding:"12px 16px",background:"linear-gradient(135deg,#1a1a2e,#34345b)",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+          {equipoSel&&tab==="directos"?(
+            <>
+              <button onClick={()=>setEquipoSel(null)} style={{background:"rgba(255,255,255,0.15)",border:"none",borderRadius:"50%",width:28,height:28,color:"#fff",cursor:"pointer",fontSize:15,display:"flex",alignItems:"center",justifyContent:"center"}}>←</button>
+              <span style={{fontSize:14,fontWeight:800,color:"#fff",fontFamily:"'DM Sans',sans-serif"}}>{equipoSel.teamName}</span>
+            </>
+          ):(
+            <span style={{fontSize:15,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>💬 CHAT</span>
+          )}
+          <button onClick={onClose} style={{marginLeft:"auto",background:"rgba(255,255,255,0.15)",border:"none",borderRadius:"50%",width:28,height:28,color:"#fff",cursor:"pointer",fontSize:15,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+        </div>
+
+        {!(equipoSel&&tab==="directos")&&(
+          <div style={{display:"flex",borderBottom:`2px solid ${C.border}`,background:C.card,flexShrink:0}}>
+            <button onClick={()=>setTab("general")}
+              style={{flex:1,padding:"10px 4px",background:"none",border:"none",borderBottom:tab==="general"?"3px solid #1a3a5c":"3px solid transparent",cursor:"pointer",fontSize:11,fontWeight:700,color:tab==="general"?"#1a3a5c":C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>
+              🌐 General
+            </button>
+            <button onClick={()=>setTab("directos")}
+              style={{flex:1,padding:"10px 4px",background:"none",border:"none",borderBottom:tab==="directos"?"3px solid #1a3a5c":"3px solid transparent",cursor:"pointer",fontSize:11,fontWeight:700,color:tab==="directos"?"#1a3a5c":C.textFaint,fontFamily:"'DM Sans',sans-serif",position:"relative"}}>
+              🔒 Directos{totalNoLeidos>0&&<span style={{position:"absolute",top:4,right:"28%",minWidth:15,height:15,borderRadius:8,background:"#c0392b",color:"#fff",fontSize:8,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center"}}>{totalNoLeidos}</span>}
+            </button>
+          </div>
+        )}
+
+        {/* GENERAL */}
+        {tab==="general"&&(
+          <>
+            <div ref={scrollRef} style={{flex:1,padding:"12px 14px",overflowY:"auto",display:"flex",flexDirection:"column",gap:8}}>
+              {chatGeneral.length===0&&(
+                <div style={{textAlign:"center",color:C.textFaint,fontSize:12,fontFamily:"'DM Sans',sans-serif",padding:"40px 0"}}>📭 Sin mensajes todavía</div>
+              )}
+              {chatGeneral.map((m,i)=>{
+                const esMio=m.de===myId;
+                return(
+                  <div key={i} style={{alignSelf:esMio?"flex-end":"flex-start",maxWidth:"78%"}}>
+                    {!esMio&&<div style={{fontSize:9,fontWeight:700,color:"#1a3a5c",fontFamily:"'DM Sans',sans-serif",marginBottom:2,marginLeft:4}}>{m.nombre}</div>}
+                    <div style={{background:esMio?"#1a3a5c":C.inputBg,color:esMio?"#fff":C.text,padding:"8px 12px",borderRadius:14,fontSize:13,fontFamily:"'DM Sans',sans-serif"}}>{m.texto}</div>
+                    <div style={{fontSize:8,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginTop:2,textAlign:esMio?"right":"left",marginRight:esMio?4:0,marginLeft:esMio?0:4}}>{formatFecha(m.fecha)}</div>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{padding:"10px 12px",borderTop:`1px solid ${C.border}`,display:"flex",gap:8,flexShrink:0}}>
+              <input value={texto} onChange={e=>setTexto(e.target.value)} onKeyDown={e=>e.key==="Enter"&&enviarGeneral()} placeholder="Escribe un mensaje…"
+                style={{flex:1,padding:"10px 12px",borderRadius:20,border:`1px solid ${C.border}`,background:C.inputBg,color:C.text,fontSize:13,fontFamily:"'DM Sans',sans-serif"}}/>
+              <button onClick={enviarGeneral} style={{padding:"10px 16px",borderRadius:20,background:"#1a3a5c",color:"#fff",border:"none",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>➤</button>
+            </div>
+          </>
+        )}
+
+        {/* DIRECTOS: lista de equipos */}
+        {tab==="directos"&&!equipoSel&&(
+          <div style={{flex:1,overflowY:"auto",padding:"10px 14px",display:"flex",flexDirection:"column",gap:6}}>
+            {allTeams.filter(t=>(t.id||t.uid)!==myId&&t.teamName).map(t=>{
+              const tId=t.id||t.uid;
+              const info=ultimosDirectos[tId];
+              return(
+                <button key={tId} onClick={()=>abrirDirecto(t)}
+                  style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:12,background:C.inputBg,border:`1px solid ${info?.noLeido?"#c0392b":C.border}`,cursor:"pointer",textAlign:"left"}}>
+                  <span style={{width:34,height:34,borderRadius:"50%",background:C.card,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,color:C.textMid,flexShrink:0,fontFamily:"'Bebas Neue',sans-serif"}}>{(t.teamName||"?").slice(0,2).toUpperCase()}</span>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:12,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{t.teamName}</div>
+                    {info?.ultimoMsg&&(
+                      <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{info.ultimoMsg.de===myId?"Tú: ":""}{info.ultimoMsg.texto}</div>
+                    )}
+                  </div>
+                  {info?.noLeido&&<span style={{width:8,height:8,borderRadius:"50%",background:"#c0392b",flexShrink:0}}/>}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* DIRECTOS: conversación abierta */}
+        {tab==="directos"&&equipoSel&&(
+          <>
+            <div ref={scrollRef} style={{flex:1,padding:"12px 14px",overflowY:"auto",display:"flex",flexDirection:"column",gap:8}}>
+              {mensajesDirecto.length===0&&(
+                <div style={{textAlign:"center",color:C.textFaint,fontSize:12,fontFamily:"'DM Sans',sans-serif",padding:"40px 0"}}>📭 Inicia la conversación — solo la ven ambos equipos</div>
+              )}
+              {mensajesDirecto.map((m,i)=>{
+                const esMio=m.de===myId;
+                return(
+                  <div key={i} style={{alignSelf:esMio?"flex-end":"flex-start",maxWidth:"78%"}}>
+                    <div style={{background:esMio?"#1a3a5c":C.inputBg,color:esMio?"#fff":C.text,padding:"8px 12px",borderRadius:14,fontSize:13,fontFamily:"'DM Sans',sans-serif"}}>{m.texto}</div>
+                    <div style={{fontSize:8,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginTop:2,textAlign:esMio?"right":"left",marginRight:esMio?4:0,marginLeft:esMio?0:4}}>{formatFecha(m.fecha)}</div>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{padding:"10px 12px",borderTop:`1px solid ${C.border}`,display:"flex",gap:8,flexShrink:0}}>
+              <input value={texto} onChange={e=>setTexto(e.target.value)} onKeyDown={e=>e.key==="Enter"&&enviarDirecto()} placeholder={`Mensaje privado a ${equipoSel.teamName}…`}
+                style={{flex:1,padding:"10px 12px",borderRadius:20,border:`1px solid ${C.border}`,background:C.inputBg,color:C.text,fontSize:13,fontFamily:"'DM Sans',sans-serif"}}/>
+              <button onClick={enviarDirecto} style={{padding:"10px 16px",borderRadius:20,background:"#1a3a5c",color:"#fff",border:"none",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>➤</button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial}){
   const tc=getTeamColor(teamData?.teamColor||"blue");
   const ORDEN_CATEGORIA={liga1:0,liga2:0,ascenso:0,champions:1,europa:1,copa:2,copaascenso:2,supercopa:3};
@@ -4717,6 +4916,27 @@ function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial}){
   const[noticiasUsuario,setNoticiasUsuario]=useState([]);
   const[competenciaData,setCompetenciaData]=useState({});
   const[noticiasFeed,setNoticiasFeed]=useState([]);
+  const[showChat,setShowChat]=useState(false);
+  const[chatNoLeidos,setChatNoLeidos]=useState(0);
+  const myId=teamData?.id||teamData?.uid;
+
+  useEffect(()=>{
+    if(!myId) return;
+    const unsub=onSnapshot(collection(db,"chatsDirectos"),snap=>{
+      let count=0;
+      snap.docs.forEach(d=>{
+        if(!d.id.includes(myId)) return;
+        const mensajes=d.data().mensajes||[];
+        if(mensajes.length===0) return;
+        const otroId=d.id.split("__").find(x=>x!==myId);
+        const ultimo=mensajes[mensajes.length-1];
+        const ultimaVista=teamData?.[`ultimaVistaChat_${otroId}`]||null;
+        if(ultimo.de!==myId&&(!ultimaVista||new Date(ultimo.fecha)>new Date(ultimaVista))) count++;
+      });
+      setChatNoLeidos(count);
+    });
+    return unsub;
+  },[myId,teamData]);
 
   useEffect(()=>{
     const unsub=onSnapshot(doc(db,"config","competenciaData"),snap=>{
@@ -4932,6 +5152,16 @@ function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial}){
             <div style={{fontSize:9.5,color:mencionesNoVistas>0?"#e07b6e":C.textLight,fontWeight:600,fontFamily:"'DM Sans',sans-serif",marginTop:3}}>{mencionesNoVistas>0?`Te mencionaron ${mencionesNoVistas} ${mencionesNoVistas!==1?"veces":"vez"} · ver noticias`:"Ver todas las noticias"}</div>
           </div>
         </button>
+
+        <button onClick={()=>setShowChat(true)}
+          style={{width:"100%",padding:"13px 14px",borderRadius:18,background:C.card,border:`1px solid ${chatNoLeidos>0?"#d8a39c":C.border}`,cursor:"pointer",display:"flex",alignItems:"center",gap:12,boxShadow:C.dark?"0 2px 14px rgba(0,0,0,0.35)":"0 4px 16px rgba(40,33,15,0.06)",textAlign:"left",marginTop:8}}>
+          <span style={{width:38,height:38,borderRadius:11,background:C.inputBg,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,flexShrink:0,position:"relative"}}>💬{chatNoLeidos>0&&<span style={{position:"absolute",top:-5,right:-5,minWidth:17,height:17,borderRadius:9,background:"#c0392b",color:"#fff",fontSize:9,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",border:`2px solid ${C.card}`}}>{chatNoLeidos}</span>}</span>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:12,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>Chat entre presidentes</div>
+            <div style={{fontSize:9.5,color:chatNoLeidos>0?"#e07b6e":C.textLight,fontWeight:600,fontFamily:"'DM Sans',sans-serif",marginTop:3}}>{chatNoLeidos>0?`${chatNoLeidos} mensaje${chatNoLeidos!==1?"s":""} sin leer`:"General y directos privados"}</div>
+          </div>
+        </button>
+        {showChat&&<ChatModal teamData={teamData} allTeams={allTeams} onClose={()=>setShowChat(false)}/>}
 
         <div style={{fontSize:10,fontWeight:700,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.8,marginTop:8,marginBottom:2}}>Más</div>
 
