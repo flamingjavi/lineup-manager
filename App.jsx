@@ -39,6 +39,25 @@ function fmtPresu(v){
   return String(n);
 }
 
+// ─── Convierte presupuesto/precio (string "131.2M", número, etc) a valor numérico ────
+function parsePresuGlobal(v){
+  if(v===undefined||v===null||v==="") return 0;
+  const s=String(v).trim().replace(/,/g,"");
+  if(s.toUpperCase().endsWith("M")) return parseFloat(s)*1000000;
+  if(s.toUpperCase().endsWith("K")) return parseFloat(s)*1000;
+  return Number(s)||0;
+}
+// ─── Precio de jugador {value,unit} a número (siempre en unidades reales) ───
+function precioJugadorAVal(price){
+  if(!price) return 0;
+  if(typeof price==="object"){
+    const v=Number(price.value)||0;
+    const unit=(price.unit||"M").toUpperCase();
+    return unit==="K"?v*1000:v*1000000;
+  }
+  return parsePresuGlobal(price);
+}
+
 // ─── COLORES ──────────────────────────────────────────────────────────────────
 // ─── PALETA REFINADA · oro editorial premium (cálido, no lima) ───────────────
 const COLORS_LIGHT = {
@@ -5159,48 +5178,6 @@ function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial,onOpenNoti
             <div style={{fontSize:9.5,color:chatNoLeidos>0?"#e07b6e":C.textLight,fontWeight:600,fontFamily:"'DM Sans',sans-serif",marginTop:3}}>{chatNoLeidos>0?`${chatNoLeidos} mensaje${chatNoLeidos!==1?"s":""} sin leer`:"General y directos privados"}</div>
           </div>
         </button>
-        <div id="home-mas-section" style={{fontSize:10,fontWeight:700,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.8,marginTop:8,marginBottom:2}}>Más</div>
-
-        {/* Mundial */}
-        <button onClick={onOpenMundial}
-          style={{width:"100%",padding:"14px 15px",borderRadius:18,background:C.card,border:`1px solid ${C.border}`,cursor:"pointer",display:"flex",alignItems:"center",gap:13,boxShadow:C.dark?"0 2px 14px rgba(0,0,0,0.35)":"0 4px 16px rgba(40,33,15,0.06)",textAlign:"left",position:"relative",overflow:"hidden"}}>
-          <div style={{width:46,height:46,borderRadius:13,background:"linear-gradient(140deg,#7c3aed,#4c1d95)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 4px 12px rgba(124,58,237,0.35)"}}>
-            <span style={{fontSize:22}}>🌍</span>
-          </div>
-          <div style={{flex:1,zIndex:1}}>
-            <div style={{fontSize:18,fontWeight:800,color:C.text,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:0.5}}>Mundial</div>
-            <div style={{fontSize:10.5,color:C.textLight,fontFamily:"'DM Sans',sans-serif",marginTop:1}}>Selecciones nacionales</div>
-          </div>
-          <span style={{fontSize:20,color:C.textFaint,zIndex:1}}>›</span>
-        </button>
-
-        {/* Mi Equipo */}
-        <button onClick={()=>onSelect(null)}
-          style={{width:"100%",padding:"14px 15px",borderRadius:18,background:C.card,border:`1px solid ${C.accent}`,cursor:"pointer",display:"flex",alignItems:"center",gap:13,boxShadow:C.dark?"0 2px 16px rgba(233,196,94,0.12)":"0 4px 18px rgba(201,162,39,0.14)",textAlign:"left",position:"relative",overflow:"hidden"}}>
-          <div style={{width:46,height:46,borderRadius:13,background:`linear-gradient(140deg,${tc.dark},${tc.bg})`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:`0 4px 12px ${tc.dark}44`}}>
-            <span style={{fontSize:22}}>👕</span>
-          </div>
-          <div style={{flex:1,zIndex:1}}>
-            <div style={{fontSize:18,fontWeight:800,color:C.text,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:0.5}}>Mi Equipo</div>
-            <div style={{fontSize:10.5,color:C.textLight,fontFamily:"'DM Sans',sans-serif",marginTop:1}}>Campo y plantilla</div>
-          </div>
-          <span style={{fontSize:20,color:C.accent,zIndex:1}}>›</span>
-        </button>
-
-        {isAdmin&&(
-          <button onClick={()=>onSelect(null)}
-            style={{width:"100%",padding:"14px 15px",borderRadius:18,background:"linear-gradient(135deg,#1a1a2e,#34345b)",border:"1px solid #9b59b6",cursor:"pointer",display:"flex",alignItems:"center",gap:13,boxShadow:"0 4px 18px rgba(155,89,182,0.25)",textAlign:"left",position:"relative",overflow:"hidden"}}>
-            <div style={{width:46,height:46,borderRadius:13,background:"linear-gradient(140deg,#9b59b6,#6c3483)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 4px 12px rgba(155,89,182,0.4)"}}>
-              <span style={{fontSize:22}}>👑</span>
-            </div>
-            <div style={{flex:1,zIndex:1}}>
-              <div style={{fontSize:18,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:0.5}}>Admin</div>
-              <div style={{fontSize:10.5,color:"rgba(255,255,255,0.65)",fontFamily:"'DM Sans',sans-serif",marginTop:1}}>Equipos, transmisión, noticias, calendario</div>
-            </div>
-            <span style={{fontSize:20,color:"#fff",zIndex:1}}>›</span>
-          </button>
-        )}
-
       </div>
     </div>
   );
@@ -7572,9 +7549,129 @@ function CompVistaPublica({comp,competenciaData,onClose}){
 
 
 // ─── BARRA DE NAVEGACIÓN INFERIOR: siempre visible, en cualquier pantalla ────
-function BottomTabBar({active,onInicio,onEquipo,onNoticias,onChat,onMas}){
+// ─── RECOMENDACIÓN DE FICHAJE: detecta tu posición más débil y sugiere candidatos ─
+function RecomendacionFichaje({teamData,squad,activeLineup,positions,pool,allTeams,user,onClose,setAiMsg}){
+  const presupuesto=parsePresuGlobal(teamData?.presupuesto);
+
+  // 1. Calcula el overall promedio por posición de la formación, según los titulares actuales
+  const debilidades=(positions||[]).map(p=>{
+    const jugador=activeLineup?.starters?.[p.id];
+    const overall=jugador?(Number(jugador.overall)||0):0;
+    return {posId:p.id,label:p.label,overall,vacante:!jugador};
+  }).sort((a,b)=>{
+    if(a.vacante&&!b.vacante) return -1;
+    if(!a.vacante&&b.vacante) return 1;
+    return a.overall-b.overall;
+  });
+  const posMasDebil=debilidades[0];
+
+  // 2. Busca en el pool global candidatos de OTROS equipos que jueguen esa posición
+  const misNombres=new Set((squad||[]).map(p=>(p.name||"").trim().toLowerCase()));
+  const candidatos=Object.values(pool||{})
+    .filter(p=>p.teamUid!==(teamData?.uid||teamData?.id)&&p.teamName!==teamData?.teamName)
+    .filter(p=>!misNombres.has((p.name||"").trim().toLowerCase()))
+    .filter(p=>{
+      const primary=POS_EN_ES[p.pos?.split("/")[0]?.trim()]||normPos(p.pos)?.split("/")[0]||"";
+      return posMasDebil&&(primary===posMasDebil.label||p.pos?.includes(posMasDebil.label));
+    })
+    .map(p=>({...p,precioVal:precioJugadorAVal(p.price)}))
+    .filter(p=>p.precioVal<=presupuesto&&p.precioVal>0) // se ajusta al presupuesto real
+    .sort((a,b)=>(Number(b.overall)||0)-(Number(a.overall)||0)) // mejor overall primero, ya filtrado por presupuesto
+    .slice(0,3);
+
+  const[ofertando,setOfertando]=useState(null);
+  const[enviando,setEnviando]=useState(false);
+
+  const contactarDueno=async(jugador)=>{
+    const toTeam=(allTeams||[]).find(t=>(t.uid||t.id)===jugador.teamUid||t.teamName===jugador.teamName);
+    if(!toTeam){setAiMsg&&setAiMsg("❌ No se encontró el equipo dueño");return;}
+    setEnviando(true);
+    try{
+      const transferRef=await addDoc(collection(db,"transfers"),{
+        fromUid:user.uid,
+        fromName:teamData.teamName,
+        toUid:toTeam.uid||toTeam.id,
+        toName:toTeam.teamName||"",
+        offeredPlayers:[],
+        requestedPlayers:[{name:jugador.name,pos:jugador.pos,price:jugador.price?.value||jugador.price||""}],
+        offeredMoney:0,
+        requestedMoney:Number(jugador.price?.value||precioJugadorAVal(jugador.price)/1000000)||0,
+        note:`Oferta automática por recomendación de fichaje para reforzar ${posMasDebil?.label||""}.`,
+        status:"pending_acceptance",
+        createdAt:serverTimestamp(),
+      });
+      setAiMsg&&setAiMsg(`✅ Oferta formal enviada a ${toTeam.teamName} por ${jugador.name}`);
+      setOfertando(null);
+    }catch(e){
+      setAiMsg&&setAiMsg("❌ Error al enviar oferta: "+e.message);
+    }
+    setEnviando(false);
+  };
+
+  return(
+    <div style={{position:"fixed",inset:0,zIndex:310,background:"rgba(0,0,0,0.65)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{background:C.bg,borderRadius:18,width:"100%",maxWidth:420,maxHeight:"85vh",overflowY:"auto",boxShadow:"0 8px 40px rgba(0,0,0,0.35)"}}>
+        <div style={{padding:"14px 16px",background:"linear-gradient(135deg,#1a3a5c,#0d1f30)",borderRadius:"18px 18px 0 0",display:"flex",alignItems:"center",gap:10}}>
+          <span style={{fontSize:18}}>🎯</span>
+          <div style={{flex:1}}>
+            <div style={{fontSize:14,fontWeight:800,color:"#fff",fontFamily:"'DM Sans',sans-serif"}}>Recomendación de fichaje</div>
+            <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",fontFamily:"'DM Sans',sans-serif"}}>Posición más débil: {posMasDebil?.vacante?`${posMasDebil.label} (vacante)`:`${posMasDebil?.label} (${posMasDebil?.overall} OVR)`}</div>
+          </div>
+          <button onClick={onClose} style={{background:"rgba(255,255,255,0.15)",border:"none",borderRadius:"50%",width:28,height:28,color:"#fff",cursor:"pointer",fontSize:15}}>✕</button>
+        </div>
+        <div style={{padding:"14px 16px",display:"flex",flexDirection:"column",gap:10}}>
+          {!posMasDebil&&(
+            <div style={{textAlign:"center",color:C.textFaint,padding:30,fontFamily:"'DM Sans',sans-serif",fontSize:12}}>No se pudo determinar tu formación actual.</div>
+          )}
+          {posMasDebil&&candidatos.length===0&&(
+            <div style={{textAlign:"center",color:C.textFaint,padding:30,fontFamily:"'DM Sans',sans-serif",fontSize:12}}>
+              No encontramos jugadores de {posMasDebil.label} que se ajusten a tu presupuesto actual ({fmtPresu(teamData?.presupuesto)||"0"}).
+            </div>
+          )}
+          {candidatos.map((c,i)=>(
+            <div key={i} style={{background:C.card,borderRadius:12,padding:"12px 14px",border:`1.5px solid ${i===0?"#1a3a5c":C.border}`}}>
+              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+                {i===0&&<span style={{fontSize:9,fontWeight:800,color:"#fff",background:"#1a3a5c",padding:"2px 7px",borderRadius:6,fontFamily:"'DM Sans',sans-serif"}}>MEJOR OPCIÓN</span>}
+                <span style={{fontSize:9,fontWeight:700,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>{c.pos}</span>
+              </div>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:14,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.name}</div>
+                  <div style={{fontSize:11,color:C.textLight,fontFamily:"'DM Sans',sans-serif"}}>{c.teamName}</div>
+                </div>
+                <div style={{textAlign:"right"}}>
+                  <div style={{fontSize:16,fontWeight:900,color:C.accent,fontFamily:"'Bebas Neue',sans-serif"}}>{c.overall||"—"}</div>
+                  <div style={{fontSize:10,fontWeight:700,color:"#27ae60",fontFamily:"'DM Sans',sans-serif"}}>💰 {fmtPresu(c.price?.value?`${c.price.value}${c.price.unit||"M"}`:c.price)||"—"}</div>
+                </div>
+              </div>
+              {ofertando===i?(
+                <div style={{marginTop:10,display:"flex",gap:6}}>
+                  <button onClick={()=>setOfertando(null)} disabled={enviando}
+                    style={{flex:1,padding:"7px",borderRadius:8,background:"none",border:`1px solid ${C.border}`,color:C.textFaint,fontSize:11,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Cancelar</button>
+                  <button onClick={()=>contactarDueno(c)} disabled={enviando}
+                    style={{flex:1,padding:"7px",borderRadius:8,background:"#27ae60",color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:enviando?0.6:1}}>
+                    {enviando?"Enviando…":"✅ Confirmar oferta"}
+                  </button>
+                </div>
+              ):(
+                <button onClick={()=>setOfertando(i)}
+                  style={{width:"100%",marginTop:10,padding:"8px",borderRadius:8,background:"#1a3a5c",color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                  📩 Contactar dueño
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+function BottomTabBar({active,onInicio,onLiga,onEquipo,onNoticias,onChat,onMas}){
   const tabs=[
     {id:"inicio",label:"Inicio",icon:"🏠",onClick:onInicio},
+    {id:"liga",label:"Liga",icon:"🏆",onClick:onLiga},
     {id:"equipo",label:"Equipo",icon:"👕",onClick:onEquipo},
     {id:"noticias",label:"Noticias",icon:"📰",onClick:onNoticias},
     {id:"chat",label:"Chat",icon:"💬",onClick:onChat},
@@ -7592,6 +7689,36 @@ function BottomTabBar({active,onInicio,onEquipo,onNoticias,onChat,onMas}){
           </button>
         );
       })}
+    </div>
+  );
+}
+
+// ─── POPUP "MÁS": flotante arriba de la barra de navegación ─────────────────
+function MasPopup({isAdmin,teamColor,onClose,onOpenMundial,onOpenEquipo,onOpenAdmin}){
+  const tc=getTeamColor(teamColor||"blue");
+  const items=[
+    {label:"Mundial",sub:"Selecciones nacionales",icon:"🌍",grad:"linear-gradient(140deg,#7c3aed,#4c1d95)",onClick:onOpenMundial},
+    {label:"Mi Equipo",sub:"Campo y plantilla",icon:"👕",grad:`linear-gradient(140deg,${tc.dark},${tc.bg})`,onClick:onOpenEquipo},
+    ...(isAdmin?[{label:"Admin",sub:"Equipos, transmisión, noticias, calendario",icon:"👑",grad:"linear-gradient(140deg,#9b59b6,#6c3483)",dark:true,onClick:onOpenAdmin}]:[]),
+  ];
+  return(
+    <div style={{position:"fixed",inset:0,zIndex:170,background:"rgba(0,0,0,0.35)"}} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()}
+        style={{position:"absolute",bottom:"calc(64px + env(safe-area-inset-bottom))",right:10,left:10,maxWidth:340,marginLeft:"auto",background:C.card,borderRadius:18,border:`1px solid ${C.border}`,boxShadow:"0 -8px 32px rgba(0,0,0,0.25)",padding:10,display:"flex",flexDirection:"column",gap:8,animation:"masPopupIn 0.16s ease-out"}}>
+        <style>{`@keyframes masPopupIn{from{opacity:0;transform:translateY(8px) scale(0.97)}to{opacity:1;transform:translateY(0) scale(1)}}`}</style>
+        {items.map((it,i)=>(
+          <button key={i} onClick={()=>{it.onClick();onClose();}}
+            style={{width:"100%",padding:"12px 13px",borderRadius:14,background:it.dark?"linear-gradient(135deg,#1a1a2e,#34345b)":C.inputBg,border:it.dark?"1px solid #9b59b6":`1px solid ${C.border}`,cursor:"pointer",display:"flex",alignItems:"center",gap:12,textAlign:"left"}}>
+            <div style={{width:40,height:40,borderRadius:11,background:it.grad,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              <span style={{fontSize:19}}>{it.icon}</span>
+            </div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:14,fontWeight:800,color:it.dark?"#fff":C.text,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:0.3}}>{it.label}</div>
+              <div style={{fontSize:9.5,color:it.dark?"rgba(255,255,255,0.65)":C.textLight,fontFamily:"'DM Sans',sans-serif",marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.sub}</div>
+            </div>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -7635,6 +7762,7 @@ function MainApp({user,isAdmin,onLogout}){
   const[mundialInitialTab,setMundialInitialTab]=useState("tabla");
   const[showHome,setShowHome]=useState(true);
   const[showNoticiasGlobal,setShowNoticiasGlobal]=useState(false);
+  const[showMasPopup,setShowMasPopup]=useState(false);
   const[showChatGlobal,setShowChatGlobal]=useState(false);
   const[compMenuComp,setCompMenuComp]=useState(null);
   const[showCompVista,setShowCompVista]=useState(null);
@@ -7653,6 +7781,8 @@ function MainApp({user,isAdmin,onLogout}){
   const[showSettings,setShowSettings]=useState(false);
   const[showSquadManager,setShowSquadManager]=useState(false);
   const[showSquadList,setShowSquadList]=useState(false);
+  const[showResumenModal,setShowResumenModal]=useState(false);
+  const[showRecomendacion,setShowRecomendacion]=useState(false);
   const[editingPlayer,setEditingPlayer]=useState(null);
   const[showPublicPool,setShowPublicPool]=useState(false);
   const[shareLineup,setShareLineup]=useState(false);
@@ -8148,8 +8278,36 @@ function MainApp({user,isAdmin,onLogout}){
         </div>
       )}
 
-      {/* 📊 Resumen del equipo · Valoración · Química · Logros · Recomendación */}
-      <EquipoResumen lineup={activeLineup} squad={squad} positions={positions} mercadoAbierto={mercadoAbierto} isSel={isSel}/>
+      {/* 📊 Botón para abrir Resumen del equipo en ventana aparte */}
+      {!isSel&&activeLineup&&(
+        <button onClick={()=>setShowResumenModal(true)}
+          style={{width:"calc(100% - 32px)",margin:"0 16px 12px",padding:"11px 14px",borderRadius:14,background:C.card,border:`1px solid ${C.border}`,cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:"'DM Sans',sans-serif"}}>
+          <span style={{fontSize:17}}>📊</span>
+          <span style={{flex:1,fontSize:12,fontWeight:700,color:C.text,textAlign:"left"}}>Resumen del equipo</span>
+          <span style={{fontSize:13,color:C.textFaint}}>›</span>
+        </button>
+      )}
+      {!isSel&&activeLineup&&(
+        <button onClick={()=>setShowRecomendacion(true)}
+          style={{width:"calc(100% - 32px)",margin:"0 16px 12px",padding:"11px 14px",borderRadius:14,background:C.card,border:`1px solid ${C.border}`,cursor:"pointer",display:"flex",alignItems:"center",gap:10,fontFamily:"'DM Sans',sans-serif"}}>
+          <span style={{fontSize:17}}>🎯</span>
+          <span style={{flex:1,fontSize:12,fontWeight:700,color:C.text,textAlign:"left"}}>Recomendación de fichaje</span>
+          <span style={{fontSize:13,color:C.textFaint}}>›</span>
+        </button>
+      )}
+      {showRecomendacion&&(
+        <RecomendacionFichaje teamData={teamData} squad={squad} activeLineup={activeLineup} positions={positions} pool={pool} allTeams={allTeams} user={user} setAiMsg={setAiMsg} onClose={()=>setShowRecomendacion(false)}/>
+      )}
+      {showResumenModal&&(
+        <div style={{position:"fixed",inset:0,zIndex:500,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setShowResumenModal(false)}>
+          <div onClick={e=>e.stopPropagation()} style={{background:C.bg,borderRadius:18,width:"100%",maxWidth:420,maxHeight:"85vh",overflowY:"auto",boxShadow:"0 8px 40px rgba(0,0,0,0.35)"}}>
+            <div style={{display:"flex",justifyContent:"flex-end",padding:"8px 8px 0"}}>
+              <button onClick={()=>setShowResumenModal(false)} style={{background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:"50%",width:30,height:30,color:C.textMid,cursor:"pointer",fontSize:15}}>✕</button>
+            </div>
+            <EquipoResumen lineup={activeLineup} squad={squad} positions={positions} mercadoAbierto={mercadoAbierto} isSel={isSel}/>
+          </div>
+        </div>
+      )}
 
       {/* MAINTENANCE STRIP - admin only */}
       {isAdmin&&(
@@ -9213,16 +9371,32 @@ function MainApp({user,isAdmin,onLogout}){
       {showChatGlobal&&<ChatModal teamData={teamData} allTeams={allTeams} onClose={()=>setShowChatGlobal(false)}/>}
 
       <BottomTabBar
-        active={showMundial?"mundial":showNoticiasGlobal?"noticias":showChatGlobal?"chat":(showHome?"inicio":"equipo")}
-        onInicio={()=>{setShowMundial(false);setShowNoticiasGlobal(false);setShowChatGlobal(false);setShowHome(true);}}
-        onEquipo={()=>{setShowMundial(false);setShowNoticiasGlobal(false);setShowChatGlobal(false);setActiveComp(null);setShowHome(false);}}
-        onNoticias={()=>{setShowMundial(false);setShowChatGlobal(false);setShowNoticiasGlobal(true);}}
-        onChat={()=>{setShowMundial(false);setShowNoticiasGlobal(false);setShowChatGlobal(true);}}
+        active={showMundial?"mundial":showNoticiasGlobal?"noticias":showChatGlobal?"chat":showCompVista?"liga":(showHome?"inicio":"equipo")}
+        onInicio={()=>{setShowMundial(false);setShowNoticiasGlobal(false);setShowChatGlobal(false);setShowCompVista(null);setShowHome(true);}}
+        onLiga={()=>{
+          const miLiga=(teamData?.competencias||[]).map(id=>COMPETENCIAS_AVAILABLE.find(c=>c.id===id)).find(c=>c&&c.formato==="liga");
+          if(!miLiga){alert("No estás inscrito en ninguna liga todavía.");return;}
+          setShowMundial(false);setShowNoticiasGlobal(false);setShowChatGlobal(false);
+          setShowCompVista({comp:miLiga});
+        }}
+        onEquipo={()=>{setShowMundial(false);setShowNoticiasGlobal(false);setShowChatGlobal(false);setShowCompVista(null);setActiveComp(null);setShowHome(false);}}
+        onNoticias={()=>{setShowMundial(false);setShowChatGlobal(false);setShowCompVista(null);setShowNoticiasGlobal(true);}}
+        onChat={()=>{setShowMundial(false);setShowNoticiasGlobal(false);setShowCompVista(null);setShowChatGlobal(true);}}
         onMas={()=>{
-          setShowMundial(false);setShowNoticiasGlobal(false);setShowChatGlobal(false);setShowHome(true);
-          setTimeout(()=>{document.getElementById("home-mas-section")?.scrollIntoView({behavior:"smooth"});},120);
+          setShowMundial(false);setShowNoticiasGlobal(false);setShowChatGlobal(false);setShowCompVista(null);setShowMasPopup(true);
         }}
       />
+
+      {showMasPopup&&(
+        <MasPopup
+          isAdmin={isAdmin}
+          teamColor={teamData?.teamColor}
+          onClose={()=>setShowMasPopup(false)}
+          onOpenMundial={()=>{setShowHome(false);setMundialInitialTab("misel");setShowMundial(true);}}
+          onOpenEquipo={()=>{setActiveComp(null);setShowHome(false);}}
+          onOpenAdmin={()=>{setActiveComp(null);setShowHome(false);}}
+        />
+      )}
 
       {/* SUB MENU MODAL */}
       {pickModal?.type==="subMenu"&&(
