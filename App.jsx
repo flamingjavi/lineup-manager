@@ -4903,20 +4903,18 @@ function ChatModal({teamData,allTeams,onClose}){
   );
 }
 
-function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial}){
+function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial,onOpenNoticias,onOpenChat}){
   const tc=getTeamColor(teamData?.teamColor||"blue");
   const ORDEN_CATEGORIA={liga1:0,liga2:0,ascenso:0,champions:1,europa:1,copa:2,copaascenso:2,supercopa:3};
   const comps=(teamData?.competencias||[]).map(id=>COMPETENCIAS_AVAILABLE.find(c=>c.id===id)).filter(Boolean)
     .sort((a,b)=>(ORDEN_CATEGORIA[a.id]??9)-(ORDEN_CATEGORIA[b.id]??9));
   const teamInitials=(teamData?.teamName||"?").slice(0,2).toUpperCase();
-  const[showNoticias,setShowNoticias]=useState(false);
   const[transmision,setTransmision]=useState(null);
   const[showTransmisionPanel,setShowTransmisionPanel]=useState(false);
   const[miSeleccionCountry,setMiSeleccionCountry]=useState(null);
   const[noticiasUsuario,setNoticiasUsuario]=useState([]);
   const[competenciaData,setCompetenciaData]=useState({});
   const[noticiasFeed,setNoticiasFeed]=useState([]);
-  const[showChat,setShowChat]=useState(false);
   const[chatNoLeidos,setChatNoLeidos]=useState(0);
   const myId=teamData?.id||teamData?.uid;
 
@@ -5067,7 +5065,7 @@ function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial}){
             <div style={{fontSize:10.5,color:"rgba(255,255,255,0.6)",fontFamily:"'DM Sans',sans-serif",marginTop:3}}>{comps.length>0?`${comps.length} competición${comps.length>1?"es":""} activa${comps.length>1?"s":""}`:"Sin competiciones activas"}</div>
           </div>
           {/* Campana */}
-          <button onClick={()=>{setShowNoticias(true);if(mencionesNoVistas>0&&(teamData?.id||teamData?.uid)){updateDoc(doc(db,"teams",teamData.id||teamData.uid),{ultimaVistaMenciones:new Date().toISOString()}).catch(()=>{});}}}
+          <button onClick={()=>{onOpenNoticias();if(mencionesNoVistas>0&&(teamData?.id||teamData?.uid)){updateDoc(doc(db,"teams",teamData.id||teamData.uid),{ultimaVistaMenciones:new Date().toISOString()}).catch(()=>{});}}}
             style={{position:"relative",width:36,height:36,borderRadius:11,background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.18)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,cursor:"pointer",flexShrink:0}}>
             🔔
             {mencionesNoVistas>0&&<span style={{position:"absolute",top:-5,right:-5,minWidth:17,height:17,borderRadius:9,background:"#e0483a",color:"#fff",fontSize:9,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",border:`2px solid ${tc.dark}`}}>{mencionesNoVistas}</span>}
@@ -5144,7 +5142,7 @@ function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial}){
         )}
 
         <div style={{fontSize:10,fontWeight:700,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.8,marginTop:8,marginBottom:2}}>Última hora</div>
-        <button onClick={()=>{setShowNoticias(true);if(mencionesNoVistas>0&&(teamData?.id||teamData?.uid)){updateDoc(doc(db,"teams",teamData.id||teamData.uid),{ultimaVistaMenciones:new Date().toISOString()}).catch(()=>{});}}}
+        <button onClick={()=>{onOpenNoticias();if(mencionesNoVistas>0&&(teamData?.id||teamData?.uid)){updateDoc(doc(db,"teams",teamData.id||teamData.uid),{ultimaVistaMenciones:new Date().toISOString()}).catch(()=>{});}}}
           style={{width:"100%",padding:"13px 14px",borderRadius:18,background:C.card,border:`1px solid ${mencionesNoVistas>0?"#d8a39c":C.border}`,cursor:"pointer",display:"flex",alignItems:"center",gap:12,boxShadow:C.dark?"0 2px 14px rgba(0,0,0,0.35)":"0 4px 16px rgba(40,33,15,0.06)",textAlign:"left"}}>
           <span style={{width:38,height:38,borderRadius:11,background:C.inputBg,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,flexShrink:0,position:"relative"}}>📰{mencionesNoVistas>0&&<span style={{position:"absolute",top:-5,right:-5,minWidth:17,height:17,borderRadius:9,background:"#c0392b",color:"#fff",fontSize:9,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",border:`2px solid ${C.card}`}}>{mencionesNoVistas}</span>}</span>
           <div style={{flex:1,minWidth:0}}>
@@ -5153,7 +5151,7 @@ function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial}){
           </div>
         </button>
 
-        <button onClick={()=>setShowChat(true)}
+        <button onClick={onOpenChat}
           style={{width:"100%",padding:"13px 14px",borderRadius:18,background:C.card,border:`1px solid ${chatNoLeidos>0?"#d8a39c":C.border}`,cursor:"pointer",display:"flex",alignItems:"center",gap:12,boxShadow:C.dark?"0 2px 14px rgba(0,0,0,0.35)":"0 4px 16px rgba(40,33,15,0.06)",textAlign:"left",marginTop:8}}>
           <span style={{width:38,height:38,borderRadius:11,background:C.inputBg,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,flexShrink:0,position:"relative"}}>💬{chatNoLeidos>0&&<span style={{position:"absolute",top:-5,right:-5,minWidth:17,height:17,borderRadius:9,background:"#c0392b",color:"#fff",fontSize:9,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",border:`2px solid ${C.card}`}}>{chatNoLeidos}</span>}</span>
           <div style={{flex:1,minWidth:0}}>
@@ -5161,9 +5159,7 @@ function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial}){
             <div style={{fontSize:9.5,color:chatNoLeidos>0?"#e07b6e":C.textLight,fontWeight:600,fontFamily:"'DM Sans',sans-serif",marginTop:3}}>{chatNoLeidos>0?`${chatNoLeidos} mensaje${chatNoLeidos!==1?"s":""} sin leer`:"General y directos privados"}</div>
           </div>
         </button>
-        {showChat&&<ChatModal teamData={teamData} allTeams={allTeams} onClose={()=>setShowChat(false)}/>}
-
-        <div style={{fontSize:10,fontWeight:700,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.8,marginTop:8,marginBottom:2}}>Más</div>
+        <div id="home-mas-section" style={{fontSize:10,fontWeight:700,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.8,marginTop:8,marginBottom:2}}>Más</div>
 
         {/* Mundial */}
         <button onClick={onOpenMundial}
@@ -5206,7 +5202,6 @@ function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial}){
         )}
 
       </div>
-      {showNoticias&&<NoticiasModal teamData={teamData} allTeams={allTeams} isAdmin={isAdmin} onClose={()=>setShowNoticias(false)}/>}
     </div>
   );
 }
@@ -7576,6 +7571,31 @@ function CompVistaPublica({comp,competenciaData,onClose}){
 }
 
 
+// ─── BARRA DE NAVEGACIÓN INFERIOR: siempre visible, en cualquier pantalla ────
+function BottomTabBar({active,onInicio,onEquipo,onNoticias,onChat,onMas}){
+  const tabs=[
+    {id:"inicio",label:"Inicio",icon:"🏠",onClick:onInicio},
+    {id:"equipo",label:"Equipo",icon:"👕",onClick:onEquipo},
+    {id:"noticias",label:"Noticias",icon:"📰",onClick:onNoticias},
+    {id:"chat",label:"Chat",icon:"💬",onClick:onChat},
+    {id:"mas",label:"Más",icon:"⋯",onClick:onMas},
+  ];
+  return(
+    <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:160,background:C.card,borderTop:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"space-around",padding:"6px 4px calc(6px + env(safe-area-inset-bottom))",boxShadow:"0 -2px 16px rgba(0,0,0,0.12)"}}>
+      {tabs.map(t=>{
+        const isActive=active===t.id;
+        return(
+          <button key={t.id} onClick={t.onClick}
+            style={{flex:1,background:"none",border:"none",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2,padding:"6px 2px",color:isActive?C.accent:C.textFaint}}>
+            <span style={{fontSize:19,lineHeight:1}}>{t.icon}</span>
+            <span style={{fontSize:9.5,fontWeight:isActive?800:600,fontFamily:"'DM Sans',sans-serif"}}>{t.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function MainApp({user,isAdmin,onLogout}){
   const[teamData,setTeamData]=useState(null);
   const[allTeams,setAllTeams]=useState([]);
@@ -7614,6 +7634,8 @@ function MainApp({user,isAdmin,onLogout}){
   const[showMundial,setShowMundial]=useState(false);
   const[mundialInitialTab,setMundialInitialTab]=useState("tabla");
   const[showHome,setShowHome]=useState(true);
+  const[showNoticiasGlobal,setShowNoticiasGlobal]=useState(false);
+  const[showChatGlobal,setShowChatGlobal]=useState(false);
   const[compMenuComp,setCompMenuComp]=useState(null);
   const[showCompVista,setShowCompVista]=useState(null);
   const[competenciaData,setCompetenciaData]=useState({});
@@ -7967,17 +7989,19 @@ function MainApp({user,isAdmin,onLogout}){
   const TA={accent:TC.bg,accentDark:TC.dark,accentLight:TC.bg+"22",goldLight:TC.bg+"18"};
 
   return(
-    <div style={{minHeight:"100vh",background:C.bg,fontFamily:"'Bebas Neue','DM Sans',sans-serif",display:"flex",flexDirection:"column",alignItems:"center",padding:"0 0 40px"}}>
+    <div style={{minHeight:"100vh",background:C.bg,fontFamily:"'Bebas Neue','DM Sans',sans-serif",display:"flex",flexDirection:"column",alignItems:"center",padding:"0 0 76px"}}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;600;700;800&display=swap');*{box-sizing:border-box}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:${C.borderDark};border-radius:4px}input::placeholder{color:${C.textFaint}}select option{background:${C.inputBg};color:${C.text}}body{background:${C.bg};color:${C.text}}`}</style>
 
       {/* HOME SCREEN */}
       {showHome&&!showMundial&&(
-        <div style={{position:"fixed",inset:0,zIndex:150,overflowY:"auto",background:C.bg}}>
+        <div style={{position:"fixed",inset:0,zIndex:150,overflowY:"auto",background:C.bg,paddingBottom:70}}>
           <HomeScreen
             teamData={teamData}
             isAdmin={isAdmin}
             allTeams={allTeams}
             onOpenMundial={()=>{setShowHome(false);setMundialInitialTab("misel");setShowMundial(true);}}
+            onOpenNoticias={()=>setShowNoticiasGlobal(true)}
+            onOpenChat={()=>setShowChatGlobal(true)}
             onSelect={comp=>{
               if(comp===null){setActiveComp(null);setShowHome(false);return;}
               setCompMenuComp(comp);
@@ -9184,6 +9208,21 @@ function MainApp({user,isAdmin,onLogout}){
       {showMercado&&<MercadoUnificado onClose={()=>setShowMercado(false)} user={user} isAdmin={isAdmin} teamData={teamData} saveTeam={saveTeam} allTeams={allTeams} pool={pool}/>}
       {showMundial&&<MundialModal onClose={()=>setShowMundial(false)} user={user} isAdmin={isAdmin} allSels={allSels} pool={pool} teamData={teamData} initialTab={mundialInitialTab}/>}
       {!showMundial&&<AvisoBanner onOpen={()=>setShowMundial(true)}/>}
+
+      {showNoticiasGlobal&&<NoticiasModal teamData={teamData} allTeams={allTeams} isAdmin={isAdmin} onClose={()=>setShowNoticiasGlobal(false)}/>}
+      {showChatGlobal&&<ChatModal teamData={teamData} allTeams={allTeams} onClose={()=>setShowChatGlobal(false)}/>}
+
+      <BottomTabBar
+        active={showMundial?"mundial":showNoticiasGlobal?"noticias":showChatGlobal?"chat":(showHome?"inicio":"equipo")}
+        onInicio={()=>{setShowMundial(false);setShowNoticiasGlobal(false);setShowChatGlobal(false);setShowHome(true);}}
+        onEquipo={()=>{setShowMundial(false);setShowNoticiasGlobal(false);setShowChatGlobal(false);setActiveComp(null);setShowHome(false);}}
+        onNoticias={()=>{setShowMundial(false);setShowChatGlobal(false);setShowNoticiasGlobal(true);}}
+        onChat={()=>{setShowMundial(false);setShowNoticiasGlobal(false);setShowChatGlobal(true);}}
+        onMas={()=>{
+          setShowMundial(false);setShowNoticiasGlobal(false);setShowChatGlobal(false);setShowHome(true);
+          setTimeout(()=>{document.getElementById("home-mas-section")?.scrollIntoView({behavior:"smooth"});},120);
+        }}
+      />
 
       {/* SUB MENU MODAL */}
       {pickModal?.type==="subMenu"&&(
