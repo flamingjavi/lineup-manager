@@ -4922,12 +4922,14 @@ function ChatModal({teamData,allTeams,onClose}){
   );
 }
 
-function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial,onOpenNoticias,onOpenChat}){
+function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial,onOpenNoticias,onOpenChat,squad,activeLineup,positions,pool,user,mercadoAbierto,setAiMsg,onOpenSquadList}){
   const tc=getTeamColor(teamData?.teamColor||"blue");
   const ORDEN_CATEGORIA={liga1:0,liga2:0,ascenso:0,champions:1,europa:1,copa:2,copaascenso:2,supercopa:3};
   const comps=(teamData?.competencias||[]).map(id=>COMPETENCIAS_AVAILABLE.find(c=>c.id===id)).filter(Boolean)
     .sort((a,b)=>(ORDEN_CATEGORIA[a.id]??9)-(ORDEN_CATEGORIA[b.id]??9));
   const teamInitials=(teamData?.teamName||"?").slice(0,2).toUpperCase();
+  const[showResumenHome,setShowResumenHome]=useState(false);
+  const[showRecomendacionHome,setShowRecomendacionHome]=useState(false);
   const[transmision,setTransmision]=useState(null);
   const[showTransmisionPanel,setShowTransmisionPanel]=useState(false);
   const[miSeleccionCountry,setMiSeleccionCountry]=useState(null);
@@ -5105,6 +5107,48 @@ function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial,onOpenNoti
 
       {/* Cards */}
       <div style={{flex:1,padding:"20px 16px",display:"flex",flexDirection:"column",gap:12,overflowY:"auto"}}>
+
+        {/* Mi Equipo, Resumen y Sugerencia de fichaje */}
+        <button onClick={onOpenSquadList}
+          style={{width:"100%",padding:"13px 15px",borderRadius:14,background:C.card,border:`1px solid ${C.border}`,cursor:"pointer",display:"flex",alignItems:"center",gap:12,textAlign:"left"}}>
+          <span style={{fontSize:19}}>👕</span>
+          <div style={{flex:1}}>
+            <div style={{fontSize:13,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>Mi equipo</div>
+            <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>{(squad||[]).length} jugadores en plantilla</div>
+          </div>
+          <span style={{fontSize:14,color:C.textFaint}}>›</span>
+        </button>
+        <button onClick={()=>setShowResumenHome(true)}
+          style={{width:"100%",padding:"13px 15px",borderRadius:14,background:C.card,border:`1px solid ${C.border}`,cursor:"pointer",display:"flex",alignItems:"center",gap:12,textAlign:"left"}}>
+          <span style={{fontSize:19}}>📊</span>
+          <div style={{flex:1}}>
+            <div style={{fontSize:13,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>Resumen del equipo</div>
+            <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Valoración, ataque, medio y defensa</div>
+          </div>
+          <span style={{fontSize:14,color:C.textFaint}}>›</span>
+        </button>
+        <button onClick={()=>setShowRecomendacionHome(true)}
+          style={{width:"100%",padding:"13px 15px",borderRadius:14,background:C.card,border:`1px solid ${C.border}`,cursor:"pointer",display:"flex",alignItems:"center",gap:12,textAlign:"left"}}>
+          <span style={{fontSize:19}}>🎯</span>
+          <div style={{flex:1}}>
+            <div style={{fontSize:13,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>Sugerencia de fichaje</div>
+            <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Refuerza tu posición más débil</div>
+          </div>
+          <span style={{fontSize:14,color:C.textFaint}}>›</span>
+        </button>
+        {showResumenHome&&(
+          <div style={{position:"fixed",inset:0,zIndex:500,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setShowResumenHome(false)}>
+            <div onClick={e=>e.stopPropagation()} style={{background:C.bg,borderRadius:18,width:"100%",maxWidth:420,maxHeight:"85vh",overflowY:"auto",boxShadow:"0 8px 40px rgba(0,0,0,0.35)"}}>
+              <div style={{display:"flex",justifyContent:"flex-end",padding:"8px 8px 0"}}>
+                <button onClick={()=>setShowResumenHome(false)} style={{background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:"50%",width:30,height:30,color:C.textMid,cursor:"pointer",fontSize:15}}>✕</button>
+              </div>
+              <EquipoResumen lineup={activeLineup} squad={squad} positions={positions} mercadoAbierto={mercadoAbierto} isSel={false}/>
+            </div>
+          </div>
+        )}
+        {showRecomendacionHome&&(
+          <RecomendacionFichaje teamData={teamData} squad={squad} activeLineup={activeLineup} positions={positions} pool={pool} allTeams={allTeams} user={user} setAiMsg={setAiMsg} onClose={()=>setShowRecomendacionHome(false)}/>
+        )}
 
         {comps.length===0&&(
           <div style={{textAlign:"center",color:C.textFaint,fontSize:12,fontFamily:"'DM Sans',sans-serif",padding:"40px 0"}}>
@@ -8129,6 +8173,14 @@ function MainApp({user,isAdmin,onLogout}){
             teamData={teamData}
             isAdmin={isAdmin}
             allTeams={allTeams}
+            squad={squad}
+            activeLineup={activeLineup}
+            positions={positions}
+            pool={pool}
+            user={user}
+            mercadoAbierto={mercadoAbierto}
+            setAiMsg={setAiMsg}
+            onOpenSquadList={()=>{setShowHome(false);setActiveComp(null);setShowSquadList(true);}}
             onOpenMundial={()=>{setShowHome(false);setMundialInitialTab("misel");setShowMundial(true);}}
             onOpenNoticias={()=>setShowNoticiasGlobal(true)}
             onOpenChat={()=>setShowChatGlobal(true)}
@@ -8710,8 +8762,28 @@ function MainApp({user,isAdmin,onLogout}){
           </div>
         )}
 
-        {/* FIELD + BENCH + RESERVES — ocultar si admin está viendo otro equipo o si showSquadList */}
-        {!viewingTeam&&!showSquadList&&<div style={{paddingTop:12,display:"flex",gap:14,flexWrap:"wrap"}}>
+        {/* Selector de competencia — se muestra cuando no hay una elegida (campo/11 ocultos) */}
+        {!viewingTeam&&!showSquadList&&!activeComp&&(
+          <div style={{padding:"30px 16px",textAlign:"center"}}>
+            <div style={{fontSize:14,fontWeight:700,color:C.textMid,fontFamily:"'DM Sans',sans-serif",marginBottom:16}}>Elige una competencia para ver tu alineación</div>
+            <div style={{display:"flex",flexDirection:"column",gap:8,maxWidth:340,margin:"0 auto"}}>
+              {(teamData?.competencias||[]).map(id=>COMPETENCIAS_AVAILABLE.find(c=>c.id===id)).filter(Boolean).map(comp=>(
+                <button key={comp.id} onClick={()=>{
+                    setActiveComp(comp);
+                    const matched=lineups.find(l=>l.name===comp.lineupName);
+                    if(matched) setActiveLineupId(matched.id);
+                  }} style={{padding:"12px 16px",borderRadius:12,background:comp.color+"18",border:`1.5px solid ${comp.color}`,color:comp.color,fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",display:"flex",alignItems:"center",gap:10}}>
+                  <span style={{fontSize:16}}>{comp.icon}</span> {comp.name}
+                </button>
+              ))}
+              {(teamData?.competencias||[]).length===0&&(
+                <div style={{color:C.textFaint,fontSize:12,fontFamily:"'DM Sans',sans-serif"}}>Aún no estás inscrito en ninguna competencia.</div>
+              )}
+            </div>
+          </div>
+        )}
+        {/* FIELD + BENCH + RESERVES — solo visible si hay una competencia activa seleccionada */}
+        {!viewingTeam&&!showSquadList&&activeComp&&<div style={{paddingTop:12,display:"flex",gap:14,flexWrap:"wrap"}}>
           <div style={{flex:"1 1 260px",minWidth:240}}>
             <Field positions={positions} lineup={activeLineup} readOnly={!!activeLineup?.locked}
               onClickPos={(id,label)=>setPickModal({type:"starter",posId:id,posLabel:label})}
