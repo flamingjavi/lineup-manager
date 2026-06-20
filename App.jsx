@@ -1686,6 +1686,111 @@ function MercadoToggle(){
 // ─── EN VIVO + AVISO (compartido: Home y Formaciones) ─────────────────────────
 // ─── CALENDARIO GENERAL: semana actual + próximas (admin sube foto) ─────────
 // ─── ADMIN: Top 10 manual de Copa por equipo ─────────────────────────────────
+// ─── ADMIN: Pronósticos — elige jornada, genera 4 partidos destacados ────────
+function PronosticosAdmin({setAiMsg}){
+  const[competenciaData,setCompetenciaData]=useState({});
+  const[pronosticos,setPronosticos]=useState({});
+  const[compId,setCompId]=useState("liga1");
+  const[jKey,setJKey]=useState("");
+  const[generando,setGenerando]=useState(false);
+
+  const COMPS_CON_FIXTURE=COMPETENCIAS_AVAILABLE.filter(c=>c.formato==="liga"||c.formato==="grupos");
+
+  useEffect(()=>{
+    const unsub=onSnapshot(doc(db,"config","competenciaData"),snap=>{
+      setCompetenciaData(snap.exists()?snap.data():{});
+    });
+    return unsub;
+  },[]);
+
+  useEffect(()=>{
+    const unsub=onSnapshot(doc(db,"config","pronosticos"),snap=>{
+      setPronosticos(snap.exists()?snap.data():{});
+    });
+    return unsub;
+  },[]);
+
+  const fixture=competenciaData?.[compId]?.fixture||{};
+  const jornadasDisponibles=Object.entries(fixture).sort((a,b)=>{
+    const numA=parseInt((a[1].nombre||a[0]).match(/\d+/)?.[0]||"0");
+    const numB=parseInt((b[1].nombre||b[0]).match(/\d+/)?.[0]||"0");
+    return numA-numB;
+  });
+
+  const claveActual=jKey?`${compId}_${jKey}`:null;
+  const pronosticoActual=claveActual?pronosticos[claveActual]:null;
+
+  const generarDestacados=async()=>{
+    if(!jKey){setAiMsg("❌ Selecciona una jornada");return;}
+    const jornada=fixture[jKey];
+    if(!jornada||(jornada.partidos||[]).length===0){setAiMsg("❌ Esta jornada no tiene partidos");return;}
+    setGenerando(true);
+    try{
+      const grupos=competenciaData?.[compId]?.grupos||[];
+      const tabla=grupos[0]?.tabla||[];
+      const destacados=await elegirPartidosDestacados(jornada.partidos,tabla,4);
+      if(destacados.length===0){setAiMsg("❌ No se pudo determinar partidos destacados");setGenerando(false);return;}
+      const ref=doc(db,"config","pronosticos");
+      const snap=await getDoc(ref).catch(()=>null);
+      const current=snap?.exists()?snap.data():{};
+      const nuevo={
+        compId,jKey,jornadaNombre:jornada.nombre||jKey,
+        destacados,predicciones:{},resultados:{},
+        creado:new Date().toISOString(),
+      };
+      await setDoc(ref,{...current,[`${compId}_${jKey}`]:nuevo},{merge:true});
+      const comp=COMPETENCIAS_AVAILABLE.find(c=>c.id===compId);
+      await addNoticia(`🔮 ¡Ya puedes pronosticar! ${jornada.nombre||jKey} de ${comp?.name||compId}: ${destacados.map(d=>`${d.local} vs ${d.visitante}`).join(", ")}`,"🔮");
+      setAiMsg("✅ Partidos destacados generados — los presidentes ya pueden pronosticar");
+    }catch(e){
+      setAiMsg("❌ Error: "+e.message);
+    }
+    setGenerando(false);
+  };
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+      <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>
+        Elige una jornada y genera automáticamente los 4 partidos más destacados (combinando posición en tabla, historial de enfrentamientos y rivalidad reciente en noticias). Todos los equipos podrán pronosticar el marcador exacto.
+      </div>
+      <div style={{display:"flex",gap:6}}>
+        <select value={compId} onChange={e=>{setCompId(e.target.value);setJKey("");}}
+          style={{flex:1,padding:"8px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif"}}>
+          {COMPS_CON_FIXTURE.map(c=><option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
+        </select>
+        <select value={jKey} onChange={e=>setJKey(e.target.value)}
+          style={{flex:1,padding:"8px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif"}}>
+          <option value="">— Jornada —</option>
+          {jornadasDisponibles.map(([k,j])=><option key={k} value={k}>{j.nombre||k}</option>)}
+        </select>
+      </div>
+      <button onClick={generarDestacados} disabled={!jKey||generando}
+        style={{padding:"9px",borderRadius:8,background:"#8e44ad",color:"#fff",border:"none",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:(!jKey||generando)?0.5:1}}>
+        {generando?"Generando…":pronosticoActual?"🔄 Regenerar destacados":"🔮 Generar 4 partidos destacados"}
+      </button>
+
+      {pronosticoActual&&(
+        <div style={{background:C.card,borderRadius:10,padding:"10px 12px",border:"1.5px solid #8e44ad"}}>
+          <div style={{fontSize:10,fontWeight:800,color:"#8e44ad",fontFamily:"'DM Sans',sans-serif",marginBottom:8}}>{pronosticoActual.jornadaNombre} — destacados</div>
+          {pronosticoActual.destacados.map((d,i)=>{
+            const resultado=pronosticoActual.resultados?.[`${d.local}__${d.visitante}`];
+            const totalPredicciones=Object.keys(pronosticoActual.predicciones||{}).filter(k=>k.includes(`__${d.local}__${d.visitante}`)).length;
+            return(
+              <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"6px 0",borderTop:i>0?`1px solid ${C.border}`:"none"}}>
+                <span style={{fontSize:11,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{d.local} vs {d.visitante}</span>
+                <span style={{fontSize:9,color:resultado?"#27ae60":C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>
+                  {resultado?`✅ ${resultado.golesLocal}-${resultado.golesVisitante}`:`${totalPredicciones} pronósticos`}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── ADMIN: Top 10 manual de Copa por equipo ─────────────────────────────────
 function Top10ManualAdmin({allTeams,setAiMsg}){
   const[equipoSelId,setEquipoSelId]=useState("");
   const[seleccion,setSeleccion]=useState([]);
@@ -4629,6 +4734,82 @@ async function addH2H({local,golesLocal,visitante,golesVisitante,competencia,jor
   await setDoc(ref,{lista},{merge:true});
 }
 
+// ─── Elige los partidos más destacados de una jornada para Pronósticos ──────
+// Combina: posición en tabla (suma más baja = mejor), historial H2H (más enfrentamientos = más rivalidad),
+// y menciones recientes en noticias entre esos dos equipos ("beef")
+async function elegirPartidosDestacados(partidos,tabla,maxPartidos=4){
+  if(!partidos||partidos.length===0) return [];
+  const[h2hSnap,noticiasSnap]=await Promise.all([
+    getDoc(doc(db,"config","h2hHistorial")).catch(()=>null),
+    getDoc(doc(db,"config","noticiasUsuario")).catch(()=>null),
+  ]);
+  const h2hLista=h2hSnap?.exists()?(h2hSnap.data().lista||[]):[];
+  const noticiasLista=noticiasSnap?.exists()?(noticiasSnap.data().lista||[]):[];
+  const haceUnMes=Date.now()-30*24*60*60*1000;
+
+  const posDe=(equipo)=>{
+    const idx=tabla.findIndex(r=>r.equipo===equipo);
+    return idx>=0?idx+1:tabla.length+5; // si no está en tabla, penaliza
+  };
+
+  const puntuados=partidos.map((p,idx)=>{
+    if(!p.local||!p.visitante) return {partido:p,idx,score:-9999};
+    let score=0;
+    // 1. Posición en tabla: suma más baja = más puntos (invertido)
+    const sumaPos=posDe(p.local)+posDe(p.visitante);
+    score+=Math.max(0,40-sumaPos);
+    // 2. Historial H2H: más enfrentamientos previos = más rivalidad
+    const enfrentamientos=h2hLista.filter(h=>(h.local===p.local&&h.visitante===p.visitante)||(h.local===p.visitante&&h.visitante===p.local));
+    score+=Math.min(enfrentamientos.length*4,20);
+    // 3. Menciones recientes en noticias entre estos dos equipos ("beef")
+    const menciones=noticiasLista.filter(n=>
+      n.estado==="aprobada"&&new Date(n.fecha).getTime()>haceUnMes&&
+      ((n.equipoAutor===p.local&&n.equipoMencionado===p.visitante)||(n.equipoAutor===p.visitante&&n.equipoMencionado===p.local))
+    );
+    score+=Math.min(menciones.length*8,24);
+    return {partido:p,idx,score};
+  });
+
+  return puntuados.sort((a,b)=>b.score-a.score).slice(0,maxPartidos).map(x=>({local:x.partido.local,visitante:x.partido.visitante,idx:x.idx}));
+}
+
+// ─── Califica automáticamente los pronósticos de un partido cuando se carga su resultado real ──
+// Puntos: 3 por marcador exacto, 1 por acertar solo ganador/empate, 0 si falla
+async function calificarPronostico(local,visitante,golesLocal,golesVisitante){
+  const ref=doc(db,"config","pronosticos");
+  const snap=await getDoc(ref).catch(()=>null);
+  if(!snap?.exists()) return;
+  const all=snap.data();
+  let cambiado=false;
+  const updates={};
+  for(const[clave,p] of Object.entries(all)){
+    if(!p?.destacados) continue;
+    const match=p.destacados.find(d=>d.local===local&&d.visitante===visitante);
+    if(!match) continue;
+    const key=`${local}__${visitante}`;
+    if(p.resultados?.[key]) continue; // ya calificado
+    const resultados={...(p.resultados||{}),[key]:{golesLocal,golesVisitante}};
+    const puntosPartido={};
+    const resultadoReal=golesLocal>golesVisitante?"L":golesVisitante>golesLocal?"V":"E";
+    for(const[predKey,pred] of Object.entries(p.predicciones||{})){
+      if(!predKey.endsWith(`__${local}__${visitante}`)) continue;
+      const equipoNombre=predKey.split("__")[0];
+      const resultadoPred=pred.golesLocal>pred.golesVisitante?"L":pred.golesVisitante>pred.golesLocal?"V":"E";
+      let pts=0;
+      if(pred.golesLocal===golesLocal&&pred.golesVisitante===golesVisitante) pts=3;
+      else if(resultadoPred===resultadoReal) pts=1;
+      puntosPartido[equipoNombre]=pts;
+    }
+    const puntosAcumulados={...(p.puntosAcumulados||{})};
+    Object.entries(puntosPartido).forEach(([eq,pts])=>{
+      puntosAcumulados[eq]=(puntosAcumulados[eq]||0)+pts;
+    });
+    updates[clave]={...p,resultados,puntosAcumulados};
+    cambiado=true;
+  }
+  if(cambiado) await setDoc(ref,updates,{merge:true});
+}
+
 const COMPETENCIAS_AVAILABLE=[
   {id:"liga1",    name:"Neo League",           icon:"🏆", color:"#1a3a5c", lineupName:"Liga", formato:"liga", division:1},
   {id:"liga2",    name:"Europe Championship",  icon:"🌍", color:"#27ae60", lineupName:"Liga", formato:"liga", division:1},
@@ -5095,6 +5276,7 @@ function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial,onOpenNoti
     .sort((a,b)=>(ORDEN_CATEGORIA[a.id]??9)-(ORDEN_CATEGORIA[b.id]??9));
   const teamInitials=(teamData?.teamName||"?").slice(0,2).toUpperCase();
   const[showResumenHome,setShowResumenHome]=useState(false);
+  const[showPronosticosHome,setShowPronosticosHome]=useState(false);
   const[showMisNotificaciones,setShowMisNotificaciones]=useState(false);
   const[showRecomendacionHome,setShowRecomendacionHome]=useState(false);
   const[transmision,setTransmision]=useState(null);
@@ -5302,6 +5484,18 @@ function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial,onOpenNoti
           </div>
           <span style={{fontSize:14,color:C.textFaint}}>›</span>
         </button>
+        <button onClick={()=>setShowPronosticosHome(true)}
+          style={{width:"100%",padding:"13px 15px",borderRadius:14,background:C.card,border:`1px solid ${C.border}`,cursor:"pointer",display:"flex",alignItems:"center",gap:12,textAlign:"left"}}>
+          <span style={{fontSize:19}}>🔮</span>
+          <div style={{flex:1}}>
+            <div style={{fontSize:13,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>Pronósticos</div>
+            <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Predice el marcador de los partidos destacados</div>
+          </div>
+          <span style={{fontSize:14,color:C.textFaint}}>›</span>
+        </button>
+        {showPronosticosHome&&(
+          <PronosticosModal teamData={teamData} setAiMsg={setAiMsg} onClose={()=>setShowPronosticosHome(false)}/>
+        )}
         {showResumenHome&&(
           <div style={{position:"fixed",inset:0,zIndex:500,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setShowResumenHome(false)}>
             <div onClick={e=>e.stopPropagation()} style={{background:C.bg,borderRadius:18,width:"100%",maxWidth:420,maxHeight:"85vh",overflowY:"auto",boxShadow:"0 8px 40px rgba(0,0,0,0.35)"}}>
@@ -6544,6 +6738,7 @@ function CompetenciaResultadoSetup({compId,compName,compColor,formato,setAiMsg})
 
     // Historial H2H (permanente)
     await addH2H({local:preview.local,golesLocal:gl,visitante:preview.visitante,golesVisitante:gv,competencia:compName});
+    await calificarPronostico(preview.local,preview.visitante,gl,gv);
 
     // Noticia del resultado
     const resultadoTxt=gl>gv?`${preview.local} venció ${gl}-${gv} a ${preview.visitante}`
@@ -6618,6 +6813,7 @@ function CompetenciaResultadoSetup({compId,compName,compColor,formato,setAiMsg})
           return ng;
         });
         await addH2H({local:p.local,golesLocal:gl,visitante:p.visitante,golesVisitante:gv,competencia:compName});
+        await calificarPronostico(p.local,p.visitante,gl,gv);
         const resultadoTxt=gl>gv?`${p.local} venció ${gl}-${gv} a ${p.visitante}`
           :gv>gl?`${p.visitante} venció ${gv}-${gl} a ${p.local}`
           :`${p.local} y ${p.visitante} empataron ${gl}-${gv}`;
@@ -7974,6 +8170,130 @@ function CompVistaPublica({comp,competenciaData,onClose,teamData,onAbrirChatGrup
 
 // ─── BARRA DE NAVEGACIÓN INFERIOR: siempre visible, en cualquier pantalla ────
 // ─── RECOMENDACIÓN DE FICHAJE: detecta tu posición más débil y sugiere candidatos ─
+// ─── PRONÓSTICOS: cualquier equipo predice el marcador de los partidos destacados ──
+function PronosticosModal({teamData,setAiMsg,onClose}){
+  const[pronosticos,setPronosticos]=useState({});
+  const[guardando,setGuardando]=useState(null); // clave del partido que se está guardando
+
+  const myName=teamData?.teamName||"";
+
+  useEffect(()=>{
+    const unsub=onSnapshot(doc(db,"config","pronosticos"),snap=>{
+      setPronosticos(snap.exists()?snap.data():{});
+    });
+    return unsub;
+  },[]);
+
+  const activos=Object.entries(pronosticos)
+    .filter(([,p])=>p?.destacados?.length>0)
+    .sort((a,b)=>new Date(b[1].creado||0)-new Date(a[1].creado||0));
+
+  const guardarPrediccion=async(clave,local,visitante,gl,gv)=>{
+    if(gl===""||gv===""||gl===null||gv===null) return;
+    const key=`${clave}`;
+    setGuardando(`${clave}__${local}__${visitante}`);
+    const ref=doc(db,"config","pronosticos");
+    const snap=await getDoc(ref).catch(()=>null);
+    if(snap?.exists()){
+      const all=snap.data();
+      const p=all[clave];
+      if(p){
+        const predKey=`${myName}__${local}__${visitante}`;
+        const predicciones={...(p.predicciones||{}),[predKey]:{golesLocal:Number(gl),golesVisitante:Number(gv),fecha:new Date().toISOString()}};
+        await setDoc(ref,{[clave]:{...p,predicciones}},{merge:true});
+      }
+    }
+    setGuardando(null);
+  };
+
+  return(
+    <div style={{position:"fixed",inset:0,zIndex:500,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{background:C.bg,borderRadius:18,width:"100%",maxWidth:440,maxHeight:"85vh",overflowY:"auto",boxShadow:"0 8px 40px rgba(0,0,0,0.35)"}}>
+        <div style={{padding:"14px 16px",background:"linear-gradient(135deg,#8e44ad,#5b2c6f)",borderRadius:"18px 18px 0 0",display:"flex",alignItems:"center",gap:10}}>
+          <span style={{fontSize:18}}>🔮</span>
+          <span style={{flex:1,fontSize:14,fontWeight:800,color:"#fff",fontFamily:"'DM Sans',sans-serif"}}>Pronósticos</span>
+          <button onClick={onClose} style={{background:"rgba(255,255,255,0.15)",border:"none",borderRadius:"50%",width:28,height:28,color:"#fff",cursor:"pointer",fontSize:15}}>✕</button>
+        </div>
+        <div style={{padding:"14px 16px",display:"flex",flexDirection:"column",gap:14}}>
+          <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>3 puntos por marcador exacto · 1 punto por acertar solo ganador/empate. Cualquier equipo puede participar, sin importar su liga.</div>
+          {activos.length===0&&(
+            <div style={{textAlign:"center",color:C.textFaint,fontSize:12,fontFamily:"'DM Sans',sans-serif",padding:"30px 0"}}>📭 Sin pronósticos disponibles por ahora</div>
+          )}
+          {activos.map(([clave,p])=>{
+            const comp=COMPETENCIAS_AVAILABLE.find(c=>c.id===p.compId);
+            return(
+              <div key={clave} style={{background:C.card,borderRadius:12,padding:"12px 14px",border:`1.5px solid ${comp?.color||"#8e44ad"}`}}>
+                <div style={{fontSize:11,fontWeight:800,color:comp?.color||"#8e44ad",fontFamily:"'DM Sans',sans-serif",marginBottom:8}}>{comp?.icon} {comp?.name} — {p.jornadaNombre}</div>
+                <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                  {p.destacados.map((d,i)=>{
+                    const key=`${d.local}__${d.visitante}`;
+                    const resultado=p.resultados?.[key];
+                    const predKey=`${myName}__${d.local}__${d.visitante}`;
+                    const miPrediccion=p.predicciones?.[predKey];
+                    const cerrado=!!resultado;
+                    const guardandoEste=guardando===`${clave}__${d.local}__${d.visitante}`;
+                    return(
+                      <div key={i} style={{padding:"8px 10px",borderRadius:9,background:C.inputBg,border:`1px solid ${C.border}`}}>
+                        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,marginBottom:6}}>
+                          <span style={{fontSize:11,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif",flex:1}}>{d.local} vs {d.visitante}</span>
+                          {cerrado&&<span style={{fontSize:9,fontWeight:800,color:"#27ae60",fontFamily:"'DM Sans',sans-serif"}}>✅ {resultado.golesLocal}-{resultado.golesVisitante}</span>}
+                        </div>
+                        {cerrado?(
+                          miPrediccion?(
+                            <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>
+                              Tu pronóstico: {miPrediccion.golesLocal}-{miPrediccion.golesVisitante}
+                              {" — "}
+                              <span style={{fontWeight:800,color:(p.puntosAcumulados?.[myName]??null)!==null?"#8e44ad":C.textFaint}}>
+                                {(()=>{
+                                  const real=resultado.golesLocal>resultado.golesVisitante?"L":resultado.golesVisitante>resultado.golesLocal?"V":"E";
+                                  const pred=miPrediccion.golesLocal>miPrediccion.golesVisitante?"L":miPrediccion.golesVisitante>miPrediccion.golesLocal?"V":"E";
+                                  if(miPrediccion.golesLocal===resultado.golesLocal&&miPrediccion.golesVisitante===resultado.golesVisitante) return "+3 (exacto)";
+                                  if(pred===real) return "+1 (ganador)";
+                                  return "+0";
+                                })()}
+                              </span>
+                            </div>
+                          ):(
+                            <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>No pronosticaste este partido</div>
+                          )
+                        ):miPrediccion?(
+                          <div style={{fontSize:10,color:"#8e44ad",fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>✓ Pronosticaste: {miPrediccion.golesLocal}-{miPrediccion.golesVisitante} (puedes cambiarlo)</div>
+                        ):null}
+                        {!cerrado&&(
+                          <div style={{display:"flex",alignItems:"center",gap:6,marginTop:miPrediccion?6:0}}>
+                            <input type="number" min="0" defaultValue={miPrediccion?.golesLocal??""} id={`gl_${clave}_${i}`}
+                              style={{width:42,padding:"5px",borderRadius:6,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:12,textAlign:"center",fontFamily:"monospace"}}/>
+                            <span style={{fontSize:11,color:C.textFaint}}>-</span>
+                            <input type="number" min="0" defaultValue={miPrediccion?.golesVisitante??""} id={`gv_${clave}_${i}`}
+                              style={{width:42,padding:"5px",borderRadius:6,border:`1px solid ${C.borderDark}`,background:C.card,color:C.text,fontSize:12,textAlign:"center",fontFamily:"monospace"}}/>
+                            <button onClick={()=>{
+                                const gl=document.getElementById(`gl_${clave}_${i}`).value;
+                                const gv=document.getElementById(`gv_${clave}_${i}`).value;
+                                guardarPrediccion(clave,d.local,d.visitante,gl,gv);
+                              }} disabled={guardandoEste}
+                              style={{marginLeft:"auto",padding:"5px 12px",borderRadius:7,background:"#8e44ad",color:"#fff",border:"none",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:guardandoEste?0.6:1}}>
+                              {guardandoEste?"…":miPrediccion?"Actualizar":"Guardar"}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                {p.puntosAcumulados?.[myName]!==undefined&&(
+                  <div style={{marginTop:8,textAlign:"center",fontSize:11,fontWeight:800,color:"#8e44ad",fontFamily:"'DM Sans',sans-serif"}}>
+                    Tus puntos en esta jornada: {p.puntosAcumulados[myName]}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function RecomendacionFichaje({teamData,squad,activeLineup,positions,pool,allTeams,user,onClose,setAiMsg,onAbrirChat}){
   const presupuesto=parsePresuGlobal(teamData?.presupuesto);
   // Semilla nueva cada vez que se abre el modal (no por día) — así la sugerencia rota de verdad en cada apertura
@@ -8286,6 +8606,7 @@ function MainApp({user,isAdmin,onLogout}){
   const[showNoticiasAdmin,setShowNoticiasAdmin]=useState(false);
   const[showCalendarioAdmin,setShowCalendarioAdmin]=useState(false);
   const[showTop10Admin,setShowTop10Admin]=useState(false);
+  const[showPronosticosAdmin,setShowPronosticosAdmin]=useState(false);
   const[aiMsg,setAiMsg]=useState("");
   const[showPresidents,setShowPresidents]=useState(false);
   const[showTop10Manager,setShowTop10Manager]=useState(false);
@@ -8998,6 +9319,15 @@ function MainApp({user,isAdmin,onLogout}){
                   <span style={{fontSize:11,color:C.textLight}}>{showTop10Admin?"▲":"▼"}</span>
                 </button>
                 {showTop10Admin&&<div style={{marginTop:8}}><Top10ManualAdmin allTeams={allTeams} setAiMsg={setAiMsg}/></div>}
+              </div>
+              {/* Collapsible Pronosticos admin */}
+              <div style={{marginTop:10}}>
+                <button onClick={()=>setShowPronosticosAdmin(v=>!v)}
+                  style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 12px",borderRadius:8,background:"none",border:`1px solid ${C.border}`,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                  <span style={{fontSize:10,fontWeight:700,color:C.textLight,textTransform:"uppercase",letterSpacing:0.5}}>🔮 Pronósticos</span>
+                  <span style={{fontSize:11,color:C.textLight}}>{showPronosticosAdmin?"▲":"▼"}</span>
+                </button>
+                {showPronosticosAdmin&&<div style={{marginTop:8}}><PronosticosAdmin setAiMsg={setAiMsg}/></div>}
               </div>
               {/* Collapsible teams list */}
               {showTeamsList&&(
