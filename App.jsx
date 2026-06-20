@@ -5682,7 +5682,6 @@ function CrearNoticiaModal({teamData,allTeams,onClose}){
 
   const enviarNoticia=async()=>{
     if(!tematicaSel){alert("Selecciona una temática");return;}
-    if(tematicaSel.requiereEquipo&&!equipoMencionado){alert("Selecciona el equipo");return;}
     if(!texto.trim()){alert("Escribe el texto de la noticia");return;}
     setEnviando(true);
     const ref=doc(db,"config","noticiasUsuario");
@@ -5692,7 +5691,7 @@ function CrearNoticiaModal({teamData,allTeams,onClose}){
       id:`nu_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,
       equipoAutor:teamData?.teamName||"",
       tematicaId:tematicaSel.id,tematicaLabel:tematicaSel.label,icono:tematicaSel.icono,
-      equipoMencionado:tematicaSel.requiereEquipo?equipoMencionado:"",
+      equipoMencionado:equipoMencionado||"",
       texto:texto.trim(),estado:"pendiente",fecha:new Date().toISOString(),reacciones:{},comentarios:[]
     };
     await setDoc(ref,{lista:[...(current.lista||[]),nueva]},{merge:true});
@@ -5736,13 +5735,14 @@ function CrearNoticiaModal({teamData,allTeams,onClose}){
         {tematicaSel&&(
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
             <div style={{fontSize:12,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{tematicaSel.label}</div>
-            {tematicaSel.requiereEquipo&&(
+            <div>
+              <div style={{fontSize:9,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginBottom:4}}>Mencionar a un equipo (opcional)</div>
               <select value={equipoMencionado} onChange={e=>setEquipoMencionado(e.target.value)}
-                style={{padding:"9px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:12,fontFamily:"'DM Sans',sans-serif"}}>
-                <option value="">— Selecciona equipo —</option>
+                style={{width:"100%",padding:"9px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:12,fontFamily:"'DM Sans',sans-serif"}}>
+                <option value="">— Sin equipo específico —</option>
                 {(allTeams||[]).filter(t=>t.teamName!==teamData?.teamName).map(t=><option key={t.uid||t.id} value={t.teamName}>{t.teamName}</option>)}
               </select>
-            )}
+            </div>
             <textarea value={texto} onChange={e=>setTexto(e.target.value)} placeholder="Escribe la noticia…"
               style={{padding:"10px",borderRadius:9,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:12,fontFamily:"'DM Sans',sans-serif",minHeight:80,resize:"vertical"}}/>
             <div style={{display:"flex",gap:8}}>
