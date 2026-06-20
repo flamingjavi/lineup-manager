@@ -4601,7 +4601,7 @@ async function addNoticia(texto,icono="📰"){
   const snap=await getDoc(ref).catch(()=>null);
   const current=snap?.exists()?snap.data():{};
   const lista=current.lista||[];
-  lista.push({texto,icono,fecha:new Date().toISOString()});
+  lista.push({id:`n_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,texto,icono,fecha:new Date().toISOString(),reacciones:{}});
   // Mantener solo las últimas 100
   await setDoc(ref,{lista:lista.slice(-100)},{merge:true});
 }
@@ -5430,6 +5430,67 @@ function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial,onOpenNoti
 }
 
 // ─── NOTICIAS ─────────────────────────────────────────────────────────────────
+// ─── Reacciones con emoji para una noticia (general o de equipos) ───────────
+const EMOJIS_REACCION=["👍","❤️","😂","🔥","😮"];
+function ReaccionesNoticia({noticia,coleccion,myTeamName}){
+  const[abierto,setAbierto]=useState(false);
+  const reacciones=noticia.reacciones||{};
+
+  const toggleReaccion=async(emoji)=>{
+    if(!myTeamName) return;
+    const ref=doc(db,"config",coleccion);
+    const snap=await getDoc(ref).catch(()=>null);
+    if(!snap?.exists()) return;
+    const data=snap.data();
+    const lista=[...(data.lista||[])];
+    const idx=lista.findIndex(n=>n.id===noticia.id);
+    if(idx<0) return;
+    const r={...(lista[idx].reacciones||{})};
+    const yaReacciono=(r[emoji]||[]).includes(myTeamName);
+    if(yaReacciono){
+      r[emoji]=r[emoji].filter(t=>t!==myTeamName);
+      if(r[emoji].length===0) delete r[emoji];
+    }else{
+      r[emoji]=[...(r[emoji]||[]),myTeamName];
+    }
+    lista[idx]={...lista[idx],reacciones:r};
+    await setDoc(ref,{lista},{merge:true});
+    setAbierto(false);
+  };
+
+  const totalReacciones=Object.values(reacciones).reduce((s,arr)=>s+arr.length,0);
+
+  return(
+    <div style={{position:"relative",marginTop:6}}>
+      <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap"}}>
+        {Object.entries(reacciones).filter(([,arr])=>arr.length>0).map(([emoji,arr])=>{
+          const yo=myTeamName&&arr.includes(myTeamName);
+          return(
+            <button key={emoji} onClick={()=>toggleReaccion(emoji)}
+              style={{display:"flex",alignItems:"center",gap:3,padding:"2px 7px",borderRadius:12,border:`1px solid ${yo?"#1a3a5c":C.border}`,background:yo?"#1a3a5c18":C.inputBg,cursor:"pointer",fontSize:11}}>
+              <span>{emoji}</span><span style={{fontSize:9,fontWeight:700,color:yo?"#1a3a5c":C.textFaint}}>{arr.length}</span>
+            </button>
+          );
+        })}
+        <button onClick={()=>setAbierto(v=>!v)}
+          style={{padding:"2px 8px",borderRadius:12,border:`1px solid ${C.border}`,background:C.inputBg,cursor:"pointer",fontSize:11,color:C.textFaint}}>
+          {totalReacciones>0?"+":"😊 Reaccionar"}
+        </button>
+      </div>
+      {abierto&&(
+        <div style={{position:"absolute",bottom:"100%",left:0,marginBottom:4,display:"flex",gap:3,background:C.card,border:`1px solid ${C.border}`,borderRadius:20,padding:"4px 6px",boxShadow:"0 4px 16px rgba(0,0,0,0.15)",zIndex:5}}>
+          {EMOJIS_REACCION.map(emoji=>(
+            <button key={emoji} onClick={()=>toggleReaccion(emoji)}
+              style={{background:"none",border:"none",cursor:"pointer",fontSize:17,padding:"2px 4px"}}>
+              {emoji}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function NoticiasModal({teamData,allTeams,isAdmin,onClose}){
   const[noticias,setNoticias]=useState([]);
   const[noticiasUsuario,setNoticiasUsuario]=useState([]);
@@ -5495,11 +5556,12 @@ function NoticiasModal({teamData,allTeams,isAdmin,onClose}){
                 </div>
               )}
               {noticias.map((n,i)=>(
-                <div key={i} style={{background:C.cardAlt||C.inputBg,borderRadius:10,padding:"10px 12px",border:`1px solid ${C.border}`,display:"flex",gap:10,alignItems:"flex-start"}}>
+                <div key={n.id||i} style={{background:C.cardAlt||C.inputBg,borderRadius:10,padding:"10px 12px",border:`1px solid ${C.border}`,display:"flex",gap:10,alignItems:"flex-start"}}>
                   <span style={{fontSize:18,flexShrink:0}}>{n.icono||"📰"}</span>
                   <div style={{flex:1}}>
                     <div style={{fontSize:12,color:C.text,fontFamily:"'DM Sans',sans-serif",fontWeight:600,lineHeight:1.4}}>{n.texto}</div>
                     <div style={{fontSize:9,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginTop:3}}>{formatFecha(n.fecha)}</div>
+                    {n.id&&<ReaccionesNoticia noticia={n} coleccion="noticias" myTeamName={teamData?.teamName}/>}
                   </div>
                 </div>
               ))}
@@ -5519,6 +5581,7 @@ function NoticiasModal({teamData,allTeams,isAdmin,onClose}){
                     <div style={{fontSize:9,fontWeight:700,color:"#1a3a5c",fontFamily:"'DM Sans',sans-serif",marginBottom:2}}>{n.tematicaLabel} · {n.equipoAutor}{n.equipoMencionado?` → ${n.equipoMencionado}`:""}</div>
                     <div style={{fontSize:12,color:C.text,fontFamily:"'DM Sans',sans-serif",fontWeight:600,lineHeight:1.4}}>{n.texto}</div>
                     <div style={{fontSize:9,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginTop:3}}>{formatFecha(n.fecha)}</div>
+                    <ReaccionesNoticia noticia={n} coleccion="noticiasUsuario" myTeamName={teamData?.teamName}/>
                   </div>
                   {isAdmin&&(
                     <button onClick={()=>eliminarNoticiaUsuario(n.id)} style={{background:"none",border:"none",color:"#c0392b",cursor:"pointer",fontSize:13,flexShrink:0}}>🗑️</button>
@@ -5560,7 +5623,7 @@ function CrearNoticiaModal({teamData,allTeams,onClose}){
       equipoAutor:teamData?.teamName||"",
       tematicaId:tematicaSel.id,tematicaLabel:tematicaSel.label,icono:tematicaSel.icono,
       equipoMencionado:tematicaSel.requiereEquipo?equipoMencionado:"",
-      texto:texto.trim(),estado:"pendiente",fecha:new Date().toISOString()
+      texto:texto.trim(),estado:"pendiente",fecha:new Date().toISOString(),reacciones:{}
     };
     await setDoc(ref,{lista:[...(current.lista||[]),nueva]},{merge:true});
     setEnviando(false);
@@ -7843,12 +7906,11 @@ function CompVistaPublica({comp,competenciaData,onClose,teamData,onAbrirChatGrup
 // ─── RECOMENDACIÓN DE FICHAJE: detecta tu posición más débil y sugiere candidatos ─
 function RecomendacionFichaje({teamData,squad,activeLineup,positions,pool,allTeams,user,onClose,setAiMsg,onAbrirChat}){
   const presupuesto=parsePresuGlobal(teamData?.presupuesto);
+  // Semilla nueva cada vez que se abre el modal (no por día) — así la sugerencia rota de verdad en cada apertura
+  const[seedBase,setSeedBase]=useState(()=>Math.floor(Math.random()*1000000));
 
   const{posMasDebil,candidatos}=useMemo(()=>{
-    // Semilla simple basada en el día + nombre del equipo: misma rotación todo el día, cambia al siguiente
-    const seedStr=`${new Date().toDateString()}_${teamData?.teamName||""}`;
-    let seedNum=0;
-    for(let i=0;i<seedStr.length;i++) seedNum=(seedNum*31+seedStr.charCodeAt(i))>>>0;
+    let seedNum=seedBase>>>0;
     const seededRandom=(max)=>{
       if(!max||max<=0) return 0; // evita división/módulo por cero
       seedNum=(seedNum*1103515245+12345)>>>0;
@@ -7898,7 +7960,7 @@ function RecomendacionFichaje({teamData,squad,activeLineup,positions,pool,allTea
       elegidos.sort((a,b)=>(Number(b.overall)||0)-(Number(a.overall)||0));
     }
     return {posMasDebil:posDebil,candidatos:elegidos};
-  },[pool,squad,activeLineup,positions,teamData?.teamName,teamData?.presupuesto,teamData?.uid,teamData?.id]);
+  },[pool,squad,activeLineup,positions,teamData?.teamName,teamData?.presupuesto,teamData?.uid,teamData?.id,seedBase]);
 
   const[ofertando,setOfertando]=useState(null);
   const[montos,setMontos]=useState({});
@@ -7943,6 +8005,10 @@ function RecomendacionFichaje({teamData,squad,activeLineup,positions,pool,allTea
           <button onClick={onClose} style={{background:"rgba(255,255,255,0.15)",border:"none",borderRadius:"50%",width:28,height:28,color:"#fff",cursor:"pointer",fontSize:15}}>✕</button>
         </div>
         <div style={{padding:"14px 16px",display:"flex",flexDirection:"column",gap:10}}>
+          <button onClick={()=>setSeedBase(Math.floor(Math.random()*1000000))}
+            style={{padding:"7px",borderRadius:8,background:"transparent",border:"1.5px dashed #1a3a5c",color:"#1a3a5c",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+            🔄 Ver otras opciones
+          </button>
           {!posMasDebil&&(
             <div style={{textAlign:"center",color:C.textFaint,padding:30,fontFamily:"'DM Sans',sans-serif",fontSize:12}}>No se pudo determinar tu formación actual.</div>
           )}
@@ -8030,12 +8096,10 @@ function BottomTabBar({active,onInicio,onLiga,onEquipo,onNoticias,onChat,onMas})
 }
 
 // ─── POPUP "MÁS": flotante arriba de la barra de navegación ─────────────────
-function MasPopup({isAdmin,teamColor,onClose,onOpenMundial,onOpenEquipo,onOpenAdmin}){
-  const tc=getTeamColor(teamColor||"blue");
+function MasPopup({isAdmin,teamColor,onClose,onOpenMundial,onOpenAjustes}){
   const items=[
     {label:"Mundial",sub:"Selecciones nacionales",icon:"🌍",grad:"linear-gradient(140deg,#7c3aed,#4c1d95)",onClick:onOpenMundial},
-    {label:"Mi Equipo",sub:"Campo y plantilla",icon:"👕",grad:`linear-gradient(140deg,${tc.dark},${tc.bg})`,onClick:onOpenEquipo},
-    ...(isAdmin?[{label:"Admin",sub:"Equipos, transmisión, noticias, calendario",icon:"👑",grad:"linear-gradient(140deg,#9b59b6,#6c3483)",dark:true,onClick:onOpenAdmin}]:[]),
+    {label:"Ajustes",sub:"Preferencias de tu cuenta",icon:"⚙️",grad:"linear-gradient(140deg,#5a6b7d,#2c3640)",onClick:onOpenAjustes},
   ];
   return(
     <div style={{position:"fixed",inset:0,zIndex:170,background:"rgba(0,0,0,0.35)"}} onClick={onClose}>
@@ -9867,8 +9931,7 @@ function MainApp({user,isAdmin,onLogout}){
           teamColor={teamData?.teamColor}
           onClose={()=>setShowMasPopup(false)}
           onOpenMundial={()=>{setShowHome(false);setMundialInitialTab("misel");setShowMundial(true);}}
-          onOpenEquipo={()=>{setActiveComp(null);setShowHome(false);}}
-          onOpenAdmin={()=>{setActiveComp(null);setShowHome(false);}}
+          onOpenAjustes={()=>{setActiveComp(null);setShowSquadList(false);setShowAdminScreen(false);setShowHome(false);setShowSettings(true);}}
         />
       )}
 
