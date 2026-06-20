@@ -1777,7 +1777,7 @@ function PronosticosAdmin({setAiMsg}){
             const totalPredicciones=Object.keys(pronosticoActual.predicciones||{}).filter(k=>k.includes(`__${d.local}__${d.visitante}`)).length;
             return(
               <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"6px 0",borderTop:i>0?`1px solid ${C.border}`:"none"}}>
-                <span style={{fontSize:11,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{d.local} vs {d.visitante}</span>
+                <span style={{fontSize:11,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{d.especial&&"⭐ "}{d.local} vs {d.visitante}</span>
                 <span style={{fontSize:9,color:resultado?"#27ae60":C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>
                   {resultado?`✅ ${resultado.golesLocal}-${resultado.golesVisitante}`:`${totalPredicciones} pronósticos`}
                 </span>
@@ -4770,7 +4770,8 @@ async function elegirPartidosDestacados(partidos,tabla,maxPartidos=4){
     return {partido:p,idx,score};
   });
 
-  return puntuados.sort((a,b)=>b.score-a.score).slice(0,maxPartidos).map(x=>({local:x.partido.local,visitante:x.partido.visitante,idx:x.idx}));
+  const top=puntuados.sort((a,b)=>b.score-a.score).slice(0,maxPartidos);
+  return top.map((x,i)=>({local:x.partido.local,visitante:x.partido.visitante,idx:x.idx,especial:i===0}));
 }
 
 // ─── Califica automáticamente los pronósticos de un partido cuando se carga su resultado real ──
@@ -4795,9 +4796,12 @@ async function calificarPronostico(local,visitante,golesLocal,golesVisitante){
       if(!predKey.endsWith(`__${local}__${visitante}`)) continue;
       const equipoNombre=predKey.split("__")[0];
       const resultadoPred=pred.golesLocal>pred.golesVisitante?"L":pred.golesVisitante>pred.golesLocal?"V":"E";
+      const aciertaResultado=resultadoPred===resultadoReal;
+      const aciertaMarcador=pred.golesLocal===golesLocal&&pred.golesVisitante===golesVisitante;
       let pts=0;
-      if(pred.golesLocal===golesLocal&&pred.golesVisitante===golesVisitante) pts=3;
-      else if(resultadoPred===resultadoReal) pts=1;
+      if(aciertaResultado) pts+=1;
+      if(aciertaMarcador) pts+=1;
+      if(match.especial&&aciertaResultado&&aciertaMarcador) pts+=2; // Partido Especial: +2 si acertaste todo
       puntosPartido[equipoNombre]=pts;
     }
     const puntosAcumulados={...(p.puntosAcumulados||{})};
@@ -8170,10 +8174,55 @@ function CompVistaPublica({comp,competenciaData,onClose,teamData,onAbrirChatGrup
 
 // ─── BARRA DE NAVEGACIÓN INFERIOR: siempre visible, en cualquier pantalla ────
 // ─── RECOMENDACIÓN DE FICHAJE: detecta tu posición más débil y sugiere candidatos ─
+// ─── TABLA DE POSICIONES de la liga de pronósticos (acumulado de todas las jornadas) ──
+function TablaPronosticos({onClose}){
+  const[pronosticos,setPronosticos]=useState({});
+
+  useEffect(()=>{
+    const unsub=onSnapshot(doc(db,"config","pronosticos"),snap=>{
+      setPronosticos(snap.exists()?snap.data():{});
+    });
+    return unsub;
+  },[]);
+
+  const totales={};
+  Object.values(pronosticos).forEach(p=>{
+    Object.entries(p?.puntosAcumulados||{}).forEach(([equipo,pts])=>{
+      totales[equipo]=(totales[equipo]||0)+pts;
+    });
+  });
+  const ranking=Object.entries(totales).map(([equipo,pts])=>({equipo,pts})).sort((a,b)=>b.pts-a.pts);
+
+  return(
+    <div style={{position:"fixed",inset:0,zIndex:510,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{background:C.bg,borderRadius:18,width:"100%",maxWidth:400,maxHeight:"85vh",overflowY:"auto",boxShadow:"0 8px 40px rgba(0,0,0,0.35)"}}>
+        <div style={{padding:"14px 16px",background:"linear-gradient(135deg,#8e44ad,#5b2c6f)",borderRadius:"18px 18px 0 0",display:"flex",alignItems:"center",gap:10}}>
+          <span style={{fontSize:18}}>🏆</span>
+          <span style={{flex:1,fontSize:14,fontWeight:800,color:"#fff",fontFamily:"'DM Sans',sans-serif"}}>Liga de Pronósticos</span>
+          <button onClick={onClose} style={{background:"rgba(255,255,255,0.15)",border:"none",borderRadius:"50%",width:28,height:28,color:"#fff",cursor:"pointer",fontSize:15}}>✕</button>
+        </div>
+        <div style={{padding:"10px 14px"}}>
+          {ranking.length===0&&(
+            <div style={{textAlign:"center",color:C.textFaint,fontSize:12,fontFamily:"'DM Sans',sans-serif",padding:"30px 0"}}>Sin puntos registrados todavía</div>
+          )}
+          {ranking.map((r,i)=>(
+            <div key={r.equipo} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 8px",borderTop:i>0?`1px solid ${C.border}`:"none"}}>
+              <span style={{fontWeight:900,fontSize:15,color:i===0?"#f39c12":i===1?"#95a5a6":i===2?"#cd7f32":C.textFaint,minWidth:22,textAlign:"center"}}>{i+1}</span>
+              <span style={{flex:1,fontSize:13,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{r.equipo}</span>
+              <span style={{fontWeight:900,fontSize:15,color:"#8e44ad"}}>{r.pts} pts</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── PRONÓSTICOS: cualquier equipo predice el marcador de los partidos destacados ──
 function PronosticosModal({teamData,setAiMsg,onClose}){
   const[pronosticos,setPronosticos]=useState({});
   const[guardando,setGuardando]=useState(null); // clave del partido que se está guardando
+  const[showTabla,setShowTabla]=useState(false);
 
   const myName=teamData?.teamName||"";
 
@@ -8215,7 +8264,12 @@ function PronosticosModal({teamData,setAiMsg,onClose}){
           <button onClick={onClose} style={{background:"rgba(255,255,255,0.15)",border:"none",borderRadius:"50%",width:28,height:28,color:"#fff",cursor:"pointer",fontSize:15}}>✕</button>
         </div>
         <div style={{padding:"14px 16px",display:"flex",flexDirection:"column",gap:14}}>
-          <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>3 puntos por marcador exacto · 1 punto por acertar solo ganador/empate. Cualquier equipo puede participar, sin importar su liga.</div>
+          <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>1 punto por acertar el resultado · 1 punto por acertar el marcador exacto · ⭐ Partido Especial: +2 extra si aciertas todo. Cualquier equipo puede participar, sin importar su liga.</div>
+          <button onClick={()=>setShowTabla(true)}
+            style={{padding:"9px",borderRadius:8,background:"transparent",border:"1.5px solid #8e44ad",color:"#8e44ad",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+            🏆 Ver tabla de posiciones
+          </button>
+          {showTabla&&<TablaPronosticos onClose={()=>setShowTabla(false)}/>}
           {activos.length===0&&(
             <div style={{textAlign:"center",color:C.textFaint,fontSize:12,fontFamily:"'DM Sans',sans-serif",padding:"30px 0"}}>📭 Sin pronósticos disponibles por ahora</div>
           )}
@@ -8233,23 +8287,31 @@ function PronosticosModal({teamData,setAiMsg,onClose}){
                     const cerrado=!!resultado;
                     const guardandoEste=guardando===`${clave}__${d.local}__${d.visitante}`;
                     return(
-                      <div key={i} style={{padding:"8px 10px",borderRadius:9,background:C.inputBg,border:`1px solid ${C.border}`}}>
+                      <div key={i} style={{padding:"8px 10px",borderRadius:9,background:d.especial?"#f1c40f11":C.inputBg,border:`1px solid ${d.especial?"#f1c40f":C.border}`}}>
                         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,marginBottom:6}}>
-                          <span style={{fontSize:11,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif",flex:1}}>{d.local} vs {d.visitante}</span>
+                          <span style={{fontSize:11,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif",flex:1}}>{d.especial&&"⭐ "}{d.local} vs {d.visitante}</span>
                           {cerrado&&<span style={{fontSize:9,fontWeight:800,color:"#27ae60",fontFamily:"'DM Sans',sans-serif"}}>✅ {resultado.golesLocal}-{resultado.golesVisitante}</span>}
                         </div>
+                        {d.especial&&!cerrado&&(
+                          <div style={{fontSize:9,color:"#b7950b",fontWeight:700,fontFamily:"'DM Sans',sans-serif",marginBottom:5}}>⭐ Partido Especial: +2 puntos extra si aciertas todo</div>
+                        )}
                         {cerrado?(
                           miPrediccion?(
                             <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>
                               Tu pronóstico: {miPrediccion.golesLocal}-{miPrediccion.golesVisitante}
                               {" — "}
-                              <span style={{fontWeight:800,color:(p.puntosAcumulados?.[myName]??null)!==null?"#8e44ad":C.textFaint}}>
+                              <span style={{fontWeight:800,color:"#8e44ad"}}>
                                 {(()=>{
                                   const real=resultado.golesLocal>resultado.golesVisitante?"L":resultado.golesVisitante>resultado.golesLocal?"V":"E";
                                   const pred=miPrediccion.golesLocal>miPrediccion.golesVisitante?"L":miPrediccion.golesVisitante>miPrediccion.golesLocal?"V":"E";
-                                  if(miPrediccion.golesLocal===resultado.golesLocal&&miPrediccion.golesVisitante===resultado.golesVisitante) return "+3 (exacto)";
-                                  if(pred===real) return "+1 (ganador)";
-                                  return "+0";
+                                  const aciertaR=pred===real;
+                                  const aciertaM=miPrediccion.golesLocal===resultado.golesLocal&&miPrediccion.golesVisitante===resultado.golesVisitante;
+                                  let pts=(aciertaR?1:0)+(aciertaM?1:0)+(d.especial&&aciertaR&&aciertaM?2:0);
+                                  const partes=[];
+                                  if(aciertaR) partes.push("R");
+                                  if(aciertaM) partes.push("M");
+                                  if(d.especial&&aciertaR&&aciertaM) partes.push("⭐");
+                                  return `+${pts} pts${partes.length?` (${partes.join("+")})`:""}`;
                                 })()}
                               </span>
                             </div>
@@ -8607,6 +8669,7 @@ function MainApp({user,isAdmin,onLogout}){
   const[showCalendarioAdmin,setShowCalendarioAdmin]=useState(false);
   const[showTop10Admin,setShowTop10Admin]=useState(false);
   const[showPronosticosAdmin,setShowPronosticosAdmin]=useState(false);
+  const[seccionAdminActiva,setSeccionAdminActiva]=useState(""); // "" | transmision | noticias | calendario | top10 | pronosticos
   const[aiMsg,setAiMsg]=useState("");
   const[showPresidents,setShowPresidents]=useState(false);
   const[showTop10Manager,setShowTop10Manager]=useState(false);
@@ -9278,56 +9341,41 @@ function MainApp({user,isAdmin,onLogout}){
                   </div>
                 </div>
               </div>
-              {/* Collapsible Aviso/Twitch admin */}
+              {/* Lista desplegable única: Transmisión / Noticias / Calendario / Top10 / Pronósticos */}
               <div style={{marginTop:10}}>
-                <button onClick={()=>setShowLiveAdmin(v=>!v)}
-                  style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 12px",borderRadius:8,background:"none",border:`1px solid ${C.border}`,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
-                  <span style={{fontSize:10,fontWeight:700,color:C.textLight,textTransform:"uppercase",letterSpacing:0.5}}>📺 Transmisión / Avisos</span>
-                  <span style={{fontSize:11,color:C.textLight}}>{showLiveAdmin?"▲":"▼"}</span>
-                </button>
-                {showLiveAdmin&&<div style={{marginTop:8,display:"flex",flexDirection:"column",gap:14}}>
-                  <TransmisionAdmin allTeams={allTeams}/>
-                  <div style={{borderTop:`1px solid ${C.border}`,paddingTop:14}}><AvisoTwitchAdmin/></div>
-                </div>}
-              </div>
-              {/* Collapsible Noticias admin */}
-              <div style={{marginTop:10}}>
-                <button onClick={()=>setShowNoticiasAdmin(v=>!v)}
-                  style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 12px",borderRadius:8,background:"none",border:`1px solid ${C.border}`,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
-                  <span style={{fontSize:10,fontWeight:700,color:C.textLight,textTransform:"uppercase",letterSpacing:0.5}}>📰 Noticias de equipos</span>
-                  <span style={{fontSize:11,color:C.textLight}}>{showNoticiasAdmin?"▲":"▼"}</span>
-                </button>
-                {showNoticiasAdmin&&<div style={{marginTop:8}}><NoticiasAdmin/></div>}
-              </div>
-              {/* Collapsible Calendario general admin */}
-              <div style={{marginTop:10}}>
-                <button onClick={()=>setShowCalendarioAdmin(v=>!v)}
-                  style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 12px",borderRadius:8,background:"none",border:`1px solid ${C.border}`,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
-                  <span style={{fontSize:10,fontWeight:700,color:C.textLight,textTransform:"uppercase",letterSpacing:0.5}}>📅 Calendario general</span>
-                  <span style={{fontSize:11,color:C.textLight}}>{showCalendarioAdmin?"▲":"▼"}</span>
-                </button>
-                {showCalendarioAdmin&&<div style={{marginTop:8}}><CalendarioGeneralAdmin setAiMsg={setAiMsg}/></div>}
-                {showCalendarioAdmin&&aiMsg&&(
-                  <div style={{marginTop:8,padding:"7px 10px",borderRadius:8,background:C.inputBg,border:`1px solid ${C.border}`,fontSize:11,color:C.textMid,fontFamily:"'DM Sans',sans-serif"}}>{aiMsg}</div>
+                <select value={seccionAdminActiva} onChange={e=>setSeccionAdminActiva(e.target.value)}
+                  style={{width:"100%",padding:"10px 12px",borderRadius:9,border:`1.5px solid ${C.border}`,background:C.inputBg,color:C.text,fontSize:12,fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>
+                  <option value="">— Selecciona una sección —</option>
+                  <option value="transmision">📺 Transmisión / Avisos</option>
+                  <option value="noticias">📰 Noticias de equipos</option>
+                  <option value="calendario">📅 Calendario general</option>
+                  <option value="top10">🏅 Top 10 de Copa por equipo</option>
+                  <option value="pronosticos">🔮 Pronósticos</option>
+                </select>
+
+                {seccionAdminActiva==="transmision"&&(
+                  <div style={{marginTop:10,display:"flex",flexDirection:"column",gap:14}}>
+                    <TransmisionAdmin allTeams={allTeams}/>
+                    <div style={{borderTop:`1px solid ${C.border}`,paddingTop:14}}><AvisoTwitchAdmin/></div>
+                  </div>
                 )}
-              </div>
-              {/* Collapsible Top 10 manual admin */}
-              <div style={{marginTop:10}}>
-                <button onClick={()=>setShowTop10Admin(v=>!v)}
-                  style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 12px",borderRadius:8,background:"none",border:`1px solid ${C.border}`,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
-                  <span style={{fontSize:10,fontWeight:700,color:C.textLight,textTransform:"uppercase",letterSpacing:0.5}}>🏅 Top 10 de Copa por equipo</span>
-                  <span style={{fontSize:11,color:C.textLight}}>{showTop10Admin?"▲":"▼"}</span>
-                </button>
-                {showTop10Admin&&<div style={{marginTop:8}}><Top10ManualAdmin allTeams={allTeams} setAiMsg={setAiMsg}/></div>}
-              </div>
-              {/* Collapsible Pronosticos admin */}
-              <div style={{marginTop:10}}>
-                <button onClick={()=>setShowPronosticosAdmin(v=>!v)}
-                  style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 12px",borderRadius:8,background:"none",border:`1px solid ${C.border}`,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
-                  <span style={{fontSize:10,fontWeight:700,color:C.textLight,textTransform:"uppercase",letterSpacing:0.5}}>🔮 Pronósticos</span>
-                  <span style={{fontSize:11,color:C.textLight}}>{showPronosticosAdmin?"▲":"▼"}</span>
-                </button>
-                {showPronosticosAdmin&&<div style={{marginTop:8}}><PronosticosAdmin setAiMsg={setAiMsg}/></div>}
+                {seccionAdminActiva==="noticias"&&(
+                  <div style={{marginTop:10}}><NoticiasAdmin/></div>
+                )}
+                {seccionAdminActiva==="calendario"&&(
+                  <div style={{marginTop:10}}>
+                    <CalendarioGeneralAdmin setAiMsg={setAiMsg}/>
+                    {aiMsg&&(
+                      <div style={{marginTop:8,padding:"7px 10px",borderRadius:8,background:C.inputBg,border:`1px solid ${C.border}`,fontSize:11,color:C.textMid,fontFamily:"'DM Sans',sans-serif"}}>{aiMsg}</div>
+                    )}
+                  </div>
+                )}
+                {seccionAdminActiva==="top10"&&(
+                  <div style={{marginTop:10}}><Top10ManualAdmin allTeams={allTeams} setAiMsg={setAiMsg}/></div>
+                )}
+                {seccionAdminActiva==="pronosticos"&&(
+                  <div style={{marginTop:10}}><PronosticosAdmin setAiMsg={setAiMsg}/></div>
+                )}
               </div>
               {/* Collapsible teams list */}
               {showTeamsList&&(
