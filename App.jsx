@@ -5428,6 +5428,7 @@ function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial,onOpenNoti
       <div style={{background:`linear-gradient(160deg,${tc.dark} 0%,${tc.bg} 100%)`,padding:"22px 18px 20px",position:"relative",overflow:"hidden"}}>
         {/* Fondo decorativo */}
         <div style={{position:"absolute",top:-50,left:"50%",transform:"translateX(-50%)",width:240,height:160,background:`radial-gradient(ellipse,${C.accent}22,transparent 70%)`}}/>
+        <div style={{position:"absolute",bottom:0,left:0,right:0,height:1,background:`linear-gradient(90deg,transparent,${C.accent}99,transparent)`}}/>
         <div style={{position:"relative",zIndex:1,display:"flex",alignItems:"center",gap:13}}>
           {/* Escudo */}
           <div style={{width:54,height:54,borderRadius:16,background:"rgba(255,255,255,0.15)",backdropFilter:"blur(10px)",border:`1.5px solid ${C.accent}88`,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 6px 18px rgba(0,0,0,0.4)",flexShrink:0}}>
@@ -5460,43 +5461,29 @@ function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial,onOpenNoti
       {/* Cards */}
       <div style={{flex:1,padding:"20px 16px",display:"flex",flexDirection:"column",gap:12,overflowY:"auto"}}>
 
-        {/* Mi Equipo, Resumen y Sugerencia de fichaje */}
-        <button onClick={onOpenSquadList}
-          style={{width:"100%",padding:"13px 15px",borderRadius:14,background:C.card,border:`1px solid ${C.border}`,cursor:"pointer",display:"flex",alignItems:"center",gap:12,textAlign:"left"}}>
-          <span style={{fontSize:19}}>👕</span>
-          <div style={{flex:1}}>
-            <div style={{fontSize:13,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>Mi equipo</div>
-            <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>{(squad||[]).length} jugadores en plantilla</div>
-          </div>
-          <span style={{fontSize:14,color:C.textFaint}}>›</span>
-        </button>
-        <button onClick={()=>setShowResumenHome(true)}
-          style={{width:"100%",padding:"13px 15px",borderRadius:14,background:C.card,border:`1px solid ${C.border}`,cursor:"pointer",display:"flex",alignItems:"center",gap:12,textAlign:"left"}}>
-          <span style={{fontSize:19}}>📊</span>
-          <div style={{flex:1}}>
-            <div style={{fontSize:13,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>Resumen del equipo</div>
-            <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Valoración, ataque, medio y defensa</div>
-          </div>
-          <span style={{fontSize:14,color:C.textFaint}}>›</span>
-        </button>
-        <button onClick={()=>setShowRecomendacionHome(true)}
-          style={{width:"100%",padding:"13px 15px",borderRadius:14,background:C.card,border:`1px solid ${C.border}`,cursor:"pointer",display:"flex",alignItems:"center",gap:12,textAlign:"left"}}>
-          <span style={{fontSize:19}}>🎯</span>
-          <div style={{flex:1}}>
-            <div style={{fontSize:13,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>Sugerencia de fichaje</div>
-            <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Refuerza tu posición más débil</div>
-          </div>
-          <span style={{fontSize:14,color:C.textFaint}}>›</span>
-        </button>
-        <button onClick={()=>setShowPronosticosHome(true)}
-          style={{width:"100%",padding:"13px 15px",borderRadius:14,background:C.card,border:`1px solid ${C.border}`,cursor:"pointer",display:"flex",alignItems:"center",gap:12,textAlign:"left"}}>
-          <span style={{fontSize:19}}>🔮</span>
-          <div style={{flex:1}}>
-            <div style={{fontSize:13,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>Pronósticos</div>
-            <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Predice el marcador de los partidos destacados</div>
-          </div>
-          <span style={{fontSize:14,color:C.textFaint}}>›</span>
-        </button>
+        {/* Accesos rápidos en fila (chips) */}
+        <div style={{display:"flex",gap:8}}>
+          <button onClick={onOpenSquadList}
+            style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:6,background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"12px 2px",cursor:"pointer",boxShadow:C.dark?"0 2px 10px rgba(0,0,0,0.3)":"0 3px 12px rgba(40,33,15,0.05)"}}>
+            <span style={{fontSize:21}}>👕</span>
+            <span style={{fontSize:9,fontWeight:800,color:C.textMid,fontFamily:"'DM Sans',sans-serif"}}>Equipo</span>
+          </button>
+          <button onClick={()=>setShowResumenHome(true)}
+            style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:6,background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"12px 2px",cursor:"pointer",boxShadow:C.dark?"0 2px 10px rgba(0,0,0,0.3)":"0 3px 12px rgba(40,33,15,0.05)"}}>
+            <span style={{fontSize:21}}>📊</span>
+            <span style={{fontSize:9,fontWeight:800,color:C.textMid,fontFamily:"'DM Sans',sans-serif"}}>Resumen</span>
+          </button>
+          <button onClick={()=>setShowRecomendacionHome(true)}
+            style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:6,background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"12px 2px",cursor:"pointer",boxShadow:C.dark?"0 2px 10px rgba(0,0,0,0.3)":"0 3px 12px rgba(40,33,15,0.05)"}}>
+            <span style={{fontSize:21}}>🎯</span>
+            <span style={{fontSize:9,fontWeight:800,color:C.textMid,fontFamily:"'DM Sans',sans-serif"}}>Fichaje</span>
+          </button>
+          <button onClick={()=>setShowPronosticosHome(true)}
+            style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:6,background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"12px 2px",cursor:"pointer",boxShadow:C.dark?"0 2px 10px rgba(0,0,0,0.3)":"0 3px 12px rgba(40,33,15,0.05)"}}>
+            <span style={{fontSize:21}}>🔮</span>
+            <span style={{fontSize:9,fontWeight:800,color:C.textMid,fontFamily:"'DM Sans',sans-serif"}}>Pronóstico</span>
+          </button>
+        </div>
         {showPronosticosHome&&(
           <PronosticosModal teamData={teamData} setAiMsg={setAiMsg} onClose={()=>setShowPronosticosHome(false)}/>
         )}
@@ -5551,58 +5538,57 @@ function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial,onOpenNoti
         )}
 
         {comps.length===0&&(
-          <div style={{textAlign:"center",color:C.textFaint,fontSize:12,fontFamily:"'DM Sans',sans-serif",padding:"40px 0"}}>
+          <div style={{textAlign:"center",color:C.textFaint,fontSize:12,fontFamily:"'DM Sans',sans-serif",padding:"30px 0"}}>
             ⚽ El admin aún no asignó tus competiciones
           </div>
         )}
 
-        {comps.length>0&&(
-          <div style={{fontSize:10,fontWeight:700,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.8,marginBottom:2}}>Mis Competiciones</div>
-        )}
-
-        {comps.map((comp)=>{
-          const info=posEnLiga(comp.id);
-          const esLiga=["liga1","liga2","ascenso"].includes(comp.id);
-          const destaca=esLiga&&comp.id===ligaPrincipal?.id;
-          return(
-          <button key={comp.id} onClick={()=>onSelect(comp)}
-            style={{width:"100%",padding:"14px 15px",borderRadius:18,background:destaca?(C.dark?"linear-gradient(100deg,#231f12,#161318)":C.goldLight):C.card,border:`1px solid ${destaca?C.accent:C.border}`,cursor:"pointer",display:"flex",alignItems:"center",gap:13,boxShadow:destaca?`0 0 22px ${C.accent}22`:(C.dark?"0 2px 14px rgba(0,0,0,0.35)":"0 4px 16px rgba(40,33,15,0.06)"),textAlign:"left",position:"relative",overflow:"hidden"}}>
-            <div style={{width:46,height:46,borderRadius:13,background:`linear-gradient(140deg,${comp.color},${comp.color}cc)`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:`0 4px 12px ${comp.color}44`}}>
-              <span style={{fontSize:22}}>{comp.icon}</span>
-            </div>
-            <div style={{flex:1,zIndex:1}}>
-              <div style={{fontSize:18,fontWeight:800,color:C.text,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:0.5}}>{comp.name}</div>
-              <div style={{fontSize:10.5,color:destaca?C.accent:C.textLight,fontWeight:info?700:400,fontFamily:"'DM Sans',sans-serif",marginTop:1}}>{info?`Vas ${ordinal(info.pos)} de ${info.total}`:"Ver mi alineación"}</div>
-            </div>
-            <span style={{fontSize:20,color:C.textFaint,zIndex:1}}>›</span>
-          </button>
-          );
-        })}
-
         {siguientePartido&&(
           <>
-            <div style={{fontSize:10,fontWeight:700,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.8,marginTop:8,marginBottom:2}}>Tu próximo partido</div>
-            <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:18,padding:15,boxShadow:C.dark?"0 2px 14px rgba(0,0,0,0.35)":"0 4px 16px rgba(40,33,15,0.06)"}}>
-              <div style={{display:"flex",alignItems:"center",gap:12}}>
-                <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:5,width:62}}>
-                  <span style={{width:42,height:42,borderRadius:"50%",background:`linear-gradient(140deg,${tc.dark},${tc.bg})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:"#fff",border:`1.5px solid ${C.accent}`,fontFamily:"'Bebas Neue',sans-serif"}}>{teamInitials}</span>
-                  <span style={{fontSize:10,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif",textAlign:"center",lineHeight:1.1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:62}}>{teamData?.teamName}</span>
+            <div style={{fontSize:10,fontWeight:700,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.8,marginBottom:2}}>Próximo partido · {siguientePartido.jornada}</div>
+            <div style={{position:"relative",overflow:"hidden",background:C.dark?"linear-gradient(150deg,#15110b,#0d0a07)":C.card,border:`1px solid ${C.border}`,borderRadius:18,padding:"18px 16px",boxShadow:C.dark?"0 4px 18px rgba(0,0,0,0.4)":"0 4px 16px rgba(40,33,15,0.06)"}}>
+              <div style={{position:"absolute",top:0,left:0,width:4,height:"100%",background:"linear-gradient(180deg,#F4D67D,#CDA12F)"}}/>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:7,width:86}}>
+                  <span style={{width:52,height:52,borderRadius:15,background:`linear-gradient(140deg,${tc.dark},${tc.bg})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,fontWeight:800,color:"#fff",border:`1.5px solid ${C.accent}`,fontFamily:"'Bebas Neue',sans-serif"}}>{teamInitials}</span>
+                  <span style={{fontSize:10,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif",textAlign:"center",lineHeight:1.1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:86}}>{teamData?.teamName}</span>
                 </div>
-                <div style={{flex:1,textAlign:"center"}}>
-                  <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:18,letterSpacing:2,color:C.accent}}>VS</div>
-                  <div style={{fontSize:9.5,color:C.textLight,fontWeight:600,fontFamily:"'DM Sans',sans-serif",marginTop:2}}>{siguientePartido.esLocal?"Local":"Visitante"} · {siguientePartido.jornada}</div>
+                <div style={{textAlign:"center"}}>
+                  <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:32,letterSpacing:2,color:C.accent,lineHeight:1}}>VS</div>
+                  <div style={{fontSize:9,color:C.textLight,fontWeight:700,fontFamily:"'DM Sans',sans-serif",marginTop:3}}>{siguientePartido.esLocal?"De local":"De visita"}</div>
                   <div style={{fontSize:9,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>{siguientePartido.liga}</div>
                 </div>
-                <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:5,width:62}}>
-                  <span style={{width:42,height:42,borderRadius:"50%",background:C.inputBg,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:C.textMid,fontFamily:"'Bebas Neue',sans-serif"}}>{rivalInitials}</span>
-                  <span style={{fontSize:10,fontWeight:700,color:C.textMid,fontFamily:"'DM Sans',sans-serif",textAlign:"center",lineHeight:1.1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:62}}>{siguientePartido.rival}</span>
+                <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:7,width:86}}>
+                  <span style={{width:52,height:52,borderRadius:15,background:C.inputBg,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,fontWeight:800,color:C.textMid,fontFamily:"'Bebas Neue',sans-serif"}}>{rivalInitials}</span>
+                  <span style={{fontSize:10,fontWeight:700,color:C.textMid,fontFamily:"'DM Sans',sans-serif",textAlign:"center",lineHeight:1.1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:86}}>{siguientePartido.rival}</span>
                 </div>
               </div>
               <button onClick={()=>{compDeSiguiente?onSelect(compDeSiguiente):onSelect(null);}}
-                style={{cursor:"pointer",width:"100%",marginTop:13,textAlign:"center",fontSize:11,fontWeight:800,color:"#2a1f04",background:"linear-gradient(145deg,#F4D67D,#CDA12F)",border:"none",borderRadius:10,padding:"10px 0",fontFamily:"'DM Sans',sans-serif"}}>⚙ Preparar alineación</button>
+                style={{cursor:"pointer",width:"100%",marginTop:15,textAlign:"center",fontSize:11.5,fontWeight:800,color:"#2a1f04",background:"linear-gradient(145deg,#F4D67D,#CDA12F)",border:"none",borderRadius:11,padding:"11px 0",boxShadow:`0 6px 16px ${C.accent}33`,fontFamily:"'DM Sans',sans-serif",letterSpacing:0.5}}>⚙ PREPARAR ALINEACIÓN</button>
             </div>
           </>
         )}
+
+        {comps.length>0&&(
+          <div style={{fontSize:10,fontWeight:700,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.8,marginTop:8,marginBottom:2}}>Mis competiciones</div>
+        )}
+        <div style={{display:"flex",flexWrap:"wrap",gap:9}}>
+          {comps.map((comp)=>{
+            const info=posEnLiga(comp.id);
+            const esLiga=["liga1","liga2","ascenso"].includes(comp.id);
+            const destaca=esLiga&&comp.id===ligaPrincipal?.id;
+            return(
+            <button key={comp.id} onClick={()=>onSelect(comp)}
+              style={{flex:"1 1 calc(50% - 5px)",minWidth:130,display:"flex",alignItems:"center",gap:9,background:C.card,border:`1px solid ${destaca?C.accent:C.border}`,borderRadius:14,padding:11,cursor:"pointer",textAlign:"left",boxShadow:destaca?`0 0 18px ${C.accent}22`:(C.dark?"0 2px 12px rgba(0,0,0,0.3)":"0 3px 12px rgba(40,33,15,0.05)")}}>
+              <span style={{width:38,height:38,borderRadius:11,background:`linear-gradient(140deg,${comp.color},${comp.color}cc)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0,boxShadow:`0 4px 12px ${comp.color}44`}}>{comp.icon}</span>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:15,letterSpacing:0.3,color:C.text,lineHeight:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{comp.name}</div>
+                <div style={{fontSize:9,fontWeight:700,color:info?C.accent:C.textLight,fontFamily:"'DM Sans',sans-serif",marginTop:2}}>{info?`Vas ${ordinal(info.pos)} de ${info.total}`:"Ver alineación"}</div>
+              </div>
+            </button>
+            );
+          })}
+        </div>
 
         <div style={{fontSize:10,fontWeight:700,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.8,marginTop:8,marginBottom:2}}>Última hora</div>
         <button onClick={()=>{onOpenNoticias();if(mencionesNoVistas>0&&(teamData?.id||teamData?.uid)){updateDoc(doc(db,"teams",teamData.id||teamData.uid),{ultimaVistaMenciones:new Date().toISOString()}).catch(()=>{});}}}
