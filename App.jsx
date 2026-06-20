@@ -4796,6 +4796,85 @@ function TransmisionPanel({teamData,lineupName,esMundial,onClose}){
 
 
 // ─── CHAT ENTRE PRESIDENTES: General + Directos (privado) ────────────────────
+// ─── CHAT GRUPAL DE UNA APUESTA: solo equipos participantes ──────────────────
+function ChatGrupoApuesta({apuesta,teamData,onClose}){
+  const[mensajes,setMensajes]=useState([]);
+  const[texto,setTexto]=useState("");
+  const[enviando,setEnviando]=useState(false);
+  const scrollRef=useRef(null);
+  const myName=teamData?.teamName||"";
+  const soyParticipante=(apuesta.equipos||[]).includes(myName);
+
+  useEffect(()=>{
+    const unsub=onSnapshot(doc(db,"chatsGrupales",apuesta.id),snap=>{
+      setMensajes(snap.exists()?(snap.data().lista||[]):[]);
+    });
+    return unsub;
+  },[apuesta.id]);
+
+  useEffect(()=>{
+    if(scrollRef.current) scrollRef.current.scrollTop=scrollRef.current.scrollHeight;
+  },[mensajes]);
+
+  const enviar=async()=>{
+    if(!texto.trim()) return;
+    setEnviando(true);
+    const ref=doc(db,"chatsGrupales",apuesta.id);
+    const snap=await getDoc(ref).catch(()=>null);
+    const current=snap?.exists()?snap.data():{lista:[],equipos:apuesta.equipos};
+    const nuevo={id:`m_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,autor:myName||"Admin",texto:texto.trim(),fecha:new Date().toISOString()};
+    const lista=[...(current.lista||[]),nuevo].slice(-200);
+    await setDoc(ref,{lista,equipos:apuesta.equipos,condicion:apuesta.condicion},{merge:true});
+    setTexto("");
+    setEnviando(false);
+  };
+
+  const formatHora=(iso)=>{
+    try{return new Date(iso).toLocaleTimeString("es-GT",{hour:"2-digit",minute:"2-digit"});}catch{return "";}
+  };
+
+  return(
+    <div style={{position:"fixed",inset:0,zIndex:520,background:"rgba(0,0,0,0.65)",display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{background:C.bg,borderRadius:"18px 18px 0 0",width:"100%",maxWidth:480,height:"75vh",display:"flex",flexDirection:"column"}}>
+        <div style={{padding:"12px 16px",background:"#1a3a5c",borderRadius:"18px 18px 0 0",flexShrink:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
+            <span style={{fontSize:16,fontWeight:800,color:"#fff",fontFamily:"'DM Sans',sans-serif",flex:1}}>🎲 Chat de la apuesta</span>
+            <button onClick={onClose} style={{background:"rgba(255,255,255,0.15)",border:"none",borderRadius:"50%",width:28,height:28,color:"#fff",cursor:"pointer",fontSize:15}}>✕</button>
+          </div>
+          <div style={{fontSize:10,color:"rgba(255,255,255,0.75)",fontFamily:"'DM Sans',sans-serif"}}>{(apuesta.equipos||[]).join(" · ")}</div>
+        </div>
+        <div ref={scrollRef} style={{flex:1,overflowY:"auto",padding:"12px 14px",display:"flex",flexDirection:"column",gap:8}}>
+          {mensajes.length===0&&(
+            <div style={{textAlign:"center",color:C.textFaint,fontSize:12,fontFamily:"'DM Sans',sans-serif",padding:"30px 0"}}>💬 Conversa con todos los equipos de esta apuesta</div>
+          )}
+          {mensajes.map(m=>{
+            const esMio=m.autor===myName;
+            return(
+              <div key={m.id} style={{alignSelf:esMio?"flex-end":"flex-start",maxWidth:"78%"}}>
+                {!esMio&&<div style={{fontSize:9,fontWeight:700,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginBottom:2,marginLeft:10}}>{m.autor}</div>}
+                <div style={{background:esMio?"#1a3a5c":C.inputBg,color:esMio?"#fff":C.text,padding:"8px 12px",borderRadius:14,borderBottomRightRadius:esMio?4:14,borderBottomLeftRadius:esMio?14:4,fontSize:13,fontFamily:"'DM Sans',sans-serif",wordBreak:"break-word"}}>{m.texto}</div>
+                <div style={{fontSize:8,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginTop:2,textAlign:esMio?"right":"left"}}>{formatHora(m.fecha)}</div>
+              </div>
+            );
+          })}
+        </div>
+        {soyParticipante?(
+          <div style={{display:"flex",gap:8,padding:"10px 12px",borderTop:`1px solid ${C.border}`,flexShrink:0}}>
+            <input value={texto} onChange={e=>setTexto(e.target.value)} onKeyDown={e=>e.key==="Enter"&&!enviando&&enviar()} placeholder="Escribe un mensaje…"
+              style={{flex:1,padding:"9px 12px",borderRadius:20,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:13,fontFamily:"'DM Sans',sans-serif"}}/>
+            <button onClick={enviar} disabled={enviando||!texto.trim()}
+              style={{width:38,height:38,borderRadius:"50%",background:"#1a3a5c",color:"#fff",border:"none",cursor:"pointer",fontSize:15,flexShrink:0,opacity:(enviando||!texto.trim())?0.5:1}}>➤</button>
+          </div>
+        ):(
+          <div style={{padding:"10px 16px",borderTop:`1px solid ${C.border}`,flexShrink:0,textAlign:"center",fontSize:11,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>
+            👁️ Solo lectura — no eres participante de esta apuesta
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ChatModal({teamData,allTeams,onClose,initialEquipoSel}){
   const[tab,setTab]=useState(initialEquipoSel?"directos":"general"); // general | directos
   const[chatGeneral,setChatGeneral]=useState([]);
@@ -4803,6 +4882,8 @@ function ChatModal({teamData,allTeams,onClose,initialEquipoSel}){
   const[mensajesDirecto,setMensajesDirecto]=useState([]);
   const[texto,setTexto]=useState("");
   const[ultimosDirectos,setUltimosDirectos]=useState({}); // {teamId: {ultimoMsg, noLeido}}
+  const[busquedaDirectos,setBusquedaDirectos]=useState("");
+  const[filtroLigaDirectos,setFiltroLigaDirectos]=useState("todas"); // todas | liga1 | liga2 | ascenso
   const myId=teamData?.id||teamData?.uid;
   const myName=teamData?.teamName||"";
   const scrollRef=useRef(null);
@@ -4945,7 +5026,20 @@ function ChatModal({teamData,allTeams,onClose,initialEquipoSel}){
         {/* DIRECTOS: lista de equipos */}
         {tab==="directos"&&!equipoSel&&(
           <div style={{flex:1,overflowY:"auto",padding:"10px 14px",display:"flex",flexDirection:"column",gap:6}}>
-            {allTeams.filter(t=>(t.id||t.uid)!==myId&&t.teamName).map(t=>{
+            <input value={busquedaDirectos} onChange={e=>setBusquedaDirectos(e.target.value)} placeholder="🔍 Buscar equipo…"
+              style={{padding:"9px 12px",borderRadius:10,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:13,fontFamily:"'DM Sans',sans-serif",marginBottom:2}}/>
+            <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:4}}>
+              {[["todas","Todas"],["liga1","Neo League"],["liga2","EC"],["ascenso","Brave League"]].map(([id,label])=>(
+                <button key={id} onClick={()=>setFiltroLigaDirectos(id)}
+                  style={{padding:"5px 10px",borderRadius:20,border:`1.5px solid ${filtroLigaDirectos===id?"#1a3a5c":C.border}`,background:filtroLigaDirectos===id?"#1a3a5c":C.inputBg,color:filtroLigaDirectos===id?"#fff":C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            {allTeams.filter(t=>(t.id||t.uid)!==myId&&t.teamName)
+              .filter(t=>t.teamName.toLowerCase().includes(busquedaDirectos.toLowerCase()))
+              .filter(t=>filtroLigaDirectos==="todas"||(t.competencias||[]).includes(filtroLigaDirectos))
+              .map(t=>{
               const tId=t.id||t.uid;
               const info=ultimosDirectos[tId];
               return(
@@ -5001,6 +5095,7 @@ function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial,onOpenNoti
     .sort((a,b)=>(ORDEN_CATEGORIA[a.id]??9)-(ORDEN_CATEGORIA[b.id]??9));
   const teamInitials=(teamData?.teamName||"?").slice(0,2).toUpperCase();
   const[showResumenHome,setShowResumenHome]=useState(false);
+  const[showMisNotificaciones,setShowMisNotificaciones]=useState(false);
   const[showRecomendacionHome,setShowRecomendacionHome]=useState(false);
   const[transmision,setTransmision]=useState(null);
   const[showTransmisionPanel,setShowTransmisionPanel]=useState(false);
@@ -5083,11 +5178,10 @@ function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial,onOpenNoti
   },[]);
 
   const ultimaVista=teamData?.ultimaVistaMenciones||null;
-  const mencionesNoVistas=noticiasUsuario.filter(n=>
-    n.estado==="aprobada"&&
-    n.equipoMencionado===teamData?.teamName&&
-    (!ultimaVista||new Date(n.fecha)>new Date(ultimaVista))
-  ).length;
+  const misMenciones=noticiasUsuario.filter(n=>
+    n.estado==="aprobada"&&n.equipoMencionado===teamData?.teamName
+  ).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
+  const mencionesNoVistas=misMenciones.filter(n=>!ultimaVista||new Date(n.fecha)>new Date(ultimaVista)).length;
 
   useEffect(()=>{
     const unsub=onSnapshot(doc(db,"config","transmisionActiva"),snap=>{
@@ -5158,7 +5252,7 @@ function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial,onOpenNoti
             <div style={{fontSize:10.5,color:"rgba(255,255,255,0.6)",fontFamily:"'DM Sans',sans-serif",marginTop:3}}>{comps.length>0?`${comps.length} competición${comps.length>1?"es":""} activa${comps.length>1?"s":""}`:"Sin competiciones activas"}</div>
           </div>
           {/* Campana */}
-          <button onClick={()=>{onOpenNoticias();if(mencionesNoVistas>0&&(teamData?.id||teamData?.uid)){updateDoc(doc(db,"teams",teamData.id||teamData.uid),{ultimaVistaMenciones:new Date().toISOString()}).catch(()=>{});}}}
+          <button onClick={()=>{setShowMisNotificaciones(true);if(mencionesNoVistas>0&&(teamData?.id||teamData?.uid)){updateDoc(doc(db,"teams",teamData.id||teamData.uid),{ultimaVistaMenciones:new Date().toISOString()}).catch(()=>{});}}}
             style={{position:"relative",width:36,height:36,borderRadius:11,background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.18)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,cursor:"pointer",flexShrink:0}}>
             🔔
             {mencionesNoVistas>0&&<span style={{position:"absolute",top:-5,right:-5,minWidth:17,height:17,borderRadius:9,background:"#e0483a",color:"#fff",fontSize:9,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",border:`2px solid ${tc.dark}`}}>{mencionesNoVistas}</span>}
@@ -5220,6 +5314,42 @@ function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial,onOpenNoti
         )}
         {showRecomendacionHome&&(
           <RecomendacionFichaje teamData={teamData} squad={squad} activeLineup={activeLineup} positions={positions} pool={pool} allTeams={allTeams} user={user} setAiMsg={setAiMsg} onAbrirChat={onOpenChatWith} onClose={()=>setShowRecomendacionHome(false)}/>
+        )}
+        {showMisNotificaciones&&(
+          <div style={{position:"fixed",inset:0,zIndex:500,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setShowMisNotificaciones(false)}>
+            <div onClick={e=>e.stopPropagation()} style={{background:C.bg,borderRadius:18,width:"100%",maxWidth:420,maxHeight:"85vh",overflowY:"auto",boxShadow:"0 8px 40px rgba(0,0,0,0.35)"}}>
+              <div style={{padding:"14px 16px",background:"linear-gradient(135deg,#1a3a5c,#0d1f30)",borderRadius:"18px 18px 0 0",display:"flex",alignItems:"center",gap:10}}>
+                <span style={{fontSize:18}}>🔔</span>
+                <span style={{flex:1,fontSize:14,fontWeight:800,color:"#fff",fontFamily:"'DM Sans',sans-serif"}}>Mis notificaciones</span>
+                <button onClick={()=>setShowMisNotificaciones(false)} style={{background:"rgba(255,255,255,0.15)",border:"none",borderRadius:"50%",width:28,height:28,color:"#fff",cursor:"pointer",fontSize:15}}>✕</button>
+              </div>
+              <div style={{padding:"14px 16px",display:"flex",flexDirection:"column",gap:10}}>
+                {siguientePartido&&(
+                  <div style={{background:C.card,borderRadius:12,padding:"12px 14px",border:`1.5px solid ${C.accent}`}}>
+                    <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginBottom:3}}>📅 Tu siguiente partido es vs</div>
+                    <div style={{fontSize:14,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{siguientePartido.rival} {siguientePartido.esLocal?"(en casa)":"(visitante)"}</div>
+                    <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginTop:3}}>{siguientePartido.liga} · {siguientePartido.jornada}</div>
+                  </div>
+                )}
+                <div style={{fontSize:11,fontWeight:800,color:C.textLight,fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.5,marginTop:4}}>Menciones a tu equipo</div>
+                {misMenciones.length===0&&(
+                  <div style={{textAlign:"center",color:C.textFaint,fontSize:12,fontFamily:"'DM Sans',sans-serif",padding:"20px 0"}}>📭 Nadie te ha mencionado todavía</div>
+                )}
+                {misMenciones.map(n=>(
+                  <div key={n.id} style={{background:C.cardAlt||C.inputBg,borderRadius:10,padding:"10px 12px",border:`1px solid ${C.border}`,display:"flex",gap:10,alignItems:"flex-start"}}>
+                    <span style={{fontSize:18,flexShrink:0}}>{n.icono||"📰"}</span>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:9,fontWeight:700,color:"#1a3a5c",fontFamily:"'DM Sans',sans-serif",marginBottom:2}}>{n.tematicaLabel} · {n.equipoAutor}</div>
+                      <div style={{fontSize:12,color:C.text,fontFamily:"'DM Sans',sans-serif",fontWeight:600,lineHeight:1.4}}>{n.texto}</div>
+                    </div>
+                  </div>
+                ))}
+                {!siguientePartido&&misMenciones.length===0&&(
+                  <div style={{textAlign:"center",color:C.textFaint,fontSize:12,fontFamily:"'DM Sans',sans-serif",padding:"10px 0"}}>Sin novedades por ahora</div>
+                )}
+              </div>
+            </div>
+          </div>
         )}
 
         {comps.length===0&&(
@@ -6676,12 +6806,13 @@ function CompetenciaFixtureSetup({compId,compColor,setAiMsg}){
 }
 
 // ─── COMPETENCIA: APUESTAS ENTRE EQUIPOS ──────────────────────────────────────
-function CompetenciaApuestasSetup({allTeams,setAiMsg}){
+function CompetenciaApuestasSetup({allTeams,setAiMsg,onAbrirChatGrupal}){
   const[apuestas,setApuestas]=useState([]);
   const[competenciaData,setCompetenciaData]=useState({});
   const[creando,setCreando]=useState(false);
-  const[form,setForm]=useState({equipoA:"",equipoB:"",condicion:"",metrica:"posicion",metricaCustom:""});
+  const[form,setForm]=useState({equipos:["",""],condicion:"",metrica:"posicion",metricaCustom:""});
   const[saving,setSaving]=useState(false);
+  const MAX_EQUIPOS=6;
 
   // Solo competencias formato "liga" tienen tabla comparable (Neo, EC, Brave League)
   const LIGAS_IDS=["liga1","liga2","ascenso"];
@@ -6693,7 +6824,9 @@ function CompetenciaApuestasSetup({allTeams,setAiMsg}){
   useEffect(()=>{
     const unsub=onSnapshot(doc(db,"config","apuestas"),snap=>{
       const all=snap.exists()?snap.data():{};
-      setApuestas(all.lista||[]);
+      // Compatibilidad: convierte apuestas viejas (equipoA/equipoB) al nuevo formato equipos[]
+      const lista=(all.lista||[]).map(a=>a.equipos?a:{...a,equipos:[a.equipoA,a.equipoB].filter(Boolean)});
+      setApuestas(lista);
     });
     return unsub;
   },[]);
@@ -6723,30 +6856,45 @@ function CompetenciaApuestasSetup({allTeams,setAiMsg}){
     await setDoc(ref,{lista:nuevaLista},{merge:true});
   };
 
+  const setEquipoEnForm=(idx,valor)=>{
+    const next=[...form.equipos];
+    next[idx]=valor;
+    setForm({...form,equipos:next});
+  };
+  const agregarEquipoForm=()=>{
+    if(form.equipos.length>=MAX_EQUIPOS) return;
+    setForm({...form,equipos:[...form.equipos,""]});
+  };
+  const quitarEquipoForm=(idx)=>{
+    if(form.equipos.length<=2) return;
+    setForm({...form,equipos:form.equipos.filter((_,i)=>i!==idx)});
+  };
+
   const crearApuesta=async()=>{
-    if(!form.equipoA||!form.equipoB){setAiMsg("❌ Selecciona ambos equipos");return;}
-    if(form.equipoA===form.equipoB){setAiMsg("❌ Los equipos no pueden ser el mismo");return;}
+    const equiposLimpios=form.equipos.map(e=>e.trim()).filter(Boolean);
+    if(equiposLimpios.length<2){setAiMsg("❌ Selecciona al menos 2 equipos");return;}
+    if(new Set(equiposLimpios).size!==equiposLimpios.length){setAiMsg("❌ No repitas el mismo equipo");return;}
     if(!form.condicion.trim()){setAiMsg("❌ Escribe la condición de la apuesta");return;}
     if(form.metrica==="custom"&&!form.metricaCustom.trim()){setAiMsg("❌ Escribe el nombre del formato de apuesta personalizado");return;}
     setSaving(true);
     const nueva={
-      id:`bet_${Date.now()}`,equipoA:form.equipoA,equipoB:form.equipoB,
+      id:`bet_${Date.now()}`,equipos:equiposLimpios,
       condicion:form.condicion.trim(),metrica:form.metrica,
       metricaCustomLabel:form.metrica==="custom"?form.metricaCustom.trim():null,
-      progresoCustomA:"",progresoCustomB:"",
+      progresoCustom:{}, // {nombreEquipo: texto}
       estado:"activa",ganador:null,
       fecha:new Date().toISOString()
     };
     await saveApuestas([...apuestas,nueva]);
-    await addNoticia(`🎲 Nueva apuesta: ${form.equipoA} vs ${form.equipoB} — ${form.condicion.trim()}`,"🎲");
-    setForm({equipoA:"",equipoB:"",condicion:"",metrica:"posicion",metricaCustom:""});
+    await addNoticia(`🎲 Nueva apuesta entre ${equiposLimpios.length} equipos: ${equiposLimpios.join(", ")} — ${form.condicion.trim()}`,"🎲");
+    setForm({equipos:["",""],condicion:"",metrica:"posicion",metricaCustom:""});
     setCreando(false);
     setAiMsg("✅ Apuesta creada");
     setSaving(false);
   };
 
-  const actualizarProgresoCustom=async(apId,campo,valor)=>{
-    const nuevaLista=apuestas.map(a=>a.id===apId?{...a,[campo]:valor}:a);
+  const actualizarProgresoCustom=(apId,equipoNombre,valor)=>{
+    const nuevaLista=apuestas.map(a=>a.id===apId?{...a,progresoCustom:{...(a.progresoCustom||{}),[equipoNombre]:valor}}:a);
     setApuestas(nuevaLista); // optimista, se guarda al perder foco
   };
   const guardarProgresoCustom=async()=>{
@@ -6759,7 +6907,7 @@ function CompetenciaApuestasSetup({allTeams,setAiMsg}){
     const nuevaLista=apuestas.map(a=>a.id===apId?{...a,estado:"cerrada",ganador}:a);
     await saveApuestas(nuevaLista);
     if(ganador){
-      await addNoticia(`🎲 ${ganador} ganó la apuesta contra ${ganador===ap.equipoA?ap.equipoB:ap.equipoA}: ${ap.condicion}`,"🏆");
+      await addNoticia(`🎲 ${ganador} ganó la apuesta contra ${ap.equipos.filter(e=>e!==ganador).join(", ")}: ${ap.condicion}`,"🏆");
     }else{
       await addNoticia(`🎲 Apuesta cerrada sin ganador: ${ap.condicion}`,"🎲");
     }
@@ -6774,33 +6922,32 @@ function CompetenciaApuestasSetup({allTeams,setAiMsg}){
 
   const metricaLabel={posicion:"Posición en tabla",puntos:"Puntos (% si son ligas distintas)",gd:"Diferencia de goles",h2h:"Resultado directo (H2H)",custom:"✏️ Otro (personalizado)"};
 
-  // Calcula el progreso a mostrar para un equipo según la métrica
-  const calcularProgreso=(nombreEquipo,metrica,mismaLiga)=>{
+  // Calcula el valor de progreso (numérico para ordenar, y texto para mostrar)
+  const calcularProgreso=(nombreEquipo,metrica)=>{
     const d=datosDeEquipo(nombreEquipo);
-    if(!d) return "—";
+    if(!d) return {valor:-Infinity,texto:"—"};
     if(metrica==="posicion"){
       const grupos=competenciaData?.[d.ligaId]?.grupos||[];
       const ordenada=[...(grupos[0]?.tabla||[])].sort((a,b)=>b.pts-a.pts);
       const idx=ordenada.findIndex(r=>r.equipo===nombreEquipo);
-      return idx>=0?`#${idx+1} (${d.ligaNombre})`:"—";
+      return {valor:idx>=0?-idx:-Infinity,texto:idx>=0?`#${idx+1} (${d.ligaNombre})`:"—"};
     }
     if(metrica==="puntos"){
-      if(mismaLiga) return `${d.fila.pts||0} pts`;
       const pj=d.fila.pj||0;
       const pct=pj>0?Math.round(((d.fila.pts||0)/(pj*3))*100):0;
-      return `${pct}% (${d.fila.pts||0}/${pj*3} pts · ${d.ligaNombre})`;
+      return {valor:pct,texto:`${pct}% (${d.fila.pts||0}/${pj*3} pts · ${d.ligaNombre})`};
     }
     if(metrica==="gd"){
       const gd=(d.fila.gf||0)-(d.fila.gc||0);
-      return `${gd>=0?"+":""}${gd} (${d.ligaNombre})`;
+      return {valor:gd,texto:`${gd>=0?"+":""}${gd} (${d.ligaNombre})`};
     }
-    return "—";
+    return {valor:0,texto:"—"};
   };
 
   return(
     <div style={{display:"flex",flexDirection:"column",gap:10}}>
       <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>
-        Crea apuestas entre equipos de cualquier liga (Neo League, EC o Brave League). Si son de ligas distintas, "Puntos" se compara como % de puntos posibles. Tú decides manualmente quién ganó al cerrarla.
+        Crea apuestas entre 2 y {MAX_EQUIPOS} equipos de cualquier liga. Si son de ligas distintas, "Puntos" se compara como % de puntos posibles. Tú decides manualmente quién ganó al cerrarla.
       </div>
 
       {!creando&&(
@@ -6812,26 +6959,29 @@ function CompetenciaApuestasSetup({allTeams,setAiMsg}){
 
       {creando&&(
         <div style={{background:C.card,borderRadius:10,padding:"12px",border:"1.5px solid #1a3a5c",display:"flex",flexDirection:"column",gap:8}}>
-          <div style={{display:"flex",gap:6}}>
-            <select value={form.equipoA} onChange={e=>setForm({...form,equipoA:e.target.value})}
-              style={{flex:1,padding:"7px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif"}}>
-              <option value="">— Equipo A —</option>
-              {ligasConEquipos.map(({comp,equipos})=>(
-                <optgroup key={comp.id} label={comp.name}>
-                  {equipos.map(t=><option key={t.uid||t.id} value={t.teamName}>{t.teamName}</option>)}
-                </optgroup>
-              ))}
-            </select>
-            <select value={form.equipoB} onChange={e=>setForm({...form,equipoB:e.target.value})}
-              style={{flex:1,padding:"7px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif"}}>
-              <option value="">— Equipo B —</option>
-              {ligasConEquipos.map(({comp,equipos})=>(
-                <optgroup key={comp.id} label={comp.name}>
-                  {equipos.map(t=><option key={t.uid||t.id} value={t.teamName}>{t.teamName}</option>)}
-                </optgroup>
-              ))}
-            </select>
-          </div>
+          <div style={{fontSize:9,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Equipos participantes ({form.equipos.length}/{MAX_EQUIPOS}):</div>
+          {form.equipos.map((eq,idx)=>(
+            <div key={idx} style={{display:"flex",gap:6,alignItems:"center"}}>
+              <select value={eq} onChange={e=>setEquipoEnForm(idx,e.target.value)}
+                style={{flex:1,padding:"7px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif"}}>
+                <option value="">— Equipo {idx+1} —</option>
+                {ligasConEquipos.map(({comp,equipos})=>(
+                  <optgroup key={comp.id} label={comp.name}>
+                    {equipos.map(t=><option key={t.uid||t.id} value={t.teamName}>{t.teamName}</option>)}
+                  </optgroup>
+                ))}
+              </select>
+              {form.equipos.length>2&&(
+                <button onClick={()=>quitarEquipoForm(idx)} style={{background:"none",border:"none",color:"#c0392b",cursor:"pointer",fontSize:14,flexShrink:0}}>✕</button>
+              )}
+            </div>
+          ))}
+          {form.equipos.length<MAX_EQUIPOS&&(
+            <button onClick={agregarEquipoForm}
+              style={{padding:"6px",borderRadius:7,background:"none",border:`1.5px dashed ${C.border}`,color:C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+              + Agregar otro equipo
+            </button>
+          )}
           <textarea value={form.condicion} onChange={e=>setForm({...form,condicion:e.target.value})} placeholder='Condición de la apuesta (ej: "El que termine más abajo paga la cena")'
             style={{padding:"8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif",minHeight:50,resize:"vertical"}}/>
           <div>
@@ -6854,7 +7004,7 @@ function CompetenciaApuestasSetup({allTeams,setAiMsg}){
               style={{flex:1,padding:"8px",borderRadius:7,background:"#27ae60",color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:saving?0.6:1}}>
               {saving?"Guardando…":"✅ Crear apuesta"}
             </button>
-            <button onClick={()=>{setCreando(false);setForm({equipoA:"",equipoB:"",condicion:"",metrica:"posicion",metricaCustom:""});}}
+            <button onClick={()=>{setCreando(false);setForm({equipos:["",""],condicion:"",metrica:"posicion",metricaCustom:""});}}
               style={{padding:"8px 14px",borderRadius:7,background:C.inputBg,color:C.textMid,border:`1px solid ${C.border}`,fontSize:11,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
               Cancelar
             </button>
@@ -6867,54 +7017,61 @@ function CompetenciaApuestasSetup({allTeams,setAiMsg}){
       )}
 
       {apuestas.map(ap=>{
-        const dA=datosDeEquipo(ap.equipoA);
-        const dB=datosDeEquipo(ap.equipoB);
-        const mismaLiga=dA&&dB&&dA.ligaId===dB.ligaId;
+        const equiposConProgreso=(ap.equipos||[]).map(eq=>({
+          nombre:eq,
+          ...calcularProgreso(eq,ap.metrica)
+        })).sort((a,b)=>b.valor-a.valor);
         return(
         <div key={ap.id} style={{background:C.card,borderRadius:10,padding:"10px 12px",border:`1.5px solid ${ap.estado==="activa"?"#1a3a5c":C.border}`,opacity:ap.estado==="cerrada"?0.7:1}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:6,marginBottom:6}}>
-            <span style={{fontSize:12,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{ap.equipoA} 🆚 {ap.equipoB}</span>
-            <button onClick={()=>eliminarApuesta(ap.id)} style={{background:"none",border:"none",color:"#c0392b",cursor:"pointer",fontSize:12}}>🗑️</button>
+            <span style={{fontSize:12,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{(ap.equipos||[]).join(" 🆚 ")}</span>
+            <button onClick={()=>eliminarApuesta(ap.id)} style={{background:"none",border:"none",color:"#c0392b",cursor:"pointer",fontSize:12,flexShrink:0}}>🗑️</button>
           </div>
           <div style={{fontSize:11,color:C.textMid,fontFamily:"'DM Sans',sans-serif",marginBottom:8,fontStyle:"italic"}}>"{ap.condicion}"</div>
           <div style={{fontSize:9,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginBottom:8}}>Métrica: {ap.metrica==="custom"?ap.metricaCustomLabel:metricaLabel[ap.metrica]}</div>
 
           {ap.metrica!=="custom"&&ap.metrica!=="h2h"&&(
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginBottom:8,fontSize:11,fontFamily:"'DM Sans',sans-serif"}}>
-              <span style={{fontWeight:700,color:C.text}}>{ap.equipoA}: <span style={{color:"#1a3a5c",fontWeight:800}}>{calcularProgreso(ap.equipoA,ap.metrica,mismaLiga)}</span></span>
-              <span style={{fontWeight:700,color:C.text}}>{ap.equipoB}: <span style={{color:"#1a3a5c",fontWeight:800}}>{calcularProgreso(ap.equipoB,ap.metrica,mismaLiga)}</span></span>
+            <div style={{display:"flex",flexDirection:"column",gap:4,marginBottom:8}}>
+              {equiposConProgreso.map((eq,i)=>(
+                <div key={eq.nombre} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"4px 8px",borderRadius:6,background:i===0?"#1a3a5c11":"transparent",fontSize:11,fontFamily:"'DM Sans',sans-serif"}}>
+                  <span style={{fontWeight:700,color:C.text}}>{i+1}. {eq.nombre}</span>
+                  <span style={{fontWeight:800,color:"#1a3a5c"}}>{eq.texto}</span>
+                </div>
+              ))}
             </div>
           )}
 
           {ap.metrica==="custom"&&(
-            <div style={{display:"flex",gap:6,marginBottom:8}}>
-              <div style={{flex:1}}>
-                <div style={{fontSize:9,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginBottom:3}}>{ap.equipoA}</div>
-                <input value={ap.progresoCustomA||""} onChange={e=>actualizarProgresoCustom(ap.id,"progresoCustomA",e.target.value)} onBlur={guardarProgresoCustom} placeholder="Progreso actual"
-                  style={{width:"100%",padding:"6px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif"}}/>
-              </div>
-              <div style={{flex:1}}>
-                <div style={{fontSize:9,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginBottom:3}}>{ap.equipoB}</div>
-                <input value={ap.progresoCustomB||""} onChange={e=>actualizarProgresoCustom(ap.id,"progresoCustomB",e.target.value)} onBlur={guardarProgresoCustom} placeholder="Progreso actual"
-                  style={{width:"100%",padding:"6px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif"}}/>
-              </div>
+            <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:8}}>
+              {(ap.equipos||[]).map(eq=>(
+                <div key={eq}>
+                  <div style={{fontSize:9,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginBottom:3}}>{eq}</div>
+                  <input value={(ap.progresoCustom||{})[eq]||""} onChange={e=>actualizarProgresoCustom(ap.id,eq,e.target.value)} onBlur={guardarProgresoCustom} placeholder="Progreso actual"
+                    style={{width:"100%",padding:"6px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif"}}/>
+                </div>
+              ))}
             </div>
           )}
+
+          <button onClick={()=>onAbrirChatGrupal&&onAbrirChatGrupal(ap)}
+            style={{width:"100%",marginBottom:8,padding:"7px",borderRadius:7,background:"transparent",border:"1.5px solid #1a3a5c",color:"#1a3a5c",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+            💬 Chat de la apuesta
+          </button>
 
           {ap.estado==="cerrada"?(
             <div style={{fontSize:11,fontWeight:800,color:"#27ae60",fontFamily:"'DM Sans',sans-serif"}}>
               {ap.ganador?`🏆 Ganó: ${ap.ganador}`:"Cerrada sin ganador"}
             </div>
           ):(
-            <div style={{display:"flex",gap:6}}>
-              <button onClick={()=>marcarGanador(ap.id,ap.equipoA)}
-                style={{flex:1,padding:"6px",borderRadius:7,background:"transparent",border:"1px solid #27ae60",color:"#27ae60",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
-                🏆 Ganó {ap.equipoA}
-              </button>
-              <button onClick={()=>marcarGanador(ap.id,ap.equipoB)}
-                style={{flex:1,padding:"6px",borderRadius:7,background:"transparent",border:"1px solid #27ae60",color:"#27ae60",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
-                🏆 Ganó {ap.equipoB}
-              </button>
+            <div style={{display:"flex",flexDirection:"column",gap:5}}>
+              <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+                {(ap.equipos||[]).map(eq=>(
+                  <button key={eq} onClick={()=>marcarGanador(ap.id,eq)}
+                    style={{flex:"1 1 calc(50% - 5px)",padding:"6px 4px",borderRadius:7,background:"transparent",border:"1px solid #27ae60",color:"#27ae60",fontSize:9,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                    🏆 {eq}
+                  </button>
+                ))}
+              </div>
               <button onClick={()=>marcarGanador(ap.id,null)}
                 style={{padding:"6px 10px",borderRadius:7,background:"transparent",border:`1px solid ${C.border}`,color:C.textFaint,fontSize:10,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
                 Cerrar sin ganador
@@ -7382,7 +7539,7 @@ function CompetenciasModal({allTeams,onClose}){
 
           {/* Vista: apuestas entre equipos */}
           {selected&&subTab==="apuestas"&&(
-            <CompetenciaApuestasSetup allTeams={allTeams} setAiMsg={setAiMsg}/>
+            <CompetenciaApuestasSetup allTeams={allTeams} setAiMsg={setAiMsg} onAbrirChatGrupal={ap=>setChatGrupoApuesta(ap)}/>
           )}
         </div>
       </div>
@@ -7391,7 +7548,7 @@ function CompetenciasModal({allTeams,onClose}){
 }
 
 // ─── VISTA PÚBLICA: Tabla / Goleadores / Fixture / Apuestas de una competencia ───
-function CompVistaPublica({comp,competenciaData,onClose}){
+function CompVistaPublica({comp,competenciaData,onClose,teamData,onAbrirChatGrupal}){
   const compId=comp.id;
   const compData=competenciaData?.[compId]||{};
   const grupos=compData.grupos||[];
@@ -7407,7 +7564,9 @@ function CompVistaPublica({comp,competenciaData,onClose}){
     const unsub1=onSnapshot(doc(db,"config","apuestas"),snap=>{
       const all=snap.exists()?snap.data():{};
       const equiposDeEstaComp=(grupos||[]).flatMap(g=>g.equipos||[]);
-      setApuestasComp((all.lista||[]).filter(a=>equiposDeEstaComp.includes(a.equipoA)||equiposDeEstaComp.includes(a.equipoB)));
+      // Compatibilidad: convierte apuestas viejas (equipoA/equipoB) al nuevo formato equipos[]
+      const lista=(all.lista||[]).map(a=>a.equipos?a:{...a,equipos:[a.equipoA,a.equipoB].filter(Boolean)});
+      setApuestasComp(lista.filter(a=>(a.equipos||[]).some(eq=>equiposDeEstaComp.includes(eq))));
     });
     const unsub2=onSnapshot(doc(db,"config","h2hHistorial"),snap=>{
       const all=snap.exists()?snap.data():{};
@@ -7606,49 +7765,65 @@ function CompVistaPublica({comp,competenciaData,onClose}){
                 apuestasComp.length===0
                   ? <div style={{textAlign:"center",color:C.textFaint,padding:40,fontFamily:"'DM Sans',sans-serif",fontSize:13}}>Sin apuestas activas</div>
                   : apuestasComp.map(ap=>{
-                    let progresoA="—",progresoB="—",etiqueta="";
+                    const equipos=ap.equipos||[];
+                    let etiqueta="";
+                    let filas=[]; // {nombre, valor, texto}
                     if(ap.metrica==="posicion"){
                       etiqueta="Posición en tabla";
-                      const pA=posicionDeEquipo(ap.equipoA),pB=posicionDeEquipo(ap.equipoB);
-                      progresoA=pA?`#${pA}`:"—"; progresoB=pB?`#${pB}`:"—";
+                      filas=equipos.map(eq=>{
+                        const p=posicionDeEquipo(eq);
+                        return {nombre:eq,valor:p?-p:-Infinity,texto:p?`#${p}`:"—"};
+                      });
                     }else if(ap.metrica==="puntos"){
                       etiqueta="Puntos";
-                      const fA=filaDeEquipo(ap.equipoA),fB=filaDeEquipo(ap.equipoB);
-                      progresoA=fA?`${fA.pts||0} pts`:"—"; progresoB=fB?`${fB.pts||0} pts`:"—";
+                      filas=equipos.map(eq=>{
+                        const f=filaDeEquipo(eq);
+                        return {nombre:eq,valor:f?(f.pts||0):-Infinity,texto:f?`${f.pts||0} pts`:"—"};
+                      });
                     }else if(ap.metrica==="gd"){
                       etiqueta="Diferencia de goles";
-                      const fA=filaDeEquipo(ap.equipoA),fB=filaDeEquipo(ap.equipoB);
-                      const gdA=fA?(fA.gf||0)-(fA.gc||0):null, gdB=fB?(fB.gf||0)-(fB.gc||0):null;
-                      progresoA=gdA!==null?(gdA>=0?"+"+gdA:gdA):"—"; progresoB=gdB!==null?(gdB>=0?"+"+gdB:gdB):"—";
-                    }else if(ap.metrica==="h2h"){
+                      filas=equipos.map(eq=>{
+                        const f=filaDeEquipo(eq);
+                        const gd=f?(f.gf||0)-(f.gc||0):null;
+                        return {nombre:eq,valor:gd!==null?gd:-Infinity,texto:gd!==null?(gd>=0?"+"+gd:gd):"—"};
+                      });
+                    }else if(ap.metrica==="h2h"&&equipos.length===2){
                       etiqueta="Resultado directo (H2H)";
-                      const partidos=h2hLista.filter(h=>(h.local===ap.equipoA&&h.visitante===ap.equipoB)||(h.local===ap.equipoB&&h.visitante===ap.equipoA));
-                      if(partidos.length===0){progresoA="Sin partidos";progresoB="Sin partidos";}
-                      else{
-                        let winsA=0,winsB=0;
-                        partidos.forEach(p=>{
-                          const golesA=p.local===ap.equipoA?p.golesLocal:p.golesVisitante;
-                          const golesB=p.local===ap.equipoB?p.golesLocal:p.golesVisitante;
-                          if(golesA>golesB) winsA++; else if(golesB>golesA) winsB++;
-                        });
-                        progresoA=`${winsA} victoria${winsA!==1?"s":""}`; progresoB=`${winsB} victoria${winsB!==1?"s":""}`;
-                      }
+                      const[eA,eB]=equipos;
+                      const partidos=h2hLista.filter(h=>(h.local===eA&&h.visitante===eB)||(h.local===eB&&h.visitante===eA));
+                      let winsA=0,winsB=0;
+                      partidos.forEach(p=>{
+                        const golesA=p.local===eA?p.golesLocal:p.golesVisitante;
+                        const golesB=p.local===eA?p.golesVisitante:p.golesLocal;
+                        if(golesA>golesB) winsA++; else if(golesB>golesA) winsB++;
+                      });
+                      filas=[
+                        {nombre:eA,valor:winsA,texto:partidos.length===0?"Sin partidos":`${winsA} victoria${winsA!==1?"s":""}`},
+                        {nombre:eB,valor:winsB,texto:partidos.length===0?"Sin partidos":`${winsB} victoria${winsB!==1?"s":""}`}
+                      ];
+                    }else if(ap.metrica==="custom"){
+                      etiqueta=ap.metricaCustomLabel||"Personalizado";
+                      filas=equipos.map(eq=>({nombre:eq,valor:0,texto:(ap.progresoCustom||{})[eq]||"—"}));
                     }
+                    if(ap.metrica!=="custom") filas.sort((a,b)=>b.valor-a.valor);
                     return(
                       <div key={ap.id} style={{background:C.card,borderRadius:12,padding:"14px",border:`1.5px solid ${ap.estado==="activa"?(comp.color||"#1a3a5c"):C.border}`,marginBottom:12,opacity:ap.estado==="cerrada"?0.7:1}}>
                         <div style={{fontSize:11,color:C.textMid,fontFamily:"'DM Sans',sans-serif",fontStyle:"italic",marginBottom:10}}>"{ap.condicion}"</div>
-                        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
-                          <div style={{flex:1,textAlign:"center"}}>
-                            <div style={{fontSize:12,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{ap.equipoA}</div>
-                            <div style={{fontSize:16,fontWeight:900,color:comp.color||"#1a3a5c",fontFamily:"'DM Sans',sans-serif"}}>{progresoA}</div>
-                          </div>
-                          <div style={{fontSize:11,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",fontWeight:700}}>VS</div>
-                          <div style={{flex:1,textAlign:"center"}}>
-                            <div style={{fontSize:12,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{ap.equipoB}</div>
-                            <div style={{fontSize:16,fontWeight:900,color:comp.color||"#1a3a5c",fontFamily:"'DM Sans',sans-serif"}}>{progresoB}</div>
-                          </div>
+                        <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                          {filas.map((f,i)=>(
+                            <div key={f.nombre} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"6px 10px",borderRadius:8,background:i===0&&ap.metrica!=="custom"?(comp.color||"#1a3a5c")+"15":"transparent",fontFamily:"'DM Sans',sans-serif"}}>
+                              <span style={{fontSize:12,fontWeight:800,color:C.text}}>{ap.metrica!=="custom"?`${i+1}. `:""}{f.nombre}</span>
+                              <span style={{fontSize:14,fontWeight:900,color:comp.color||"#1a3a5c"}}>{f.texto}</span>
+                            </div>
+                          ))}
                         </div>
                         <div style={{fontSize:8,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",textAlign:"center",marginTop:8}}>{etiqueta}</div>
+                        {equipos.includes(teamData?.teamName)&&(
+                          <button onClick={()=>onAbrirChatGrupal&&onAbrirChatGrupal(ap)}
+                            style={{width:"100%",marginTop:10,padding:"7px",borderRadius:7,background:"transparent",border:`1.5px solid ${comp.color||"#1a3a5c"}`,color:comp.color||"#1a3a5c",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                            💬 Chat de la apuesta
+                          </button>
+                        )}
                         {ap.estado==="cerrada"&&(
                           <div style={{marginTop:10,textAlign:"center",fontSize:11,fontWeight:800,color:"#27ae60",fontFamily:"'DM Sans',sans-serif"}}>
                             {ap.ganador?`🏆 Ganó: ${ap.ganador}`:"Cerrada sin ganador"}
@@ -7971,6 +8146,8 @@ function MainApp({user,isAdmin,onLogout}){
   const[adminsList,setAdminsList]=useState([]);
   const[viewingTeam,setViewingTeam]=useState(null);
   const[showTeamsList,setShowTeamsList]=useState(false);
+  const[busquedaEquiposAdmin,setBusquedaEquiposAdmin]=useState("");
+  const[filtroLigaEquiposAdmin,setFiltroLigaEquiposAdmin]=useState("todas"); // todas | liga1 | liga2 | ascenso
   const[showLiveAdmin,setShowLiveAdmin]=useState(false);
   const[showNoticiasAdmin,setShowNoticiasAdmin]=useState(false);
   const[showCalendarioAdmin,setShowCalendarioAdmin]=useState(false);
@@ -8003,6 +8180,7 @@ function MainApp({user,isAdmin,onLogout}){
   const[showMasPopup,setShowMasPopup]=useState(false);
   const[showChatGlobal,setShowChatGlobal]=useState(false);
   const[chatEquipoObjetivo,setChatEquipoObjetivo]=useState(null);
+  const[chatGrupoApuesta,setChatGrupoApuesta]=useState(null);
   const[compMenuComp,setCompMenuComp]=useState(null);
   const[showCompVista,setShowCompVista]=useState(null);
   const[competenciaData,setCompetenciaData]=useState({});
@@ -8020,6 +8198,14 @@ function MainApp({user,isAdmin,onLogout}){
   const[showSettings,setShowSettings]=useState(false);
   const[showSquadManager,setShowSquadManager]=useState(false);
   const[showSquadList,setShowSquadList]=useState(false);
+  // Red de seguridad: cada vez que se entra a ver una competencia específica, asegura que el campo
+  // sea visible (sin importar desde dónde se llegó — evita el bug de "Mi equipo" bloqueando el campo después)
+  useEffect(()=>{
+    if(activeComp){
+      setShowSquadList(false);
+      setShowAdminScreen(false);
+    }
+  },[activeComp]);
   const[showResumenModal,setShowResumenModal]=useState(false);
   const[showRecomendacion,setShowRecomendacion]=useState(false);
   const[editingPlayer,setEditingPlayer]=useState(null);
@@ -8401,6 +8587,8 @@ function MainApp({user,isAdmin,onLogout}){
               const comp=compMenuComp;
               setCompMenuComp(null);
               setShowHome(false);
+              setShowSquadList(false);
+              setShowAdminScreen(false);
               const lineupName=comp.lineupName;
               const matched=lineups.find(l=>l.name===lineupName);
               if(matched) setActiveLineupId(matched.id);
@@ -8435,7 +8623,7 @@ function MainApp({user,isAdmin,onLogout}){
       )}
 
       {/* VISTA PÚBLICA: Tabla / Goleadores / Fixture */}
-      {showCompVista&&<CompVistaPublica comp={showCompVista.comp} competenciaData={competenciaData} onClose={()=>setShowCompVista(null)}/>}
+      {showCompVista&&<CompVistaPublica comp={showCompVista.comp} competenciaData={competenciaData} teamData={teamData} onAbrirChatGrupal={ap=>setChatGrupoApuesta(ap)} onClose={()=>setShowCompVista(null)}/>}
 
       <LiveAndAviso/>
       {/* TOP BAR */}
@@ -8680,7 +8868,20 @@ function MainApp({user,isAdmin,onLogout}){
               {/* Collapsible teams list */}
               {showTeamsList&&(
                 <div style={{marginTop:10,display:"flex",flexDirection:"column",gap:5}}>
-                  {[...allTeams].sort((a,b)=>(a.teamName||"").localeCompare(b.teamName||"")).map(t=>{
+                  <input value={busquedaEquiposAdmin} onChange={e=>setBusquedaEquiposAdmin(e.target.value)} placeholder="🔍 Buscar equipo…"
+                    style={{padding:"8px 10px",borderRadius:9,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:12,fontFamily:"'DM Sans',sans-serif"}}/>
+                  <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:3}}>
+                    {[["todas","Todas"],["liga1","Neo League"],["liga2","EC"],["ascenso","Brave League"]].map(([id,label])=>(
+                      <button key={id} onClick={()=>setFiltroLigaEquiposAdmin(id)}
+                        style={{padding:"5px 10px",borderRadius:20,border:`1.5px solid ${filtroLigaEquiposAdmin===id?C.accent:C.border}`,background:filtroLigaEquiposAdmin===id?C.accent:C.inputBg,color:filtroLigaEquiposAdmin===id?"#fff":C.textMid,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  {[...allTeams]
+                    .filter(t=>(t.teamName||"").toLowerCase().includes(busquedaEquiposAdmin.toLowerCase()))
+                    .filter(t=>filtroLigaEquiposAdmin==="todas"||(t.competencias||[]).includes(filtroLigaEquiposAdmin))
+                    .sort((a,b)=>(a.teamName||"").localeCompare(b.teamName||"")).map(t=>{
                     const isTeamAdmin=adminsList.some(a=>a.id===t.uid);
                     const isMe=t.uid===user.uid;
                     const isSelected=viewingTeam&&(viewingTeam.id||viewingTeam.uid)===(t.id||t.uid);
@@ -9640,6 +9841,7 @@ function MainApp({user,isAdmin,onLogout}){
 
       {showNoticiasGlobal&&<NoticiasModal teamData={teamData} allTeams={allTeams} isAdmin={isAdmin} onClose={()=>setShowNoticiasGlobal(false)}/>}
       {showChatGlobal&&<ChatModal teamData={teamData} allTeams={allTeams} initialEquipoSel={chatEquipoObjetivo?allTeams.find(t=>t.teamName===chatEquipoObjetivo):null} onClose={()=>{setShowChatGlobal(false);setChatEquipoObjetivo(null);}}/>}
+      {chatGrupoApuesta&&<ChatGrupoApuesta apuesta={chatGrupoApuesta} teamData={teamData} onClose={()=>setChatGrupoApuesta(null)}/>}
 
       <BottomTabBar
         active={showMundial?"mundial":showNoticiasGlobal?"noticias":showChatGlobal?"chat":showCompVista?"liga":(showHome?"inicio":"equipo")}
@@ -9648,9 +9850,10 @@ function MainApp({user,isAdmin,onLogout}){
           const miLiga=(teamData?.competencias||[]).map(id=>COMPETENCIAS_AVAILABLE.find(c=>c.id===id)).find(c=>c&&c.formato==="liga");
           if(!miLiga){alert("No estás inscrito en ninguna liga todavía.");return;}
           setShowMundial(false);setShowNoticiasGlobal(false);setShowChatGlobal(false);
+          setShowSquadList(false);setShowAdminScreen(false);
           setShowCompVista({comp:miLiga});
         }}
-        onEquipo={()=>{setShowMundial(false);setShowNoticiasGlobal(false);setShowChatGlobal(false);setShowCompVista(null);setActiveComp(null);setShowHome(false);}}
+        onEquipo={()=>{setShowMundial(false);setShowNoticiasGlobal(false);setShowChatGlobal(false);setShowCompVista(null);setActiveComp(null);setShowSquadList(false);setShowAdminScreen(false);setShowHome(false);}}
         onNoticias={()=>{setShowMundial(false);setShowChatGlobal(false);setShowCompVista(null);setShowNoticiasGlobal(true);}}
         onChat={()=>{setShowMundial(false);setShowNoticiasGlobal(false);setShowCompVista(null);setShowChatGlobal(true);}}
         onMas={()=>{
