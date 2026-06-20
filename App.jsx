@@ -1046,8 +1046,10 @@ function AdminTeamEditor({teamData,pool,allTeamsRef}){
 
       const banca=(lineup.subs||[]).filter(Boolean);
       const convocados=[...starters11,...banca];
-      const top10Names=[...convocados].map(p=>getFullPlayer(p)).filter(p=>p.overall&&p.name)
-        .sort((a,b)=>(b.overall||0)-(a.overall||0)).slice(0,10).map(p=>p.name);
+      const top10Names=(teamData?.top10Manual&&teamData.top10Manual.length===10)
+        ? teamData.top10Manual
+        : [...convocados].map(p=>getFullPlayer(p)).filter(p=>p.overall&&p.name)
+            .sort((a,b)=>(b.overall||0)-(a.overall||0)).slice(0,10).map(p=>p.name);
       const enTitular=starters11.filter(p=>top10Names.includes(p.name));
       const cumpleTop10=enTitular.length<=2;
       let detalleTop10=`${enTitular.length}/2 máx`;
@@ -1683,6 +1685,74 @@ function MercadoToggle(){
 
 // ─── EN VIVO + AVISO (compartido: Home y Formaciones) ─────────────────────────
 // ─── CALENDARIO GENERAL: semana actual + próximas (admin sube foto) ─────────
+// ─── ADMIN: Top 10 manual de Copa por equipo ─────────────────────────────────
+function Top10ManualAdmin({allTeams,setAiMsg}){
+  const[equipoSelId,setEquipoSelId]=useState("");
+  const[seleccion,setSeleccion]=useState([]);
+  const[saving,setSaving]=useState(false);
+
+  const equipo=allTeams.find(t=>(t.uid||t.id)===equipoSelId);
+  const squad=equipo?.squad||[];
+
+  useEffect(()=>{
+    setSeleccion(equipo?.top10Manual||[]);
+  },[equipoSelId]);
+
+  const toggleJugador=(nombre)=>{
+    setSeleccion(prev=>{
+      if(prev.includes(nombre)) return prev.filter(n=>n!==nombre);
+      if(prev.length>=10){alert("Ya seleccionaste 10 jugadores. Quita uno antes de agregar otro.");return prev;}
+      return [...prev,nombre];
+    });
+  };
+
+  const guardar=async()=>{
+    if(!equipo) return;
+    if(seleccion.length!==10){alert(`Debes seleccionar exactamente 10 jugadores (llevas ${seleccion.length}).`);return;}
+    setSaving(true);
+    await updateDoc(doc(db,"teams",equipo.id||equipo.uid),{top10Manual:seleccion});
+    setAiMsg&&setAiMsg(`✅ Top 10 de ${equipo.teamName} guardado`);
+    setSaving(false);
+  };
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+      <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Selecciona exactamente 10 jugadores de la plantilla como "Top 10 oficial" del equipo. Esta lista queda fija (no se recalcula automático) y se usa en el requisito de Copa.</div>
+      <select value={equipoSelId} onChange={e=>setEquipoSelId(e.target.value)}
+        style={{padding:"8px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:12,fontFamily:"'DM Sans',sans-serif"}}>
+        <option value="">— Selecciona equipo —</option>
+        {[...allTeams].sort((a,b)=>(a.teamName||"").localeCompare(b.teamName||"")).map(t=><option key={t.uid||t.id} value={t.uid||t.id}>{t.teamName}</option>)}
+      </select>
+      {equipo&&(
+        <>
+          <div style={{fontSize:11,fontWeight:700,color:seleccion.length===10?"#27ae60":C.textMid,fontFamily:"'DM Sans',sans-serif"}}>{seleccion.length}/10 seleccionados</div>
+          <div style={{maxHeight:320,overflowY:"auto",display:"flex",flexDirection:"column",gap:5}}>
+            {squad.length===0&&(
+              <div style={{textAlign:"center",color:C.textFaint,padding:16,fontFamily:"'DM Sans',sans-serif",fontSize:11}}>Este equipo no tiene plantilla cargada</div>
+            )}
+            {[...squad].sort((a,b)=>(b.overall||0)-(a.overall||0)).map((p,i)=>{
+              const marcado=seleccion.includes(p.name);
+              return(
+                <button key={i} onClick={()=>toggleJugador(p.name)}
+                  style={{display:"flex",alignItems:"center",gap:10,padding:"8px 11px",borderRadius:8,background:marcado?"#1a3a5c18":C.inputBg,border:`1.5px solid ${marcado?"#1a3a5c":C.border}`,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textAlign:"left"}}>
+                  <span style={{fontSize:14}}>{marcado?"✅":"⬜"}</span>
+                  <span style={{flex:1,fontSize:12,fontWeight:700,color:C.text}}>{p.name}</span>
+                  <span style={{fontSize:10,color:C.textFaint}}>{p.pos}</span>
+                  <span style={{fontSize:12,fontWeight:800,color:C.accent}}>{p.overall||"—"}</span>
+                </button>
+              );
+            })}
+          </div>
+          <button onClick={guardar} disabled={saving||seleccion.length!==10}
+            style={{padding:"10px",borderRadius:8,background:seleccion.length===10?"#27ae60":C.inputBg,color:seleccion.length===10?"#fff":C.textFaint,border:"none",fontSize:12,fontWeight:800,cursor:seleccion.length===10?"pointer":"not-allowed",fontFamily:"'DM Sans',sans-serif",opacity:saving?0.6:1}}>
+            {saving?"Guardando…":"✅ Guardar Top 10"}
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
 function CalendarioGeneralAdmin({setAiMsg}){
   const[semanas,setSemanas]=useState([]);
   const[semanaActual,setSemanaActual]=useState(null);
@@ -2038,9 +2108,9 @@ function NoticiasAdmin(){
 function TransmisionAdmin({allTeams}){
   const[transmision,setTransmision]=useState(null);
   const[esMundial,setEsMundial]=useState(false);
+  const[compId,setCompId]=useState("liga1");
   const[equipoA,setEquipoA]=useState("");
   const[equipoB,setEquipoB]=useState("");
-  const[lineupName,setLineupName]=useState("Liga");
   const[mensajes,setMensajes]=useState([]);
   const[selecciones,setSelecciones]=useState([]);
 
@@ -2069,7 +2139,9 @@ function TransmisionAdmin({allTeams}){
   const iniciarTransmision=async()=>{
     if(!equipoA||!equipoB){alert("Selecciona ambos equipos");return;}
     if(equipoA===equipoB){alert("Los equipos no pueden ser el mismo");return;}
-    await setDoc(doc(db,"config","transmisionActiva"),{equipoA,equipoB,lineupName,esMundial,inicio:new Date().toISOString()});
+    const comp=COMPETENCIAS_AVAILABLE.find(c=>c.id===compId);
+    const lineupName=comp?.lineupName||"Liga";
+    await setDoc(doc(db,"config","transmisionActiva"),{equipoA,equipoB,compId,lineupName,esMundial,inicio:new Date().toISOString()});
     await setDoc(doc(db,"config","transmisionMensajes"),{lista:[]}); // limpia mensajes de transmisión anterior
     await addNoticia(`🔴 ¡Empezó la transmisión! ${equipoA} vs ${equipoB} — manda tus cambios e instrucciones desde la app`,"🔴");
   };
@@ -2106,28 +2178,28 @@ function TransmisionAdmin({allTeams}){
             🌍 Mundial
           </button>
         </div>
+        {!esMundial&&(
+          <select value={compId} onChange={e=>{setCompId(e.target.value);setEquipoA("");setEquipoB("");}}
+            style={{padding:"7px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif"}}>
+            {COMPETENCIAS_AVAILABLE.filter(c=>c.formato!=="final").map(c=><option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
+          </select>
+        )}
         <div style={{display:"flex",gap:6}}>
           <select value={equipoA} onChange={e=>setEquipoA(e.target.value)}
             style={{flex:1,padding:"7px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif"}}>
             <option value="">{esMundial?"— Selección A —":"— Equipo A —"}</option>
             {esMundial
               ? selecciones.map(s=><option key={s.id} value={s.country||s.id}>{s.country||s.id}</option>)
-              : allTeams.map(t=><option key={t.uid||t.id} value={t.teamName}>{t.teamName}</option>)}
+              : allTeams.filter(t=>(t.competencias||[]).includes(compId)).map(t=><option key={t.uid||t.id} value={t.teamName}>{t.teamName}</option>)}
           </select>
           <select value={equipoB} onChange={e=>setEquipoB(e.target.value)}
             style={{flex:1,padding:"7px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif"}}>
             <option value="">{esMundial?"— Selección B —":"— Equipo B —"}</option>
             {esMundial
               ? selecciones.map(s=><option key={s.id} value={s.country||s.id}>{s.country||s.id}</option>)
-              : allTeams.map(t=><option key={t.uid||t.id} value={t.teamName}>{t.teamName}</option>)}
+              : allTeams.filter(t=>(t.competencias||[]).includes(compId)).map(t=><option key={t.uid||t.id} value={t.teamName}>{t.teamName}</option>)}
           </select>
         </div>
-        {!esMundial&&(
-          <select value={lineupName} onChange={e=>setLineupName(e.target.value)}
-            style={{padding:"7px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif"}}>
-            {[...new Set(COMPETENCIAS_AVAILABLE.map(c=>c.lineupName))].map(ln=><option key={ln} value={ln}>{ln}</option>)}
-          </select>
-        )}
         <button onClick={iniciarTransmision}
           style={{padding:"9px",borderRadius:8,background:"#e74c3c",color:"#fff",border:"none",fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
           🔴 Iniciar transmisión
@@ -4724,10 +4796,10 @@ function TransmisionPanel({teamData,lineupName,esMundial,onClose}){
 
 
 // ─── CHAT ENTRE PRESIDENTES: General + Directos (privado) ────────────────────
-function ChatModal({teamData,allTeams,onClose}){
-  const[tab,setTab]=useState("general"); // general | directos
+function ChatModal({teamData,allTeams,onClose,initialEquipoSel}){
+  const[tab,setTab]=useState(initialEquipoSel?"directos":"general"); // general | directos
   const[chatGeneral,setChatGeneral]=useState([]);
-  const[equipoSel,setEquipoSel]=useState(null); // equipo con el que chateas en directo
+  const[equipoSel,setEquipoSel]=useState(initialEquipoSel||null); // equipo con el que chateas en directo
   const[mensajesDirecto,setMensajesDirecto]=useState([]);
   const[texto,setTexto]=useState("");
   const[ultimosDirectos,setUltimosDirectos]=useState({}); // {teamId: {ultimoMsg, noLeido}}
@@ -4922,12 +4994,14 @@ function ChatModal({teamData,allTeams,onClose}){
   );
 }
 
-function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial,onOpenNoticias,onOpenChat}){
+function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial,onOpenNoticias,onOpenChat,squad,activeLineup,positions,pool,user,mercadoAbierto,setAiMsg,onOpenSquadList,onOpenChatWith}){
   const tc=getTeamColor(teamData?.teamColor||"blue");
   const ORDEN_CATEGORIA={liga1:0,liga2:0,ascenso:0,champions:1,europa:1,copa:2,copaascenso:2,supercopa:3};
   const comps=(teamData?.competencias||[]).map(id=>COMPETENCIAS_AVAILABLE.find(c=>c.id===id)).filter(Boolean)
     .sort((a,b)=>(ORDEN_CATEGORIA[a.id]??9)-(ORDEN_CATEGORIA[b.id]??9));
   const teamInitials=(teamData?.teamName||"?").slice(0,2).toUpperCase();
+  const[showResumenHome,setShowResumenHome]=useState(false);
+  const[showRecomendacionHome,setShowRecomendacionHome]=useState(false);
   const[transmision,setTransmision]=useState(null);
   const[showTransmisionPanel,setShowTransmisionPanel]=useState(false);
   const[miSeleccionCountry,setMiSeleccionCountry]=useState(null);
@@ -5105,6 +5179,48 @@ function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial,onOpenNoti
 
       {/* Cards */}
       <div style={{flex:1,padding:"20px 16px",display:"flex",flexDirection:"column",gap:12,overflowY:"auto"}}>
+
+        {/* Mi Equipo, Resumen y Sugerencia de fichaje */}
+        <button onClick={onOpenSquadList}
+          style={{width:"100%",padding:"13px 15px",borderRadius:14,background:C.card,border:`1px solid ${C.border}`,cursor:"pointer",display:"flex",alignItems:"center",gap:12,textAlign:"left"}}>
+          <span style={{fontSize:19}}>👕</span>
+          <div style={{flex:1}}>
+            <div style={{fontSize:13,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>Mi equipo</div>
+            <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>{(squad||[]).length} jugadores en plantilla</div>
+          </div>
+          <span style={{fontSize:14,color:C.textFaint}}>›</span>
+        </button>
+        <button onClick={()=>setShowResumenHome(true)}
+          style={{width:"100%",padding:"13px 15px",borderRadius:14,background:C.card,border:`1px solid ${C.border}`,cursor:"pointer",display:"flex",alignItems:"center",gap:12,textAlign:"left"}}>
+          <span style={{fontSize:19}}>📊</span>
+          <div style={{flex:1}}>
+            <div style={{fontSize:13,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>Resumen del equipo</div>
+            <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Valoración, ataque, medio y defensa</div>
+          </div>
+          <span style={{fontSize:14,color:C.textFaint}}>›</span>
+        </button>
+        <button onClick={()=>setShowRecomendacionHome(true)}
+          style={{width:"100%",padding:"13px 15px",borderRadius:14,background:C.card,border:`1px solid ${C.border}`,cursor:"pointer",display:"flex",alignItems:"center",gap:12,textAlign:"left"}}>
+          <span style={{fontSize:19}}>🎯</span>
+          <div style={{flex:1}}>
+            <div style={{fontSize:13,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>Sugerencia de fichaje</div>
+            <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Refuerza tu posición más débil</div>
+          </div>
+          <span style={{fontSize:14,color:C.textFaint}}>›</span>
+        </button>
+        {showResumenHome&&(
+          <div style={{position:"fixed",inset:0,zIndex:500,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setShowResumenHome(false)}>
+            <div onClick={e=>e.stopPropagation()} style={{background:C.bg,borderRadius:18,width:"100%",maxWidth:420,maxHeight:"85vh",overflowY:"auto",boxShadow:"0 8px 40px rgba(0,0,0,0.35)"}}>
+              <div style={{display:"flex",justifyContent:"flex-end",padding:"8px 8px 0"}}>
+                <button onClick={()=>setShowResumenHome(false)} style={{background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:"50%",width:30,height:30,color:C.textMid,cursor:"pointer",fontSize:15}}>✕</button>
+              </div>
+              <EquipoResumen lineup={activeLineup} squad={squad} positions={positions} mercadoAbierto={mercadoAbierto} isSel={false}/>
+            </div>
+          </div>
+        )}
+        {showRecomendacionHome&&(
+          <RecomendacionFichaje teamData={teamData} squad={squad} activeLineup={activeLineup} positions={positions} pool={pool} allTeams={allTeams} user={user} setAiMsg={setAiMsg} onAbrirChat={onOpenChatWith} onClose={()=>setShowRecomendacionHome(false)}/>
+        )}
 
         {comps.length===0&&(
           <div style={{textAlign:"center",color:C.textFaint,fontSize:12,fontFamily:"'DM Sans',sans-serif",padding:"40px 0"}}>
@@ -7550,8 +7666,14 @@ function CompVistaPublica({comp,competenciaData,onClose}){
 
 // ─── BARRA DE NAVEGACIÓN INFERIOR: siempre visible, en cualquier pantalla ────
 // ─── RECOMENDACIÓN DE FICHAJE: detecta tu posición más débil y sugiere candidatos ─
-function RecomendacionFichaje({teamData,squad,activeLineup,positions,pool,allTeams,user,onClose,setAiMsg}){
+function RecomendacionFichaje({teamData,squad,activeLineup,positions,pool,allTeams,user,onClose,setAiMsg,onAbrirChat}){
   const presupuesto=parsePresuGlobal(teamData?.presupuesto);
+
+  // Semilla simple basada en el día + nombre del equipo: misma rotación todo el día, cambia al siguiente
+  const seedStr=`${new Date().toDateString()}_${teamData?.teamName||""}`;
+  let seedNum=0;
+  for(let i=0;i<seedStr.length;i++) seedNum=(seedNum*31+seedStr.charCodeAt(i))>>>0;
+  const seededRandom=(max)=>{ seedNum=(seedNum*1103515245+12345)>>>0; return seedNum%max; };
 
   // 1. Calcula el overall promedio por posición de la formación, según los titulares actuales
   const debilidades=(positions||[]).map(p=>{
@@ -7563,11 +7685,13 @@ function RecomendacionFichaje({teamData,squad,activeLineup,positions,pool,allTea
     if(!a.vacante&&b.vacante) return 1;
     return a.overall-b.overall;
   });
-  const posMasDebil=debilidades[0];
+  // Rota entre las 3 posiciones más débiles (no siempre la misma), usando la semilla del día
+  const candidatasDebiles=debilidades.slice(0,Math.min(3,debilidades.length));
+  const posMasDebil=candidatasDebiles[seededRandom(candidatasDebiles.length)]||debilidades[0];
 
   // 2. Busca en el pool global candidatos de OTROS equipos que jueguen esa posición
   const misNombres=new Set((squad||[]).map(p=>(p.name||"").trim().toLowerCase()));
-  const candidatos=Object.values(pool||{})
+  const candidatosTodos=Object.values(pool||{})
     .filter(p=>p.teamUid!==(teamData?.uid||teamData?.id)&&p.teamName!==teamData?.teamName)
     .filter(p=>!misNombres.has((p.name||"").trim().toLowerCase()))
     .filter(p=>{
@@ -7576,15 +7700,25 @@ function RecomendacionFichaje({teamData,squad,activeLineup,positions,pool,allTea
     })
     .map(p=>({...p,precioVal:precioJugadorAVal(p.price)}))
     .filter(p=>p.precioVal<=presupuesto&&p.precioVal>0) // se ajusta al presupuesto real
-    .sort((a,b)=>(Number(b.overall)||0)-(Number(a.overall)||0)) // mejor overall primero, ya filtrado por presupuesto
-    .slice(0,3);
+    .sort((a,b)=>(Number(b.overall)||0)-(Number(a.overall)||0));
+  // Toma una muestra rotativa de hasta 8 candidatos viables, y elige 3 de ahí según la semilla del día
+  const poolRotacion=candidatosTodos.slice(0,8);
+  const candidatos=[];
+  const usados=new Set();
+  while(candidatos.length<3&&candidatos.length<poolRotacion.length){
+    const idx=seededRandom(poolRotacion.length);
+    if(!usados.has(idx)){usados.add(idx);candidatos.push(poolRotacion[idx]);}
+  }
+  candidatos.sort((a,b)=>(Number(b.overall)||0)-(Number(a.overall)||0));
 
   const[ofertando,setOfertando]=useState(null);
+  const[montos,setMontos]=useState({});
   const[enviando,setEnviando]=useState(false);
 
-  const contactarDueno=async(jugador)=>{
+  const contactarDueno=async(jugador,idx)=>{
     const toTeam=(allTeams||[]).find(t=>(t.uid||t.id)===jugador.teamUid||t.teamName===jugador.teamName);
     if(!toTeam){setAiMsg&&setAiMsg("❌ No se encontró el equipo dueño");return;}
+    const montoOferta=Number(montos[idx])||Number(jugador.price?.value)||0;
     setEnviando(true);
     try{
       const transferRef=await addDoc(collection(db,"transfers"),{
@@ -7595,12 +7729,12 @@ function RecomendacionFichaje({teamData,squad,activeLineup,positions,pool,allTea
         offeredPlayers:[],
         requestedPlayers:[{name:jugador.name,pos:jugador.pos,price:jugador.price?.value||jugador.price||""}],
         offeredMoney:0,
-        requestedMoney:Number(jugador.price?.value||precioJugadorAVal(jugador.price)/1000000)||0,
+        requestedMoney:montoOferta,
         note:`Oferta automática por recomendación de fichaje para reforzar ${posMasDebil?.label||""}.`,
         status:"pending_acceptance",
         createdAt:serverTimestamp(),
       });
-      setAiMsg&&setAiMsg(`✅ Oferta formal enviada a ${toTeam.teamName} por ${jugador.name}`);
+      setAiMsg&&setAiMsg(`✅ Oferta formal enviada a ${toTeam.teamName} por ${jugador.name} (${montoOferta}M)`);
       setOfertando(null);
     }catch(e){
       setAiMsg&&setAiMsg("❌ Error al enviar oferta: "+e.message);
@@ -7645,19 +7779,32 @@ function RecomendacionFichaje({teamData,squad,activeLineup,positions,pool,allTea
                 </div>
               </div>
               {ofertando===i?(
-                <div style={{marginTop:10,display:"flex",gap:6}}>
-                  <button onClick={()=>setOfertando(null)} disabled={enviando}
-                    style={{flex:1,padding:"7px",borderRadius:8,background:"none",border:`1px solid ${C.border}`,color:C.textFaint,fontSize:11,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Cancelar</button>
-                  <button onClick={()=>contactarDueno(c)} disabled={enviando}
-                    style={{flex:1,padding:"7px",borderRadius:8,background:"#27ae60",color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:enviando?0.6:1}}>
-                    {enviando?"Enviando…":"✅ Confirmar oferta"}
-                  </button>
+                <div style={{marginTop:10,display:"flex",flexDirection:"column",gap:6}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                    <span style={{fontSize:11,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Monto (M):</span>
+                    <input type="number" value={montos[i]??(c.price?.value||"")} onChange={e=>setMontos({...montos,[i]:e.target.value})}
+                      style={{flex:1,padding:"6px 8px",borderRadius:7,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:12,fontFamily:"'DM Sans',sans-serif"}}/>
+                  </div>
+                  <div style={{display:"flex",gap:6}}>
+                    <button onClick={()=>setOfertando(null)} disabled={enviando}
+                      style={{flex:1,padding:"7px",borderRadius:8,background:"none",border:`1px solid ${C.border}`,color:C.textFaint,fontSize:11,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Cancelar</button>
+                    <button onClick={()=>contactarDueno(c,i)} disabled={enviando}
+                      style={{flex:1,padding:"7px",borderRadius:8,background:"#27ae60",color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:enviando?0.6:1}}>
+                      {enviando?"Enviando…":"✅ Enviar oferta"}
+                    </button>
+                  </div>
                 </div>
               ):(
-                <button onClick={()=>setOfertando(i)}
-                  style={{width:"100%",marginTop:10,padding:"8px",borderRadius:8,background:"#1a3a5c",color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
-                  📩 Contactar dueño
-                </button>
+                <div style={{display:"flex",gap:6,marginTop:10}}>
+                  <button onClick={()=>setOfertando(i)}
+                    style={{flex:1,padding:"8px",borderRadius:8,background:"#1a3a5c",color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                    📩 Contactar dueño
+                  </button>
+                  <button onClick={()=>onAbrirChat&&onAbrirChat(c.teamName)}
+                    style={{flex:1,padding:"8px",borderRadius:8,background:"transparent",border:"1.5px solid #1a3a5c",color:"#1a3a5c",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                    💬 Charlar con presidente
+                  </button>
+                </div>
               )}
             </div>
           ))}
@@ -7723,6 +7870,80 @@ function MasPopup({isAdmin,teamColor,onClose,onOpenMundial,onOpenEquipo,onOpenAd
   );
 }
 
+// ─── ADMIN: Selección manual del Top 10 de cada equipo (para Copa) ───────────
+function Top10ManagerModal({allTeams,onClose}){
+  const[equipoSel,setEquipoSel]=useState(null);
+  const[seleccionados,setSeleccionados]=useState([]);
+  const[saving,setSaving]=useState(false);
+
+  const abrirEquipo=(t)=>{
+    setEquipoSel(t);
+    setSeleccionados((t.top10Manual||[]).slice());
+  };
+
+  const toggleJugador=(nombre)=>{
+    setSeleccionados(prev=>{
+      if(prev.includes(nombre)) return prev.filter(n=>n!==nombre);
+      if(prev.length>=10){alert("Ya seleccionaste 10 jugadores. Quita alguno antes de agregar otro.");return prev;}
+      return [...prev,nombre];
+    });
+  };
+
+  const guardar=async()=>{
+    if(!equipoSel) return;
+    setSaving(true);
+    await updateDoc(doc(db,"teams",equipoSel.id||equipoSel.uid),{top10Manual:seleccionados});
+    setSaving(false);
+    setEquipoSel(null);
+  };
+
+  return(
+    <div style={{position:"fixed",inset:0,zIndex:600,background:"rgba(0,0,0,0.7)",display:"flex",flexDirection:"column"}}>
+      <div style={{background:C.bg,flex:1,display:"flex",flexDirection:"column",maxHeight:"100vh"}}>
+        <div style={{padding:"12px 16px",background:"linear-gradient(135deg,#1a1a2e,#34345b)",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+          <span style={{fontSize:15,fontWeight:800,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>🔟 TOP 10 DE COPA</span>
+          <button onClick={()=>{setEquipoSel(null);onClose();}} style={{marginLeft:"auto",background:"rgba(255,255,255,0.15)",border:"none",borderRadius:"50%",width:28,height:28,color:"#fff",cursor:"pointer",fontSize:15}}>×</button>
+        </div>
+        {!equipoSel&&(
+          <div style={{flex:1,overflowY:"auto",padding:"14px 16px",display:"flex",flexDirection:"column",gap:6}}>
+            <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginBottom:6}}>Elige un equipo para marcar manualmente cuáles 10 jugadores cuentan como su Top 10 oficial en Copa. Esta lista no cambia automáticamente.</div>
+            {allTeams.filter(t=>t.teamName).sort((a,b)=>a.teamName.localeCompare(b.teamName)).map(t=>(
+              <button key={t.uid||t.id} onClick={()=>abrirEquipo(t)}
+                style={{padding:"11px 13px",borderRadius:10,background:C.card,border:`1px solid ${C.border}`,color:C.text,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textAlign:"left",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <span>{t.teamName}</span>
+                <span style={{fontSize:10,color:(t.top10Manual||[]).length===10?"#27ae60":C.textFaint,fontWeight:600}}>{(t.top10Manual||[]).length}/10</span>
+              </button>
+            ))}
+          </div>
+        )}
+        {equipoSel&&(
+          <div style={{flex:1,overflowY:"auto",padding:"14px 16px",display:"flex",flexDirection:"column",gap:6}}>
+            <button onClick={()=>setEquipoSel(null)} style={{alignSelf:"flex-start",background:"none",border:"none",color:C.textLight,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",marginBottom:4}}>← Volver</button>
+            <div style={{fontSize:14,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif",marginBottom:2}}>{equipoSel.teamName}</div>
+            <div style={{fontSize:11,fontWeight:700,color:seleccionados.length===10?"#27ae60":"#e67e22",fontFamily:"'DM Sans',sans-serif",marginBottom:10}}>{seleccionados.length}/10 seleccionados</div>
+            {(equipoSel.squad||[]).map((p,i)=>{
+              const sel=seleccionados.includes(p.name);
+              return(
+                <button key={i} onClick={()=>toggleJugador(p.name)}
+                  style={{padding:"10px 13px",borderRadius:9,background:sel?"#1a3a5c":C.card,border:`1.5px solid ${sel?"#1a3a5c":C.border}`,color:sel?"#fff":C.text,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",textAlign:"left",display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{fontSize:14}}>{sel?"✅":"⬜"}</span>
+                  <span style={{flex:1}}>{p.name}</span>
+                  <span style={{fontSize:10,opacity:0.8}}>{p.pos||p.primaryPos||""}</span>
+                  {p.overall&&<span style={{fontSize:11,fontWeight:900}}>{p.overall}</span>}
+                </button>
+              );
+            })}
+            <button onClick={guardar} disabled={saving}
+              style={{marginTop:10,padding:"11px",borderRadius:9,background:"#27ae60",color:"#fff",border:"none",fontSize:13,fontWeight:800,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:saving?0.6:1}}>
+              {saving?"Guardando…":"✅ Guardar Top 10"}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function MainApp({user,isAdmin,onLogout}){
   const[teamData,setTeamData]=useState(null);
   const[allTeams,setAllTeams]=useState([]);
@@ -7739,8 +7960,10 @@ function MainApp({user,isAdmin,onLogout}){
   const[showLiveAdmin,setShowLiveAdmin]=useState(false);
   const[showNoticiasAdmin,setShowNoticiasAdmin]=useState(false);
   const[showCalendarioAdmin,setShowCalendarioAdmin]=useState(false);
+  const[showTop10Admin,setShowTop10Admin]=useState(false);
   const[aiMsg,setAiMsg]=useState("");
   const[showPresidents,setShowPresidents]=useState(false);
+  const[showTop10Manager,setShowTop10Manager]=useState(false);
   const[showImport,setShowImport]=useState(false);
   const[showSelecciones,setShowSelecciones]=useState(false);
   const[showCompetencias,setShowCompetencias]=useState(false);
@@ -7764,6 +7987,7 @@ function MainApp({user,isAdmin,onLogout}){
   const[showNoticiasGlobal,setShowNoticiasGlobal]=useState(false);
   const[showMasPopup,setShowMasPopup]=useState(false);
   const[showChatGlobal,setShowChatGlobal]=useState(false);
+  const[chatEquipoObjetivo,setChatEquipoObjetivo]=useState(null);
   const[compMenuComp,setCompMenuComp]=useState(null);
   const[showCompVista,setShowCompVista]=useState(null);
   const[competenciaData,setCompetenciaData]=useState({});
@@ -7988,11 +8212,13 @@ function MainApp({user,isAdmin,onLogout}){
         detalle:`${sub20.length}/2`
       });
 
-      // Top 10 por overall, de toda la convocatoria (titulares + banca)
+      // Top 10 oficial definido por el admin; si no existe, calcula automático por overall como respaldo
       const banca=(activeLineup.subs||[]).filter(Boolean);
       const convocados=[...starters11,...banca];
-      const top10Names=[...convocados].map(p=>getFullPlayer(p)).filter(p=>p.overall&&p.name)
-        .sort((a,b)=>(b.overall||0)-(a.overall||0)).slice(0,10).map(p=>p.name);
+      const top10Names=(teamData?.top10Manual&&teamData.top10Manual.length===10)
+        ? teamData.top10Manual
+        : [...convocados].map(p=>getFullPlayer(p)).filter(p=>p.overall&&p.name)
+            .sort((a,b)=>(b.overall||0)-(a.overall||0)).slice(0,10).map(p=>p.name);
       const enTitular=starters11.filter(p=>top10Names.includes(p.name));
       const cumpleTop10=enTitular.length<=2;
       let detalleTop10=`${enTitular.length}/2 máx`;
@@ -8129,6 +8355,15 @@ function MainApp({user,isAdmin,onLogout}){
             teamData={teamData}
             isAdmin={isAdmin}
             allTeams={allTeams}
+            squad={squad}
+            activeLineup={activeLineup}
+            positions={positions}
+            pool={pool}
+            user={user}
+            mercadoAbierto={mercadoAbierto}
+            setAiMsg={setAiMsg}
+            onOpenSquadList={()=>{setShowHome(false);setActiveComp(null);setShowSquadList(true);}}
+            onOpenChatWith={nombre=>{setChatEquipoObjetivo(nombre);setShowChatGlobal(true);setShowHome(false);}}
             onOpenMundial={()=>{setShowHome(false);setMundialInitialTab("misel");setShowMundial(true);}}
             onOpenNoticias={()=>setShowNoticiasGlobal(true)}
             onOpenChat={()=>setShowChatGlobal(true)}
@@ -8296,7 +8531,7 @@ function MainApp({user,isAdmin,onLogout}){
         </button>
       )}
       {showRecomendacion&&(
-        <RecomendacionFichaje teamData={teamData} squad={squad} activeLineup={activeLineup} positions={positions} pool={pool} allTeams={allTeams} user={user} setAiMsg={setAiMsg} onClose={()=>setShowRecomendacion(false)}/>
+        <RecomendacionFichaje teamData={teamData} squad={squad} activeLineup={activeLineup} positions={positions} pool={pool} allTeams={allTeams} user={user} setAiMsg={setAiMsg} onAbrirChat={nombre=>{setChatEquipoObjetivo(nombre);setShowChatGlobal(true);setShowRecomendacion(false);}} onClose={()=>setShowRecomendacion(false)}/>
       )}
       {showResumenModal&&(
         <div style={{position:"fixed",inset:0,zIndex:500,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setShowResumenModal(false)}>
@@ -8346,6 +8581,9 @@ function MainApp({user,isAdmin,onLogout}){
                         </div>
                         <div onClick={()=>{setShowPresidents(true);setShowAdminMenu(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:C.text}}>
                           👤 <span>Presidentes</span>
+                        </div>
+                        <div onClick={()=>{setShowTop10Manager(true);setShowAdminMenu(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:C.text}}>
+                          🔟 <span>Top 10 Copa</span>
                         </div>
                         <div onClick={()=>{setShowPool(true);setShowAdminMenu(false);}} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:600,color:C.text}}>
                           🌍 <span>Pool</span>
@@ -8445,6 +8683,15 @@ function MainApp({user,isAdmin,onLogout}){
                 {showCalendarioAdmin&&aiMsg&&(
                   <div style={{marginTop:8,padding:"7px 10px",borderRadius:8,background:C.inputBg,border:`1px solid ${C.border}`,fontSize:11,color:C.textMid,fontFamily:"'DM Sans',sans-serif"}}>{aiMsg}</div>
                 )}
+              </div>
+              {/* Collapsible Top 10 manual admin */}
+              <div style={{marginTop:10}}>
+                <button onClick={()=>setShowTop10Admin(v=>!v)}
+                  style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 12px",borderRadius:8,background:"none",border:`1px solid ${C.border}`,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                  <span style={{fontSize:10,fontWeight:700,color:C.textLight,textTransform:"uppercase",letterSpacing:0.5}}>🏅 Top 10 de Copa por equipo</span>
+                  <span style={{fontSize:11,color:C.textLight}}>{showTop10Admin?"▲":"▼"}</span>
+                </button>
+                {showTop10Admin&&<div style={{marginTop:8}}><Top10ManualAdmin allTeams={allTeams} setAiMsg={setAiMsg}/></div>}
               </div>
               {/* Collapsible teams list */}
               {showTeamsList&&(
@@ -8710,8 +8957,28 @@ function MainApp({user,isAdmin,onLogout}){
           </div>
         )}
 
-        {/* FIELD + BENCH + RESERVES — ocultar si admin está viendo otro equipo o si showSquadList */}
-        {!viewingTeam&&!showSquadList&&<div style={{paddingTop:12,display:"flex",gap:14,flexWrap:"wrap"}}>
+        {/* Selector de competencia — se muestra cuando no hay una elegida (campo/11 ocultos) */}
+        {!viewingTeam&&!showSquadList&&!activeComp&&(
+          <div style={{padding:"30px 16px",textAlign:"center"}}>
+            <div style={{fontSize:14,fontWeight:700,color:C.textMid,fontFamily:"'DM Sans',sans-serif",marginBottom:16}}>Elige una competencia para ver tu alineación</div>
+            <div style={{display:"flex",flexDirection:"column",gap:8,maxWidth:340,margin:"0 auto"}}>
+              {(teamData?.competencias||[]).map(id=>COMPETENCIAS_AVAILABLE.find(c=>c.id===id)).filter(Boolean).map(comp=>(
+                <button key={comp.id} onClick={()=>{
+                    setActiveComp(comp);
+                    const matched=lineups.find(l=>l.name===comp.lineupName);
+                    if(matched) setActiveLineupId(matched.id);
+                  }} style={{padding:"12px 16px",borderRadius:12,background:comp.color+"18",border:`1.5px solid ${comp.color}`,color:comp.color,fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",display:"flex",alignItems:"center",gap:10}}>
+                  <span style={{fontSize:16}}>{comp.icon}</span> {comp.name}
+                </button>
+              ))}
+              {(teamData?.competencias||[]).length===0&&(
+                <div style={{color:C.textFaint,fontSize:12,fontFamily:"'DM Sans',sans-serif"}}>Aún no estás inscrito en ninguna competencia.</div>
+              )}
+            </div>
+          </div>
+        )}
+        {/* FIELD + BENCH + RESERVES — solo visible si hay una competencia activa seleccionada */}
+        {!viewingTeam&&!showSquadList&&activeComp&&<div style={{paddingTop:12,display:"flex",gap:14,flexWrap:"wrap"}}>
           <div style={{flex:"1 1 260px",minWidth:240}}>
             <Field positions={positions} lineup={activeLineup} readOnly={!!activeLineup?.locked}
               onClickPos={(id,label)=>setPickModal({type:"starter",posId:id,posLabel:label})}
@@ -8721,6 +8988,24 @@ function MainApp({user,isAdmin,onLogout}){
               teamColor={teamData?.teamColor}/>
           </div>
           <div style={{width:"100%",order:3}}>
+            {activeComp?.lineupName==="Copa"&&!activeLineup?.locked&&(
+              <button onClick={()=>{
+                  const ligaLineup=lineups.find(l=>l.name==="Liga");
+                  const porteroLiga=ligaLineup?.starters?.["gk"]||null;
+                  const bancaActual=(activeLineup?.subs||[]).filter(Boolean);
+                  const candidatos=[...bancaActual];
+                  if(porteroLiga&&!candidatos.some(p=>p.name===porteroLiga.name)) candidatos.push(porteroLiga);
+                  const ordenada=[...candidatos].sort((a,b)=>(Number(a.overall)||0)-(Number(b.overall)||0));
+                  const nuevaBanca=Array(7).fill(null);
+                  ordenada.slice(0,7).forEach((p,i)=>{nuevaBanca[i]=p;});
+                  const resumen=ordenada.slice(0,7).map(p=>`${p.name} (${p.overall||"—"})`).join(", ");
+                  if(!window.confirm(`Esto reemplazará tu banca actual de Copa, ordenada de peor a mejor media${porteroLiga?" (incluyendo al portero titular de Liga)":""}:\n\n${resumen}\n\n¿Confirmar?`)) return;
+                  saveTeam({lineups:lineups.map(l=>l.id===activeLineup.id?{...l,subs:nuevaBanca}:l)});
+                  setAiMsg&&setAiMsg("✅ Banca de Copa ordenada de peor a mejor media");
+                }} style={{width:"100%",marginBottom:8,padding:"8px",borderRadius:8,background:"transparent",border:"1.5px dashed #8e44ad",color:"#8e44ad",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                🔀 Ordenar banca por media (peor a mejor)
+              </button>
+            )}
             <Bench subs={activeLineup?.subs} readOnly={!!activeLineup?.locked}
               onClickSub={i=>{
                 const sub=activeLineup?.subs?.[i];
@@ -8807,6 +9092,8 @@ function MainApp({user,isAdmin,onLogout}){
           </div>
         </div>
       )}
+
+      {showTop10Manager&&<Top10ManagerModal allTeams={allTeams} onClose={()=>setShowTop10Manager(false)}/>}
 
       {/* PRESIDENTS MODAL */}
       {showPresidents&&(
@@ -9368,7 +9655,7 @@ function MainApp({user,isAdmin,onLogout}){
       {!showMundial&&<AvisoBanner onOpen={()=>setShowMundial(true)}/>}
 
       {showNoticiasGlobal&&<NoticiasModal teamData={teamData} allTeams={allTeams} isAdmin={isAdmin} onClose={()=>setShowNoticiasGlobal(false)}/>}
-      {showChatGlobal&&<ChatModal teamData={teamData} allTeams={allTeams} onClose={()=>setShowChatGlobal(false)}/>}
+      {showChatGlobal&&<ChatModal teamData={teamData} allTeams={allTeams} initialEquipoSel={chatEquipoObjetivo?allTeams.find(t=>t.teamName===chatEquipoObjetivo):null} onClose={()=>{setShowChatGlobal(false);setChatEquipoObjetivo(null);}}/>}
 
       <BottomTabBar
         active={showMundial?"mundial":showNoticiasGlobal?"noticias":showChatGlobal?"chat":showCompVista?"liga":(showHome?"inicio":"equipo")}
