@@ -4601,7 +4601,7 @@ async function addNoticia(texto,icono="📰"){
   const snap=await getDoc(ref).catch(()=>null);
   const current=snap?.exists()?snap.data():{};
   const lista=current.lista||[];
-  lista.push({id:`n_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,texto,icono,fecha:new Date().toISOString(),reacciones:{}});
+  lista.push({id:`n_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,texto,icono,fecha:new Date().toISOString(),reacciones:{},comentarios:[]});
   // Mantener solo las últimas 100
   await setDoc(ref,{lista:lista.slice(-100)},{merge:true});
 }
@@ -5491,6 +5491,74 @@ function ReaccionesNoticia({noticia,coleccion,myTeamName}){
   );
 }
 
+// ─── Comentarios para una noticia (general o de equipos) ────────────────────
+function ComentariosNoticia({noticia,coleccion,myTeamName}){
+  const[abierto,setAbierto]=useState(false);
+  const[texto,setTexto]=useState("");
+  const[enviando,setEnviando]=useState(false);
+  const comentarios=noticia.comentarios||[];
+
+  const enviarComentario=async()=>{
+    if(!texto.trim()||!myTeamName) return;
+    setEnviando(true);
+    const ref=doc(db,"config",coleccion);
+    const snap=await getDoc(ref).catch(()=>null);
+    if(snap?.exists()){
+      const data=snap.data();
+      const lista=[...(data.lista||[])];
+      const idx=lista.findIndex(n=>n.id===noticia.id);
+      if(idx>=0){
+        const nuevoComentario={id:`c_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,autor:myTeamName,texto:texto.trim(),fecha:new Date().toISOString()};
+        const comentariosActuales=[...(lista[idx].comentarios||[]),nuevoComentario];
+        lista[idx]={...lista[idx],comentarios:comentariosActuales};
+        await setDoc(ref,{lista},{merge:true});
+      }
+    }
+    setTexto("");
+    setEnviando(false);
+  };
+
+  const formatHora=(iso)=>{
+    try{return new Date(iso).toLocaleTimeString("es-GT",{hour:"2-digit",minute:"2-digit"});}catch{return "";}
+  };
+
+  return(
+    <div style={{marginTop:4}}>
+      <button onClick={()=>setAbierto(v=>!v)}
+        style={{background:"none",border:"none",cursor:"pointer",fontSize:10,fontWeight:700,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",padding:0}}>
+        💬 {comentarios.length>0?`${comentarios.length} comentario${comentarios.length!==1?"s":""}`:"Comentar"}
+      </button>
+      {abierto&&(
+        <div style={{marginTop:6,display:"flex",flexDirection:"column",gap:6}}>
+          {comentarios.map(c=>(
+            <div key={c.id} style={{background:C.inputBg,borderRadius:8,padding:"6px 9px",border:`1px solid ${C.border}`}}>
+              <div style={{display:"flex",justifyContent:"space-between",gap:6}}>
+                <span style={{fontSize:9,fontWeight:800,color:"#1a3a5c",fontFamily:"'DM Sans',sans-serif"}}>{c.autor}</span>
+                <span style={{fontSize:8,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>{formatHora(c.fecha)}</span>
+              </div>
+              <div style={{fontSize:11,color:C.text,fontFamily:"'DM Sans',sans-serif",marginTop:2}}>{c.texto}</div>
+            </div>
+          ))}
+          {comentarios.length===0&&(
+            <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",textAlign:"center",padding:"4px 0"}}>Sin comentarios todavía</div>
+          )}
+          {myTeamName&&(
+            <div style={{display:"flex",gap:5}}>
+              <input value={texto} onChange={e=>setTexto(e.target.value)} onKeyDown={e=>e.key==="Enter"&&!enviando&&enviarComentario()} placeholder="Escribe un comentario…"
+                style={{flex:1,padding:"6px 9px",borderRadius:8,border:`1px solid ${C.borderDark}`,background:C.inputBg,color:C.text,fontSize:11,fontFamily:"'DM Sans',sans-serif"}}/>
+              <button onClick={enviarComentario} disabled={enviando||!texto.trim()}
+                style={{padding:"6px 11px",borderRadius:8,background:"#1a3a5c",color:"#fff",border:"none",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",opacity:(enviando||!texto.trim())?0.6:1}}>
+                ➤
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 function NoticiasModal({teamData,allTeams,isAdmin,onClose}){
   const[noticias,setNoticias]=useState([]);
   const[noticiasUsuario,setNoticiasUsuario]=useState([]);
@@ -5562,6 +5630,7 @@ function NoticiasModal({teamData,allTeams,isAdmin,onClose}){
                     <div style={{fontSize:12,color:C.text,fontFamily:"'DM Sans',sans-serif",fontWeight:600,lineHeight:1.4}}>{n.texto}</div>
                     <div style={{fontSize:9,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginTop:3}}>{formatFecha(n.fecha)}</div>
                     {n.id&&<ReaccionesNoticia noticia={n} coleccion="noticias" myTeamName={teamData?.teamName}/>}
+                    {n.id&&<ComentariosNoticia noticia={n} coleccion="noticias" myTeamName={teamData?.teamName}/>}
                   </div>
                 </div>
               ))}
@@ -5582,6 +5651,7 @@ function NoticiasModal({teamData,allTeams,isAdmin,onClose}){
                     <div style={{fontSize:12,color:C.text,fontFamily:"'DM Sans',sans-serif",fontWeight:600,lineHeight:1.4}}>{n.texto}</div>
                     <div style={{fontSize:9,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginTop:3}}>{formatFecha(n.fecha)}</div>
                     <ReaccionesNoticia noticia={n} coleccion="noticiasUsuario" myTeamName={teamData?.teamName}/>
+                    <ComentariosNoticia noticia={n} coleccion="noticiasUsuario" myTeamName={teamData?.teamName}/>
                   </div>
                   {isAdmin&&(
                     <button onClick={()=>eliminarNoticiaUsuario(n.id)} style={{background:"none",border:"none",color:"#c0392b",cursor:"pointer",fontSize:13,flexShrink:0}}>🗑️</button>
@@ -5623,7 +5693,7 @@ function CrearNoticiaModal({teamData,allTeams,onClose}){
       equipoAutor:teamData?.teamName||"",
       tematicaId:tematicaSel.id,tematicaLabel:tematicaSel.label,icono:tematicaSel.icono,
       equipoMencionado:tematicaSel.requiereEquipo?equipoMencionado:"",
-      texto:texto.trim(),estado:"pendiente",fecha:new Date().toISOString(),reacciones:{}
+      texto:texto.trim(),estado:"pendiente",fecha:new Date().toISOString(),reacciones:{},comentarios:[]
     };
     await setDoc(ref,{lista:[...(current.lista||[]),nueva]},{merge:true});
     setEnviando(false);
