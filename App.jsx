@@ -104,6 +104,54 @@ const COLORS_DARK = {
 
 const getC = (darkMode) => darkMode ? COLORS_DARK : COLORS_LIGHT;
 
+// ─── PALETAS DE ACENTO PERSONALIZABLES: solo cambia el color de acento, fondo/texto siguen el modo claro/oscuro ──
+const ACCENT_PALETTES = {
+  oro: {
+    label:"🟡 Oro",
+    light:{accent:"#C9A227",accentDark:"#a8841d",accentLight:"rgba(201,162,39,0.16)",accentGrad:"linear-gradient(145deg,#E4BC44 0%,#C9A227 55%,#B08D1C 100%)",accentInk:"#3a2c05",accentShadow:"0 4px 14px rgba(201,162,39,0.35),inset 0 1px 0 rgba(255,255,255,0.35)",gold:"#C9A227",goldLight:"rgba(201,162,39,0.12)"},
+    dark:{accent:"#E9C45E",accentDark:"#cda12f",accentLight:"rgba(233,196,94,0.14)",accentGrad:"linear-gradient(145deg,#F4D67D 0%,#E9C45E 55%,#CDA12F 100%)",accentInk:"#2a1f04",accentShadow:"0 4px 16px rgba(233,196,94,0.3),inset 0 1px 0 rgba(255,255,255,0.3)",gold:"#E9C45E",goldLight:"rgba(233,196,94,0.09)"},
+  },
+  azul: {
+    label:"🔵 Azul",
+    light:{accent:"#2E6FB0",accentDark:"#235784",accentLight:"rgba(46,111,176,0.16)",accentGrad:"linear-gradient(145deg,#5C9AD6 0%,#2E6FB0 55%,#1F5083 100%)",accentInk:"#0c2235",accentShadow:"0 4px 14px rgba(46,111,176,0.35),inset 0 1px 0 rgba(255,255,255,0.35)",gold:"#2E6FB0",goldLight:"rgba(46,111,176,0.12)"},
+    dark:{accent:"#5FA8E9",accentDark:"#3d83c4",accentLight:"rgba(95,168,233,0.14)",accentGrad:"linear-gradient(145deg,#8FC4F4 0%,#5FA8E9 55%,#3D83C4 100%)",accentInk:"#0a1f30",accentShadow:"0 4px 16px rgba(95,168,233,0.3),inset 0 1px 0 rgba(255,255,255,0.3)",gold:"#5FA8E9",goldLight:"rgba(95,168,233,0.09)"},
+  },
+  esmeralda: {
+    label:"🟢 Esmeralda",
+    light:{accent:"#1F9D6B",accentDark:"#177c54",accentLight:"rgba(31,157,107,0.16)",accentGrad:"linear-gradient(145deg,#4FC195 0%,#1F9D6B 55%,#147A53 100%)",accentInk:"#062c1e",accentShadow:"0 4px 14px rgba(31,157,107,0.35),inset 0 1px 0 rgba(255,255,255,0.35)",gold:"#1F9D6B",goldLight:"rgba(31,157,107,0.12)"},
+    dark:{accent:"#4ECF9D",accentDark:"#2fa97c",accentLight:"rgba(78,207,157,0.14)",accentGrad:"linear-gradient(145deg,#7EE0BB 0%,#4ECF9D 55%,#2FA97C 100%)",accentInk:"#06291c",accentShadow:"0 4px 16px rgba(78,207,157,0.3),inset 0 1px 0 rgba(255,255,255,0.3)",gold:"#4ECF9D",goldLight:"rgba(78,207,157,0.09)"},
+  },
+  rubi: {
+    label:"🔴 Rubí",
+    light:{accent:"#C23B4F",accentDark:"#9c2d3e",accentLight:"rgba(194,59,79,0.16)",accentGrad:"linear-gradient(145deg,#DE6C7C 0%,#C23B4F 55%,#9C2D3E 100%)",accentInk:"#330a10",accentShadow:"0 4px 14px rgba(194,59,79,0.35),inset 0 1px 0 rgba(255,255,255,0.35)",gold:"#C23B4F",goldLight:"rgba(194,59,79,0.12)"},
+    dark:{accent:"#E96E80",accentDark:"#c4475c",accentLight:"rgba(233,110,128,0.14)",accentGrad:"linear-gradient(145deg,#F19DA9 0%,#E96E80 55%,#C4475C 100%)",accentInk:"#330b12",accentShadow:"0 4px 16px rgba(233,110,128,0.3),inset 0 1px 0 rgba(255,255,255,0.3)",gold:"#E96E80",goldLight:"rgba(233,110,128,0.09)"},
+  },
+  purpura: {
+    label:"🟣 Púrpura",
+    light:{accent:"#7C4FB0",accentDark:"#623c8c",accentLight:"rgba(124,79,176,0.16)",accentGrad:"linear-gradient(145deg,#A47FD6 0%,#7C4FB0 55%,#5E3A87 100%)",accentInk:"#1d1230",accentShadow:"0 4px 14px rgba(124,79,176,0.35),inset 0 1px 0 rgba(255,255,255,0.35)",gold:"#7C4FB0",goldLight:"rgba(124,79,176,0.12)"},
+    dark:{accent:"#AE82E9",accentDark:"#8b5fc4",accentLight:"rgba(174,130,233,0.14)",accentGrad:"linear-gradient(145deg,#C9AAF4 0%,#AE82E9 55%,#8B5FC4 100%)",accentInk:"#1f1430",accentShadow:"0 4px 16px rgba(174,130,233,0.3),inset 0 1px 0 rgba(255,255,255,0.3)",gold:"#AE82E9",goldLight:"rgba(174,130,233,0.09)"},
+  },
+  naranja: {
+    label:"🟠 Naranja",
+    light:{accent:"#D67A2A",accentDark:"#ad5f1f",accentLight:"rgba(214,122,42,0.16)",accentGrad:"linear-gradient(145deg,#EBA45F 0%,#D67A2A 55%,#AD5F1F 100%)",accentInk:"#371f06",accentShadow:"0 4px 14px rgba(214,122,42,0.35),inset 0 1px 0 rgba(255,255,255,0.35)",gold:"#D67A2A",goldLight:"rgba(214,122,42,0.12)"},
+    dark:{accent:"#F0A05E",accentDark:"#c87f3e",accentLight:"rgba(240,160,94,0.14)",accentGrad:"linear-gradient(145deg,#F6C290 0%,#F0A05E 55%,#C87F3E 100%)",accentInk:"#33200a",accentShadow:"0 4px 16px rgba(240,160,94,0.3),inset 0 1px 0 rgba(255,255,255,0.3)",gold:"#F0A05E",goldLight:"rgba(240,160,94,0.09)"},
+  },
+  rosa: {
+    label:"🩷 Rosa",
+    light:{accent:"#D14E94",accentDark:"#a93c76",accentLight:"rgba(209,78,148,0.16)",accentGrad:"linear-gradient(145deg,#E47CB2 0%,#D14E94 55%,#A93C76 100%)",accentInk:"#330e21",accentShadow:"0 4px 14px rgba(209,78,148,0.35),inset 0 1px 0 rgba(255,255,255,0.35)",gold:"#D14E94",goldLight:"rgba(209,78,148,0.12)"},
+    dark:{accent:"#EC85BB",accentDark:"#c45e95",accentLight:"rgba(236,133,187,0.14)",accentGrad:"linear-gradient(145deg,#F3ADD2 0%,#EC85BB 55%,#C45E95 100%)",accentInk:"#330f23",accentShadow:"0 4px 16px rgba(236,133,187,0.3),inset 0 1px 0 rgba(255,255,255,0.3)",gold:"#EC85BB",goldLight:"rgba(236,133,187,0.09)"},
+  },
+};
+
+// Combina la base (claro/oscuro) con la paleta de acento elegida por el usuario
+const getCWithAccent = (darkMode,accentId) => {
+  const base=getC(darkMode);
+  const palette=ACCENT_PALETTES[accentId]||ACCENT_PALETTES.oro;
+  const overrides=darkMode?palette.dark:palette.light;
+  return {...base,...overrides};
+};
+
+
 // Default C for components that don't have access to darkMode state
 let C = COLORS_LIGHT;
 
@@ -8861,8 +8909,8 @@ function MainApp({user,isAdmin,onLogout}){
     await setDoc(poolRef,current);
   };
 
-  // Update global C based on user's dark mode preference (before any early returns)
-  C = getC(teamData?.darkMode);
+  // Update global C based on user's dark mode + accent color preference (before any early returns)
+  C = getCWithAccent(teamData?.darkMode, teamData?.accentColor||"oro");
 
   if(!teamData) return(
     <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -9557,6 +9605,22 @@ function MainApp({user,isAdmin,onLogout}){
             <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`}}>
               <div style={{fontSize:10,fontWeight:600,color:C.textLight,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8,fontFamily:"'DM Sans',sans-serif"}}>🎨 Color del equipo</div>
               <ColorPicker selected={teamData.teamColor||"blue"} onChange={color=>saveTeam({teamColor:color})}/>
+            </div>
+            <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`}}>
+              <div style={{fontSize:10,fontWeight:600,color:C.textLight,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8,fontFamily:"'DM Sans',sans-serif"}}>🌈 Color de acento de la app</div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                {Object.entries(ACCENT_PALETTES).map(([id,pal])=>{
+                  const seleccionado=(teamData.accentColor||"oro")===id;
+                  const swatch=(teamData.darkMode?pal.dark:pal.light).accent;
+                  return(
+                    <button key={id} onClick={()=>saveTeam({accentColor:id})}
+                      style={{display:"flex",alignItems:"center",gap:6,padding:"6px 11px",borderRadius:20,border:`2px solid ${seleccionado?swatch:C.border}`,background:seleccionado?swatch+"22":C.inputBg,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                      <span style={{width:14,height:14,borderRadius:"50%",background:swatch,flexShrink:0,border:"1px solid rgba(0,0,0,0.15)"}}/>
+                      <span style={{fontSize:11,fontWeight:700,color:C.text}}>{pal.label.replace(/^[^\s]+\s/,"")}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
             <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12}}>
               <span style={{fontSize:16}}>🌍</span>
