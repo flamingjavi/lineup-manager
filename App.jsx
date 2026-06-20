@@ -2276,7 +2276,7 @@ function TransmisionAdmin({allTeams}){
         <div style={{display:"flex",gap:6}}>
           <button onClick={()=>{setEsMundial(false);setEquipoA("");setEquipoB("");}}
             style={{flex:1,padding:"7px",borderRadius:7,border:`1.5px solid ${!esMundial?"#e74c3c":C.border}`,background:!esMundial?"#e74c3c":C.inputBg,color:!esMundial?"#fff":C.textMid,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
-            🏟️ Liga/Copa
+            🏟️ Competición
           </button>
           <button onClick={()=>{setEsMundial(true);setEquipoA("");setEquipoB("");}}
             style={{flex:1,padding:"7px",borderRadius:7,border:`1.5px solid ${esMundial?"#e74c3c":C.border}`,background:esMundial?"#e74c3c":C.inputBg,color:esMundial?"#fff":C.textMid,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
