@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, Fragment } from "react";
+import { useState, useEffect, useRef, useMemo, Fragment } from "react";
 import { auth, db } from "./firebase";
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile } from "firebase/auth";
 import { doc, getDoc, setDoc, updateDoc, onSnapshot, collection, getDocs, deleteDoc, addDoc, serverTimestamp, deleteField } from "firebase/firestore";
@@ -7669,47 +7669,61 @@ function CompVistaPublica({comp,competenciaData,onClose}){
 function RecomendacionFichaje({teamData,squad,activeLineup,positions,pool,allTeams,user,onClose,setAiMsg,onAbrirChat}){
   const presupuesto=parsePresuGlobal(teamData?.presupuesto);
 
-  // Semilla simple basada en el día + nombre del equipo: misma rotación todo el día, cambia al siguiente
-  const seedStr=`${new Date().toDateString()}_${teamData?.teamName||""}`;
-  let seedNum=0;
-  for(let i=0;i<seedStr.length;i++) seedNum=(seedNum*31+seedStr.charCodeAt(i))>>>0;
-  const seededRandom=(max)=>{ seedNum=(seedNum*1103515245+12345)>>>0; return seedNum%max; };
+  const{posMasDebil,candidatos}=useMemo(()=>{
+    // Semilla simple basada en el día + nombre del equipo: misma rotación todo el día, cambia al siguiente
+    const seedStr=`${new Date().toDateString()}_${teamData?.teamName||""}`;
+    let seedNum=0;
+    for(let i=0;i<seedStr.length;i++) seedNum=(seedNum*31+seedStr.charCodeAt(i))>>>0;
+    const seededRandom=(max)=>{
+      if(!max||max<=0) return 0; // evita división/módulo por cero
+      seedNum=(seedNum*1103515245+12345)>>>0;
+      return seedNum%max;
+    };
 
-  // 1. Calcula el overall promedio por posición de la formación, según los titulares actuales
-  const debilidades=(positions||[]).map(p=>{
-    const jugador=activeLineup?.starters?.[p.id];
-    const overall=jugador?(Number(jugador.overall)||0):0;
-    return {posId:p.id,label:p.label,overall,vacante:!jugador};
-  }).sort((a,b)=>{
-    if(a.vacante&&!b.vacante) return -1;
-    if(!a.vacante&&b.vacante) return 1;
-    return a.overall-b.overall;
-  });
-  // Rota entre las 3 posiciones más débiles (no siempre la misma), usando la semilla del día
-  const candidatasDebiles=debilidades.slice(0,Math.min(3,debilidades.length));
-  const posMasDebil=candidatasDebiles[seededRandom(candidatasDebiles.length)]||debilidades[0];
+    // 1. Calcula el overall promedio por posición de la formación, según los titulares actuales
+    const debilidades=(positions||[]).map(p=>{
+      const jugador=activeLineup?.starters?.[p.id];
+      const overall=jugador?(Number(jugador.overall)||0):0;
+      return {posId:p.id,label:p.label,overall,vacante:!jugador};
+    }).sort((a,b)=>{
+      if(a.vacante&&!b.vacante) return -1;
+      if(!a.vacante&&b.vacante) return 1;
+      return a.overall-b.overall;
+    });
+    if(debilidades.length===0) return {posMasDebil:null,candidatos:[]};
 
-  // 2. Busca en el pool global candidatos de OTROS equipos que jueguen esa posición
-  const misNombres=new Set((squad||[]).map(p=>(p.name||"").trim().toLowerCase()));
-  const candidatosTodos=Object.values(pool||{})
-    .filter(p=>p.teamUid!==(teamData?.uid||teamData?.id)&&p.teamName!==teamData?.teamName)
-    .filter(p=>!misNombres.has((p.name||"").trim().toLowerCase()))
-    .filter(p=>{
-      const primary=POS_EN_ES[p.pos?.split("/")[0]?.trim()]||normPos(p.pos)?.split("/")[0]||"";
-      return posMasDebil&&(primary===posMasDebil.label||p.pos?.includes(posMasDebil.label));
-    })
-    .map(p=>({...p,precioVal:precioJugadorAVal(p.price)}))
-    .filter(p=>p.precioVal<=presupuesto&&p.precioVal>0) // se ajusta al presupuesto real
-    .sort((a,b)=>(Number(b.overall)||0)-(Number(a.overall)||0));
-  // Toma una muestra rotativa de hasta 8 candidatos viables, y elige 3 de ahí según la semilla del día
-  const poolRotacion=candidatosTodos.slice(0,8);
-  const candidatos=[];
-  const usados=new Set();
-  while(candidatos.length<3&&candidatos.length<poolRotacion.length){
-    const idx=seededRandom(poolRotacion.length);
-    if(!usados.has(idx)){usados.add(idx);candidatos.push(poolRotacion[idx]);}
-  }
-  candidatos.sort((a,b)=>(Number(b.overall)||0)-(Number(a.overall)||0));
+    // Rota entre las 3 posiciones más débiles (no siempre la misma), usando la semilla del día
+    const candidatasDebiles=debilidades.slice(0,Math.min(3,debilidades.length));
+    const posDebil=candidatasDebiles[seededRandom(candidatasDebiles.length)]||debilidades[0];
+
+    // 2. Busca en el pool global candidatos de OTROS equipos que jueguen esa posición
+    const misNombres=new Set((squad||[]).map(p=>(p.name||"").trim().toLowerCase()));
+    const candidatosTodos=Object.values(pool||{})
+      .filter(p=>p.teamUid!==(teamData?.uid||teamData?.id)&&p.teamName!==teamData?.teamName)
+      .filter(p=>!misNombres.has((p.name||"").trim().toLowerCase()))
+      .filter(p=>{
+        const primary=POS_EN_ES[p.pos?.split("/")[0]?.trim()]||normPos(p.pos)?.split("/")[0]||"";
+        return posDebil&&(primary===posDebil.label||p.pos?.includes(posDebil.label));
+      })
+      .map(p=>({...p,precioVal:precioJugadorAVal(p.price)}))
+      .filter(p=>p.precioVal<=presupuesto&&p.precioVal>0) // se ajusta al presupuesto real
+      .sort((a,b)=>(Number(b.overall)||0)-(Number(a.overall)||0));
+
+    // Toma una muestra rotativa de hasta 8 candidatos viables, y elige 3 de ahí según la semilla del día
+    const poolRotacion=candidatosTodos.slice(0,8);
+    const elegidos=[];
+    if(poolRotacion.length>0){
+      const usados=new Set();
+      let intentos=0;
+      while(elegidos.length<3&&elegidos.length<poolRotacion.length&&intentos<50){
+        const idx=seededRandom(poolRotacion.length);
+        if(!usados.has(idx)){usados.add(idx);elegidos.push(poolRotacion[idx]);}
+        intentos++;
+      }
+      elegidos.sort((a,b)=>(Number(b.overall)||0)-(Number(a.overall)||0));
+    }
+    return {posMasDebil:posDebil,candidatos:elegidos};
+  },[pool,squad,activeLineup,positions,teamData?.teamName,teamData?.presupuesto,teamData?.uid,teamData?.id]);
 
   const[ofertando,setOfertando]=useState(null);
   const[montos,setMontos]=useState({});
