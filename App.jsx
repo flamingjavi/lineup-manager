@@ -897,8 +897,9 @@ function Field({positions,lineup,readOnly,onClickPos,onRemovePos,dragOverPos,onD
   return(
     <div style={{position:"relative",width:"100%",paddingBottom:"133%",borderRadius:18,overflow:"hidden",boxShadow:"0 20px 56px rgba(0,0,0,0.28),inset 0 0 0 1px rgba(255,255,255,0.06)"}}>
       {lineup?.code&&(
-        <div style={{position:"absolute",top:8,right:8,zIndex:20,background:"rgba(0,0,0,0.55)",borderRadius:6,padding:"2px 8px",backdropFilter:"blur(4px)"}}>
-          <span style={{fontSize:9,fontWeight:700,color:"rgba(255,255,255,0.9)",fontFamily:"monospace",letterSpacing:1}}>{lineup.code}</span>
+        <div style={{position:"absolute",top:8,right:8,zIndex:20,display:"flex",alignItems:"center",gap:5,background:"rgba(0,0,0,0.6)",border:"1px solid rgba(255,255,255,0.18)",borderRadius:8,padding:"3px 8px",backdropFilter:"blur(4px)"}}>
+          <span style={{fontSize:7.5,fontWeight:800,color:"rgba(255,255,255,0.6)",letterSpacing:1,textTransform:"uppercase",fontFamily:"'DM Sans',sans-serif"}}>FC26</span>
+          <span style={{fontSize:10,fontWeight:700,color:"#fff",fontFamily:"monospace",letterSpacing:1}}>{lineup.code}</span>
         </div>
       )}
       <div style={{position:"absolute",inset:0,background:"linear-gradient(180deg,#1d6831 0%,#218a3c 25%,#1d6831 50%,#218a3c 75%,#1d6831 100%)"}}/>
@@ -5484,7 +5485,7 @@ function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial,onOpenNoti
           </div>
           <div style={{flex:1,minWidth:0}}>
             <div style={{fontSize:23,fontWeight:900,color:"#fff",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1,lineHeight:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{teamData?.teamName}</div>
-            <div style={{fontSize:10.5,color:"rgba(255,255,255,0.6)",fontFamily:"'DM Sans',sans-serif",marginTop:3}}>{comps.length>0?`${comps.length} competición${comps.length>1?"es":""} activa${comps.length>1?"s":""}`:"Sin competiciones activas"}</div>
+            <div style={{fontSize:10.5,color:"rgba(255,255,255,0.6)",fontFamily:"'DM Sans',sans-serif",marginTop:3}}>{comps.length>0?`${comps.length} ${comps.length>1?"competiciones":"competición"} activa${comps.length>1?"s":""}`:"Sin competiciones activas"}</div>
           </div>
           {/* Campana */}
           <button onClick={()=>{setShowMisNotificaciones(true);if(mencionesNoVistas>0&&(teamData?.id||teamData?.uid)){updateDoc(doc(db,"teams",teamData.id||teamData.uid),{ultimaVistaMenciones:new Date().toISOString()}).catch(()=>{});}}}
