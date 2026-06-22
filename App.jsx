@@ -8701,6 +8701,16 @@ const anaPlays=(p,label)=>{
   return all.includes(label)||anaGetP(p)===label;
 };
 const anaAvg=arr=>arr.length?Math.round(arr.reduce((s,p)=>s+Number(p.overall||0),0)/arr.length):0;
+// Valor en MILLONES (toda la economía de la app se maneja en M)
+const anaValM=price=>{
+  if(price==null) return 0;
+  if(typeof price==="object") return Number(price.value)||0;
+  const s=String(price).replace(/,/g,"").toUpperCase().trim();
+  if(s.endsWith("M")) return parseFloat(s)||0;
+  if(s.endsWith("K")) return (parseFloat(s)||0)/1000;
+  return parseFloat(s)||0;
+};
+const anaFmtM=v=>{const n=Math.round((Number(v)||0)*10)/10;return (Number.isInteger(n)?n:n.toFixed(1))+"M";};
 // Devuelve análisis del once de una alineación
 function analizarOnce(lineup,squad){
   const getFull=base=>(squad||[]).find(s=>(s.name||"").toLowerCase()===(base?.name||"").toLowerCase())||base||{};
@@ -8914,7 +8924,7 @@ function OnceIdealModal({squad,lineups,activeLineup,saveTeam,onClose}){
 
 // ─── 4 · RADAR DE MERCADO ────────────────────────────────────────────────────
 function RadarMercadoModal({teamData,squad,activeLineup,pool,onClose,onMercado}){
-  const presupuesto=parsePresuGlobal(teamData?.presupuesto);
+  const presupuesto=anaValM(teamData?.presupuesto);
   const a=analizarOnce(activeLineup,squad);
   const weakStarter=[...a.withOv].sort((x,y)=>Number(x.p.overall)-Number(y.p.overall))[0];
   const weakLabel=weakStarter?weakStarter.label:"DC";
@@ -8925,15 +8935,15 @@ function RadarMercadoModal({teamData,squad,activeLineup,pool,onClose,onMercado})
   const cands=Object.values(pool||{})
     .filter(p=>p.overall&&!misNombres.has((p.name||"").toLowerCase()))
     .filter(p=>pos==="all"?true:anaPlays(p,pos))
-    .filter(p=>{const v=precioJugadorAVal(p.price);return v>0&&(presupuesto===0||v<=presupuesto);})
-    .map(p=>{const v=precioJugadorAVal(p.price);const ratio=p.overall/(v/1000000||1);return{...p,_val:v,_ratio:ratio};})
+    .filter(p=>{const v=anaValM(p.price);return v>0&&(presupuesto===0||v<=presupuesto);})
+    .map(p=>{const v=anaValM(p.price);const ratio=p.overall/(v||1);return{...p,_val:v,_ratio:ratio};})
     .sort((a,b)=>b._ratio-a._ratio).slice(0,8);
   const joyaMin=cands.length?[...cands].sort((a,b)=>b._ratio-a._ratio)[Math.min(2,cands.length-1)]._ratio:0;
   const top=cands[0];
   return anaShell("RADAR DE MERCADO",onClose,(
     <div>
       <div style={{padding:"14px 16px",display:"flex",gap:9,borderBottom:`1px solid ${C.border}`}}>
-        <div style={{flex:1,background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:13,padding:"10px 13px"}}><div style={{fontSize:9,fontWeight:800,color:C.textFaint,letterSpacing:0.5,textTransform:"uppercase"}}>Presupuesto</div><div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:22,color:C.accent,lineHeight:1.1}}>{presupuesto?fmtPresu(presupuesto):"—"}</div></div>
+        <div style={{flex:1,background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:13,padding:"10px 13px"}}><div style={{fontSize:9,fontWeight:800,color:C.textFaint,letterSpacing:0.5,textTransform:"uppercase"}}>Presupuesto</div><div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:22,color:C.accent,lineHeight:1.1}}>{presupuesto?anaFmtM(presupuesto):"—"}</div></div>
         <div style={{flex:1.3,background:"rgba(192,57,43,0.07)",border:"1px solid rgba(192,57,43,0.22)",borderRadius:13,padding:"10px 13px"}}><div style={{fontSize:9,fontWeight:800,color:"#c0392b",letterSpacing:0.5,textTransform:"uppercase"}}>Posición floja</div><div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:22,color:"#c0392b",lineHeight:1.1}}>{weakLabel} · {weakStarter?.p.overall||"—"}</div></div>
       </div>
       <div style={{padding:"12px 16px 4px",display:"flex",gap:7,flexWrap:"wrap"}}>
@@ -8946,7 +8956,7 @@ function RadarMercadoModal({teamData,squad,activeLineup,pool,onClose,onMercado})
           <div key={i} style={{display:"flex",alignItems:"center",gap:12,padding:12,background:C.card,borderRadius:15,border:`1px solid ${joya?C.accent+"66":C.border}`}}>
             <div style={{width:40,height:40,borderRadius:12,background:C.accentGrad,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontFamily:"'Bebas Neue',sans-serif",fontSize:16,color:C.accentInk,boxShadow:C.accentShadow}}>{p.overall}</div>
             <div style={{flex:1,minWidth:0}}><div style={{display:"flex",alignItems:"center",gap:6}}><span style={{fontSize:13,fontWeight:800,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.name}</span>{joya&&<span style={{fontSize:8,fontWeight:800,color:C.accentInk,background:C.accent,borderRadius:5,padding:"2px 6px",letterSpacing:0.3,flexShrink:0}}>JOYA</span>}</div><div style={{fontSize:10,color:C.textLight,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{anaGetP(p)} · {p.teamName||"libre"}{up!=null&&up>0?` · +${up} vs tu titular`:""}</div></div>
-            <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:18,color:C.accent,lineHeight:1,flexShrink:0}}>{fmtPresu(p._val)}</div>
+            <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:18,color:C.accent,lineHeight:1,flexShrink:0}}>{anaFmtM(p._val)}</div>
           </div>
         );})}
         {top&&<div style={{marginTop:5,padding:"12px 14px",background:"rgba(39,174,96,0.06)",border:"1px dashed rgba(39,174,96,0.3)",borderRadius:14,display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:17,color:"#27ae60"}}>◆</span><span style={{fontSize:11,color:C.textMid,lineHeight:1.45,fontWeight:600}}>{top.name} es tu mejor relación media/precio para {pos==="all"?"reforzar":`tu ${pos}`}{miTitular&&Number(top.overall)>Number(miTitular.overall||0)?` (+${Number(top.overall)-Number(miTitular.overall)} sobre tu titular)`:""}.</span></div>}
@@ -8963,11 +8973,11 @@ function TuTemporadaModal({teamData,squad,activeLineup,onClose}){
   const conOv=(squad||[]).filter(p=>p.overall);
   const mejor=conOv.length?[...conOv].sort((x,y)=>y.overall-x.overall)[0]:null;
   const oro=conOv.filter(p=>Number(p.overall)>=80).length;
-  const valor=conOv.reduce((s,p)=>s+precioJugadorAVal(p.price),0);
+  const valor=conOv.reduce((s,p)=>s+anaValM(p.price),0);
   const comps=(teamData?.competencias||[]).length;
   const TC=getTeamColor(teamData?.teamColor);
   const compartir=()=>{
-    const txt=`⭐ ${teamData?.teamName||"Mi equipo"} · Temporada\n📊 Media del once: ${a.media}\n👥 Plantilla: ${conOv.length} jugadores\n🥇 Titulares ≥80: ${oro}\n💎 Mejor jugador: ${mejor?`${mejor.name} (${mejor.overall})`:"—"}\n💰 Valor de plantilla: ${fmtPresu(valor)}`;
+    const txt=`⭐ ${teamData?.teamName||"Mi equipo"} · Temporada\n📊 Media del once: ${a.media}\n👥 Plantilla: ${conOv.length} jugadores\n🥇 Titulares ≥80: ${oro}\n💎 Mejor jugador: ${mejor?`${mejor.name} (${mejor.overall})`:"—"}\n💰 Valor de plantilla: ${anaFmtM(valor)}`;
     if(navigator.share){navigator.share({text:txt}).catch(()=>{});}
     else{const ta=document.createElement("textarea");ta.value=txt;document.body.appendChild(ta);ta.select();try{document.execCommand("copy");}catch(e){}document.body.removeChild(ta);alert("Resumen copiado al portapapeles ✓");}
   };
@@ -8987,7 +8997,7 @@ function TuTemporadaModal({teamData,squad,activeLineup,onClose}){
         <div style={{display:"flex",gap:12}}>
           <div style={{flex:1,background:C.card,border:`1px solid ${C.border}`,borderRadius:17,padding:13,textAlign:"center"}}><div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:26,color:C.text,lineHeight:1}}>{conOv.length}</div><div style={{fontSize:9,color:C.textLight,fontWeight:700,marginTop:3}}>plantilla</div></div>
           <div style={{flex:1,background:C.card,border:`1px solid ${C.border}`,borderRadius:17,padding:13,textAlign:"center"}}><div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:26,color:C.text,lineHeight:1}}>{oro}</div><div style={{fontSize:9,color:C.textLight,fontWeight:700,marginTop:3}}>titulares oro</div></div>
-          <div style={{flex:1,background:C.card,border:`1px solid ${C.border}`,borderRadius:17,padding:13,textAlign:"center"}}><div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:22,color:C.text,lineHeight:1.1}}>{fmtPresu(valor)}</div><div style={{fontSize:9,color:C.textLight,fontWeight:700,marginTop:3}}>valor plantilla</div></div>
+          <div style={{flex:1,background:C.card,border:`1px solid ${C.border}`,borderRadius:17,padding:13,textAlign:"center"}}><div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:22,color:C.text,lineHeight:1.1}}>{anaFmtM(valor)}</div><div style={{fontSize:9,color:C.textLight,fontWeight:700,marginTop:3}}>valor plantilla</div></div>
         </div>
       </div>
     </div>
