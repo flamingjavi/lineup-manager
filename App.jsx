@@ -1736,7 +1736,7 @@ function MercadoToggle(){
 // ─── CALENDARIO GENERAL: semana actual + próximas (admin sube foto) ─────────
 // ─── ADMIN: Top 10 manual de Copa por equipo ─────────────────────────────────
 // ─── ADMIN: Pronósticos — elige jornada, genera 4 partidos destacados ────────
-function PronosticosAdmin({setAiMsg}){
+function PronosticosAdmin({setAiMsg,allTeams}){
   const[competenciaData,setCompetenciaData]=useState({});
   const[pronosticos,setPronosticos]=useState({});
   const[compId,setCompId]=useState("liga1");
@@ -1777,7 +1777,7 @@ function PronosticosAdmin({setAiMsg}){
     try{
       const grupos=competenciaData?.[compId]?.grupos||[];
       const tabla=grupos[0]?.tabla||[];
-      const destacados=await elegirPartidosDestacados(jornada.partidos,tabla,4);
+      const destacados=await elegirPartidosDestacados(jornada.partidos,tabla,4,allTeams||[]);
       if(destacados.length===0){setAiMsg("❌ No se pudo determinar partidos destacados");setGenerando(false);return;}
       const ref=doc(db,"config","pronosticos");
       const snap=await getDoc(ref).catch(()=>null);
@@ -4786,8 +4786,18 @@ async function addH2H({local,golesLocal,visitante,golesVisitante,competencia,jor
 // ─── Elige los partidos más destacados de una jornada para Pronósticos ──────
 // Combina: posición en tabla (suma más baja = mejor), historial H2H (más enfrentamientos = más rivalidad),
 // y menciones recientes en noticias entre esos dos equipos ("beef")
-async function elegirPartidosDestacados(partidos,tabla,maxPartidos=4){
+async function elegirPartidosDestacados(partidos,tabla,maxPartidos=4,allTeams=[]){
   if(!partidos||partidos.length===0) return [];
+
+  // Filtra partidos válidos (tienen local y visitante)
+  const validos=partidos.filter(p=>p.local&&p.visitante);
+  if(validos.length===0) return [];
+
+  // Si hay menos partidos que maxPartidos, devuelve todos
+  if(validos.length<=maxPartidos){
+    return validos.map((p,i)=>({local:p.local,visitante:p.visitante,idx:i,especial:i===0}));
+  }
+
   const[h2hSnap,noticiasSnap]=await Promise.all([
     getDoc(doc(db,"config","h2hHistorial")).catch(()=>null),
     getDoc(doc(db,"config","noticiasUsuario")).catch(()=>null),
@@ -4796,26 +4806,47 @@ async function elegirPartidosDestacados(partidos,tabla,maxPartidos=4){
   const noticiasLista=noticiasSnap?.exists()?(noticiasSnap.data().lista||[]):[];
   const haceUnMes=Date.now()-30*24*60*60*1000;
 
+  // Equipos admin (presidentes que son también admins)
+  const equiposAdmin=new Set((allTeams||[]).filter(t=>t.isAdmin).map(t=>t.teamName));
+
   const posDe=(equipo)=>{
+    if(!tabla||tabla.length===0) return 99;
     const idx=tabla.findIndex(r=>r.equipo===equipo);
-    return idx>=0?idx+1:tabla.length+5; // si no está en tabla, penaliza
+    return idx>=0?idx+1:99;
   };
 
-  const puntuados=partidos.map((p,idx)=>{
-    if(!p.local||!p.visitante) return {partido:p,idx,score:-9999};
+  const puntuados=validos.map((p,idx)=>{
     let score=0;
-    // 1. Posición en tabla: suma más baja = más puntos (invertido)
-    const sumaPos=posDe(p.local)+posDe(p.visitante);
-    score+=Math.max(0,40-sumaPos);
-    // 2. Historial H2H: más enfrentamientos previos = más rivalidad
-    const enfrentamientos=h2hLista.filter(h=>(h.local===p.local&&h.visitante===p.visitante)||(h.local===p.visitante&&h.visitante===p.local));
+
+    // 1. Partido entre equipos admin = destacado automáticamente (máxima prioridad)
+    const ambosSonAdmin=equiposAdmin.has(p.local)&&equiposAdmin.has(p.visitante);
+    const unoEsAdmin=equiposAdmin.has(p.local)||equiposAdmin.has(p.visitante);
+    if(ambosSonAdmin) score+=60;
+    else if(unoEsAdmin) score+=30;
+
+    // 2. Posición en tabla (solo si hay tabla cargada)
+    if(tabla&&tabla.length>0){
+      const sumaPos=posDe(p.local)+posDe(p.visitante);
+      score+=Math.max(0,40-sumaPos);
+    }
+
+    // 3. Historial H2H
+    const enfrentamientos=h2hLista.filter(h=>
+      (h.local===p.local&&h.visitante===p.visitante)||
+      (h.local===p.visitante&&h.visitante===p.local)
+    );
     score+=Math.min(enfrentamientos.length*4,20);
-    // 3. Menciones recientes en noticias entre estos dos equipos ("beef")
+
+    // 4. Beef reciente en noticias
     const menciones=noticiasLista.filter(n=>
       n.estado==="aprobada"&&new Date(n.fecha).getTime()>haceUnMes&&
       ((n.equipoAutor===p.local&&n.equipoMencionado===p.visitante)||(n.equipoAutor===p.visitante&&n.equipoMencionado===p.local))
     );
     score+=Math.min(menciones.length*8,24);
+
+    // 5. Si no hay ningún criterio (score=0), añade algo de variación aleatoria para que no sean siempre los mismos
+    if(score===0) score=Math.random()*10;
+
     return {partido:p,idx,score};
   });
 
@@ -5379,13 +5410,18 @@ function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial,onOpenNoti
         const numB=parseInt((b[1].nombre||b[0]).match(/\d+/)?.[0]||"0");
         return numA-numB;
       });
+      const myName=(teamData.teamName||"").trim().toLowerCase();
       for(const [jkey,jornada] of jornadasOrdenadas){
-        const partido=(jornada.partidos||[]).find(p=>(p.local===teamData.teamName||p.visitante===teamData.teamName)&&!p.marcador);
+        const partido=(jornada.partidos||[]).find(p=>{
+          const loc=(p.local||"").trim().toLowerCase();
+          const vis=(p.visitante||"").trim().toLowerCase();
+          return (loc===myName||vis===myName)&&!p.marcador;
+        });
         if(partido){
           const numJornada=parseInt((jornada.nombre||jkey).match(/\d+/)?.[0]||"999");
           candidatos.push({
-            rival:partido.local===teamData.teamName?partido.visitante:partido.local,
-            esLocal:partido.local===teamData.teamName,
+            rival:partido.local.trim().toLowerCase()===myName?partido.visitante:partido.local,
+            esLocal:partido.local.trim().toLowerCase()===myName,
             jornada:jornada.nombre||jkey,liga:comp.name,numJornada
           });
           break; // solo el primero sin jugar de esta competencia
@@ -9732,7 +9768,7 @@ function MainApp({user,isAdmin,onLogout}){
                   <div style={{marginTop:10}}><Top10ManualAdmin allTeams={allTeams} setAiMsg={setAiMsg}/></div>
                 )}
                 {seccionAdminActiva==="pronosticos"&&(
-                  <div style={{marginTop:10}}><PronosticosAdmin setAiMsg={setAiMsg}/></div>
+                  <div style={{marginTop:10}}><PronosticosAdmin setAiMsg={setAiMsg} allTeams={allTeams}/></div>
                 )}
               </div>
               {/* Collapsible teams list */}
