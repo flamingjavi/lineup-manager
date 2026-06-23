@@ -9163,7 +9163,7 @@ function OnceIdealModal({squad,lineups,activeLineup,saveTeam,onClose}){
 }
 
 // ─── 4 · RADAR DE MERCADO ────────────────────────────────────────────────────
-function RadarMercadoModal({teamData,squad,activeLineup,pool,onClose,onMercado}){
+function RadarMercadoModal({teamData,squad,activeLineup,pool,onClose,onMercado,onAbrirChat}){
   const presupuesto=anaValM(teamData?.presupuesto);
   const a=analizarOnce(activeLineup,squad);
   const weakStarter=[...a.withOv].sort((x,y)=>Number(x.p.overall)-Number(y.p.overall))[0];
@@ -9196,7 +9196,16 @@ function RadarMercadoModal({teamData,squad,activeLineup,pool,onClose,onMercado})
         {cands.map((p,i)=>{const TCp=getTeamColor("sky");const joya=p._ratio>=joyaMin&&p._ratio>0;const up=miTitular?Number(p.overall)-Number(miTitular.overall||0):null;return(
           <div key={i} style={{display:"flex",alignItems:"center",gap:12,padding:12,background:C.card,borderRadius:15,border:`1px solid ${joya?C.accent+"66":C.border}`}}>
             <div style={{width:40,height:40,borderRadius:12,background:C.accentGrad,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontFamily:"'Bebas Neue',sans-serif",fontSize:16,color:C.accentInk,boxShadow:C.accentShadow}}>{p.overall}</div>
-            <div style={{flex:1,minWidth:0}}><div style={{display:"flex",alignItems:"center",gap:6}}><span style={{fontSize:13,fontWeight:800,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.name}</span>{joya&&<span style={{fontSize:8,fontWeight:800,color:C.accentInk,background:C.accent,borderRadius:5,padding:"2px 6px",letterSpacing:0.3,flexShrink:0}}>JOYA</span>}</div><div style={{fontSize:10,color:C.textLight,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{anaGetP(p)} · {p.teamName||"libre"}{up!=null&&up>0?` · +${up} vs tu titular`:""}</div></div>
+            <div style={{flex:1,minWidth:0}}>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  {p.teamName&&p.teamName!==teamData?.teamName
+                    ?<button onClick={()=>onAbrirChat&&onAbrirChat(p.teamName)} style={{background:"none",border:"none",padding:0,cursor:"pointer",fontSize:13,fontWeight:800,color:C.accent,textAlign:"left",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textDecoration:"underline",textDecorationStyle:"dotted",textUnderlineOffset:3}}>{p.name}</button>
+                    :<span style={{fontSize:13,fontWeight:800,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.name}</span>
+                  }
+                  {joya&&<span style={{fontSize:8,fontWeight:800,color:C.accentInk,background:C.accent,borderRadius:5,padding:"2px 6px",letterSpacing:0.3,flexShrink:0}}>JOYA</span>}
+                </div>
+                <div style={{fontSize:10,color:C.textLight,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{anaGetP(p)} · {p.teamName||"libre"}{up!=null&&up>0?` · +${up} vs tu titular`:""}</div>
+              </div>
             <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:18,color:C.accent,lineHeight:1,flexShrink:0}}>{anaFmtM(p._val)}</div>
           </div>
         );})}
@@ -10993,7 +11002,7 @@ function MainApp({user,isAdmin,onLogout}){
         onMercado={()=>{setAnalisisView("");setShowMercado(true);}}/>}
       {analisisView==="caracara"&&<CaraACaraModal teamData={teamData} squad={squad} activeLineup={activeLineup} allTeams={allTeams} onClose={()=>setAnalisisView("")}/>}
       {analisisView==="ideal"&&<OnceIdealModal squad={squad} lineups={lineups} activeLineup={activeLineup} saveTeam={saveTeam} onClose={()=>setAnalisisView("")}/>}
-      {analisisView==="radar"&&<RadarMercadoModal teamData={teamData} squad={squad} activeLineup={activeLineup} pool={pool} onClose={()=>setAnalisisView("")} onMercado={()=>{setAnalisisView("");setShowMercado(true);}}/>}
+      {analisisView==="radar"&&<RadarMercadoModal teamData={teamData} squad={squad} activeLineup={activeLineup} pool={pool} onClose={()=>setAnalisisView("")} onMercado={()=>{setAnalisisView("");setShowMercado(true);}} onAbrirChat={nombre=>{setAnalisisView("");setChatEquipoObjetivo(nombre);setShowChatGlobal(true);}}/>}
       {analisisView==="temporada"&&<TuTemporadaModal teamData={teamData} squad={squad} activeLineup={activeLineup} onClose={()=>setAnalisisView("")}/>}
 
       <BottomTabBar
