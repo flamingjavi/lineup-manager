@@ -5660,6 +5660,39 @@ function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial,onOpenNoti
           </div>
         )}
 
+        {/* 🔧 DIAGNÓSTICO TEMPORAL — borrar cuando funcione */}
+        <div style={{background:"#1a1a2e",borderRadius:10,padding:"10px 12px",border:"1px solid #444",fontSize:10,fontFamily:"monospace",color:"#aaa",marginBottom:8}}>
+          <div style={{color:"#f39c12",fontWeight:700,marginBottom:4}}>🔧 Debug próximo partido</div>
+          <div>teamName: <b style={{color:"#fff"}}>{teamData?.teamName||"(vacío)"}</b></div>
+          <div>competencias: <b style={{color:"#fff"}}>{JSON.stringify(teamData?.competencias||[])}</b></div>
+          <div>comps encontrados: <b style={{color:"#fff"}}>{comps.length}</b></div>
+          {comps.map(comp=>{
+            const fx=competenciaData?.[comp.id]?.fixture||{};
+            const jornadas=Object.entries(fx);
+            return(
+              <div key={comp.id} style={{marginTop:4,borderTop:"1px solid #333",paddingTop:4}}>
+                <div style={{color:"#4ecdc4"}}>{comp.id}: {jornadas.length} jornadas</div>
+                {jornadas.slice(0,2).map(([jk,jr])=>{
+                  const lista=Array.isArray(jr)?jr:(jr?.partidos||[]);
+                  return(
+                    <div key={jk} style={{marginLeft:8}}>
+                      <div>{jk}: {lista.length} partidos</div>
+                      {lista.slice(0,2).map((p,i)=>(
+                        <div key={i} style={{marginLeft:8,color:"#ccc"}}>
+                          "{p.local}" vs "{p.visitante}" {p.marcador?"✅":"⏳"}
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
+          <div style={{marginTop:4,borderTop:"1px solid #333",paddingTop:4,color:siguientePartido?"#2ecc71":"#e74c3c"}}>
+            siguientePartido: {siguientePartido?JSON.stringify(siguientePartido):"null — no encontrado"}
+          </div>
+        </div>
+
         {siguientePartido&&(
           <>
             <div style={{fontSize:10,fontWeight:700,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.8,marginBottom:2}}>Próximo partido · {siguientePartido.jornada}</div>
