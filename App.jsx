@@ -1866,6 +1866,9 @@ function PronosticosAdmin({setAiMsg,allTeams}){
           })}
         </div>
       )}
+      <div style={{borderTop:`1px solid ${C.border}`,marginTop:12,paddingTop:12}}>
+        <HistorialPronosticosAdmin/>
+      </div>
     </div>
   );
 }
@@ -8286,6 +8289,150 @@ function CompVistaPublica({comp,competenciaData,onClose,teamData,onAbrirChatGrup
 // ─── BARRA DE NAVEGACIÓN INFERIOR: siempre visible, en cualquier pantalla ────
 // ─── RECOMENDACIÓN DE FICHAJE: detecta tu posición más débil y sugiere candidatos ─
 // ─── TABLA DE POSICIONES de la liga de pronósticos (acumulado de todas las jornadas) ──
+// ─── ADMIN: Historial completo de pronósticos (solo lectura + edición de puntos) ──
+function HistorialPronosticosAdmin(){
+  const[pronosticos,setPronosticos]=useState({});
+  const[expandido,setExpandido]=useState(null); // equipo expandido
+  const[editando,setEditando]=useState(null); // {clave, equipo, jornada}
+  const[nuevoPts,setNuevoPts]=useState("");
+  const[guardando,setGuardando]=useState(false);
+
+  useEffect(()=>{
+    const unsub=onSnapshot(doc(db,"config","pronosticos"),snap=>{
+      setPronosticos(snap.exists()?snap.data():{});
+    });
+    return unsub;
+  },[]);
+
+  // Totales por equipo sumando todas las jornadas
+  const totales={};
+  const detallePorEquipo={}; // {equipo: [{clave, jornada, comp, pts, predicciones, resultados, destacados}]}
+
+  Object.entries(pronosticos).forEach(([clave,p])=>{
+    if(!p?.destacados) return;
+    Object.entries(p.puntosAcumulados||{}).forEach(([equipo,pts])=>{
+      totales[equipo]=(totales[equipo]||0)+pts;
+      if(!detallePorEquipo[equipo]) detallePorEquipo[equipo]=[];
+      detallePorEquipo[equipo].push({
+        clave,
+        jornada:p.jornadaNombre||clave,
+        compId:p.compId,
+        pts,
+        destacados:p.destacados||[],
+        predicciones:p.predicciones||{},
+        resultados:p.resultados||{},
+      });
+    });
+  });
+
+  const ranking=Object.entries(totales).map(([equipo,pts])=>({equipo,pts})).sort((a,b)=>b.pts-a.pts);
+
+  const guardarEdicion=async()=>{
+    if(!editando||nuevoPts===""||isNaN(Number(nuevoPts))) return;
+    setGuardando(true);
+    const ref=doc(db,"config","pronosticos");
+    const snap=await getDoc(ref).catch(()=>null);
+    if(snap?.exists()){
+      const all=snap.data();
+      const p=all[editando.clave];
+      if(p){
+        const puntosAcumulados={...(p.puntosAcumulados||{}),[editando.equipo]:Number(nuevoPts)};
+        await setDoc(ref,{[editando.clave]:{...p,puntosAcumulados}},{merge:true});
+      }
+    }
+    setEditando(null);setNuevoPts("");setGuardando(false);
+  };
+
+  const COMP_LABELS={"liga1":"Neo League","liga2":"EC","ascenso":"Brave League","copa":"Copa","champions":"Champions","europa":"Europa","copaascenso":"Brave Cup"};
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:0,marginTop:8}}>
+      <div style={{fontSize:10,fontWeight:700,color:"#8e44ad",fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}}>
+        📋 Historial completo — {ranking.length} equipos
+      </div>
+      {ranking.length===0&&(
+        <div style={{textAlign:"center",color:C.textFaint,fontSize:11,fontFamily:"'DM Sans',sans-serif",padding:"20px 0"}}>
+          Sin datos de pronósticos todavía
+        </div>
+      )}
+      {ranking.map((r,i)=>{
+        const detalles=detallePorEquipo[r.equipo]||[];
+        const abierto=expandido===r.equipo;
+        const medal=i===0?"🥇":i===1?"🥈":i===2?"🥉":`${i+1}.`;
+        return(
+          <div key={r.equipo} style={{borderBottom:`1px solid ${C.border}`}}>
+            {/* Fila del equipo */}
+            <div onClick={()=>setExpandido(abierto?null:r.equipo)}
+              style={{display:"flex",alignItems:"center",gap:8,padding:"9px 6px",cursor:"pointer",background:abierto?C.accentLight:"transparent"}}>
+              <span style={{fontSize:13,minWidth:22,textAlign:"center"}}>{medal}</span>
+              <span style={{flex:1,fontSize:12,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{r.equipo}</span>
+              <span style={{fontWeight:900,fontSize:14,color:"#8e44ad",fontFamily:"'Bebas Neue',sans-serif"}}>{r.pts} pts</span>
+              <span style={{fontSize:11,color:C.textFaint}}>{abierto?"▲":"▼"}</span>
+            </div>
+            {/* Desglose expandido */}
+            {abierto&&(
+              <div style={{padding:"6px 10px 10px",background:C.card,display:"flex",flexDirection:"column",gap:8}}>
+                {detalles.length===0&&<div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Sin predicciones registradas</div>}
+                {detalles.map((d,di)=>{
+                  const editandoEste=editando?.clave===d.clave&&editando?.equipo===r.equipo;
+                  return(
+                    <div key={di} style={{background:C.inputBg,borderRadius:8,padding:"8px 10px",border:`1px solid ${C.border}`}}>
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+                        <div>
+                          <span style={{fontSize:10,fontWeight:800,color:"#8e44ad",fontFamily:"'DM Sans',sans-serif"}}>{d.jornada}</span>
+                          <span style={{fontSize:9,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginLeft:5}}>{COMP_LABELS[d.compId]||d.compId}</span>
+                        </div>
+                        {editandoEste?(
+                          <div style={{display:"flex",alignItems:"center",gap:5}}>
+                            <input type="number" value={nuevoPts} onChange={e=>setNuevoPts(e.target.value)} autoFocus
+                              style={{width:48,padding:"3px 6px",borderRadius:6,border:`1px solid #8e44ad`,background:C.card,color:C.text,fontSize:11,textAlign:"center"}}/>
+                            <button onClick={guardarEdicion} disabled={guardando}
+                              style={{padding:"3px 8px",borderRadius:6,background:"#8e44ad",color:"#fff",border:"none",fontSize:10,fontWeight:700,cursor:"pointer"}}>
+                              {guardando?"…":"✓"}
+                            </button>
+                            <button onClick={()=>{setEditando(null);setNuevoPts("");}}
+                              style={{padding:"3px 7px",borderRadius:6,background:"none",border:`1px solid ${C.border}`,color:C.textFaint,fontSize:10,cursor:"pointer"}}>
+                              ✕
+                            </button>
+                          </div>
+                        ):(
+                          <div style={{display:"flex",alignItems:"center",gap:6}}>
+                            <span style={{fontWeight:800,fontSize:13,color:"#8e44ad"}}>{d.pts} pts</span>
+                            <button onClick={e=>{e.stopPropagation();setEditando({clave:d.clave,equipo:r.equipo});setNuevoPts(String(d.pts));}}
+                              style={{padding:"2px 8px",borderRadius:6,background:"transparent",border:`1px solid ${C.border}`,color:C.textFaint,fontSize:10,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                              ✏️ Editar
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      {/* Predicciones partido por partido */}
+                      {d.destacados.map((partido,pi)=>{
+                        const pKey=`${r.equipo}__${partido.local}__${partido.visitante}`;
+                        const pred=d.predicciones[pKey];
+                        const res=d.resultados[`${partido.local}__${partido.visitante}`];
+                        return(
+                          <div key={pi} style={{display:"flex",alignItems:"center",gap:6,padding:"3px 0",borderTop:pi>0?`1px solid ${C.border}`:"none",fontSize:10,fontFamily:"'DM Sans',sans-serif"}}>
+                            <span style={{fontSize:9}}>{partido.especial?"⭐":"🔵"}</span>
+                            <span style={{flex:1,color:C.textLight}}>{partido.local} vs {partido.visitante}</span>
+                            <span style={{color:pred?"#8e44ad":C.textFaint,fontWeight:pred?700:400}}>
+                              {pred?`${pred.golesLocal}-${pred.golesVisitante}`:"—"}
+                            </span>
+                            {res&&<span style={{color:"#27ae60",fontWeight:700}}>({res.golesLocal}-{res.golesVisitante})</span>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function TablaPronosticos({onClose}){
   const[pronosticos,setPronosticos]=useState({});
 
