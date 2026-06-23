@@ -8390,7 +8390,7 @@ function HistorialPronosticosAdmin(){
                       ):(
                         <div style={{display:"flex",alignItems:"center",gap:6}}>
                           {pts!==undefined&&<span style={{fontWeight:800,fontSize:12,color:"#8e44ad"}}>{pts} pts</span>}
-                          <button onClick={e=>{e.stopPropagation();setEditando({clave,equipo});setNuevoPts(pts!==undefined?String(pts):"0");}}
+                          <button onClick={e=>{e.stopPropagation();const pin=prompt("🔐 PIN de admin para editar punteo:");if(pin===null)return;if(pin!=="0253"){alert("❌ PIN incorrecto");return;}setEditando({clave,equipo});setNuevoPts(pts!==undefined?String(pts):"0");}}
                             style={{padding:"2px 7px",borderRadius:6,background:"transparent",border:`1px solid ${C.border}`,color:C.textFaint,fontSize:10,cursor:"pointer"}}>
                             ✏️ Editar
                           </button>
@@ -9176,6 +9176,7 @@ function RadarMercadoModal({teamData,squad,activeLineup,pool,onClose,onMercado})
     .filter(p=>p.overall&&!misNombres.has((p.name||"").toLowerCase()))
     .filter(p=>pos==="all"?true:anaPlays(p,pos))
     .filter(p=>{const v=anaValM(p.price);return v>0&&(presupuesto===0||v<=presupuesto);})
+    .filter(p=>p.age!=null&&Number(p.age)<19)
     .map(p=>{const v=anaValM(p.price);const ratio=p.overall/(v||1);return{...p,_val:v,_ratio:ratio};})
     .sort((a,b)=>b._ratio-a._ratio).slice(0,8);
   const joyaMin=cands.length?[...cands].sort((a,b)=>b._ratio-a._ratio)[Math.min(2,cands.length-1)]._ratio:0;
