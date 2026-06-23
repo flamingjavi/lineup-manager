@@ -5447,13 +5447,21 @@ function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial,onOpenNoti
         const partido=listaPartidos.find(p=>{
           const loc=(p.local||"").trim().toLowerCase();
           const vis=(p.visitante||"").trim().toLowerCase();
-          return (loc===myName||vis===myName)&&!p.marcador;
+          if(p.marcador) return false;
+          // Match exacto primero
+          if(loc===myName||vis===myName) return true;
+          // Match parcial: "Leicester City" coincide con "Leicester City FC"
+          if(loc.length>=4&&(loc.includes(myName)||myName.includes(loc))) return true;
+          if(vis.length>=4&&(vis.includes(myName)||myName.includes(vis))) return true;
+          return false;
         });
         if(partido){
+          const loc=(partido.local||"").trim().toLowerCase();
+          const esLocal=loc===myName||myName.includes(loc)||loc.includes(myName);
           const numJornada=parseInt(nombreJornada.match(/\d+/)?.[0]||"999");
           candidatos.push({
-            rival:partido.local.trim().toLowerCase()===myName?partido.visitante:partido.local,
-            esLocal:partido.local.trim().toLowerCase()===myName,
+            rival:esLocal?partido.visitante:partido.local,
+            esLocal,
             jornada:nombreJornada,liga:comp.name,numJornada
           });
           break;
@@ -5659,39 +5667,6 @@ function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial,onOpenNoti
             ⚽ El admin aún no asignó tus competiciones
           </div>
         )}
-
-        {/* 🔧 DIAGNÓSTICO TEMPORAL — borrar cuando funcione */}
-        <div style={{background:"#1a1a2e",borderRadius:10,padding:"10px 12px",border:"1px solid #444",fontSize:10,fontFamily:"monospace",color:"#aaa",marginBottom:8}}>
-          <div style={{color:"#f39c12",fontWeight:700,marginBottom:4}}>🔧 Debug próximo partido</div>
-          <div>teamName: <b style={{color:"#fff"}}>{teamData?.teamName||"(vacío)"}</b></div>
-          <div>competencias: <b style={{color:"#fff"}}>{JSON.stringify(teamData?.competencias||[])}</b></div>
-          <div>comps encontrados: <b style={{color:"#fff"}}>{comps.length}</b></div>
-          {comps.map(comp=>{
-            const fx=competenciaData?.[comp.id]?.fixture||{};
-            const jornadas=Object.entries(fx);
-            return(
-              <div key={comp.id} style={{marginTop:4,borderTop:"1px solid #333",paddingTop:4}}>
-                <div style={{color:"#4ecdc4"}}>{comp.id}: {jornadas.length} jornadas</div>
-                {jornadas.slice(0,2).map(([jk,jr])=>{
-                  const lista=Array.isArray(jr)?jr:(jr?.partidos||[]);
-                  return(
-                    <div key={jk} style={{marginLeft:8}}>
-                      <div>{jk}: {lista.length} partidos</div>
-                      {lista.slice(0,2).map((p,i)=>(
-                        <div key={i} style={{marginLeft:8,color:"#ccc"}}>
-                          "{p.local}" vs "{p.visitante}" {p.marcador?"✅":"⏳"}
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })}
-          <div style={{marginTop:4,borderTop:"1px solid #333",paddingTop:4,color:siguientePartido?"#2ecc71":"#e74c3c"}}>
-            siguientePartido: {siguientePartido?JSON.stringify(siguientePartido):"null — no encontrado"}
-          </div>
-        </div>
 
         {siguientePartido&&(
           <>
