@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, Fragment } from "react";
 import { auth, db } from "./firebase";
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile } from "firebase/auth";
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile, sendPasswordResetEmail } from "firebase/auth";
 import { doc, getDoc, setDoc, updateDoc, onSnapshot, collection, getDocs, deleteDoc, addDoc, serverTimestamp, deleteField } from "firebase/firestore";
 
 // Expose db for admin import scripts
@@ -260,6 +260,22 @@ function AuthScreen({onAuth}){
   const[confirmPw,setConfirmPw]=useState("");
   const[loading,setLoading]=useState(false);
   const[error,setError]=useState("");
+  const[resetSent,setResetSent]=useState(false);
+  const[resetLoading,setResetLoading]=useState(false);
+
+  const handleForgotPassword=async()=>{
+    setError("");
+    if(!email.trim()){setError("Escribe tu correo arriba primero.");return;}
+    setResetLoading(true);
+    try{
+      await sendPasswordResetEmail(auth,email.trim());
+      setResetSent(true);
+    }catch(e){
+      const msgs={"auth/invalid-email":"Email inválido.","auth/user-not-found":"No existe cuenta con ese correo."};
+      setError(msgs[e.code]||"Error: "+e.message);
+    }
+    setResetLoading(false);
+  };
 
   const handleSubmit=async()=>{
     setError("");setLoading(true);
@@ -314,6 +330,16 @@ function AuthScreen({onAuth}){
         <input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="correo@ejemplo.com" style={inp} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.borderDark} onKeyDown={e=>e.key==="Enter"&&handleSubmit()}/>
         <label style={{fontSize:11,fontWeight:600,color:C.textLight,display:"block",marginBottom:5,textTransform:"uppercase",letterSpacing:0.5,fontFamily:"'DM Sans',sans-serif"}}>Contraseña</label>
         <input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="Mínimo 6 caracteres" style={inp} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.borderDark} onKeyDown={e=>e.key==="Enter"&&handleSubmit()}/>
+        {mode==="login"&&(
+          <div style={{textAlign:"right",marginTop:-6,marginBottom:4}}>
+            {resetSent
+              ?<span style={{fontSize:11,color:"#27ae60",fontFamily:"'DM Sans',sans-serif",fontWeight:600}}>✓ Correo enviado</span>
+              :<button onClick={handleForgotPassword} disabled={resetLoading} style={{background:"none",border:"none",color:C.textLight,fontSize:11,fontFamily:"'DM Sans',sans-serif",cursor:"pointer",textDecoration:"underline",padding:0}}>
+                {resetLoading?"Enviando…":"¿Olvidaste tu contraseña?"}
+              </button>
+            }
+          </div>
+        )}
         {mode==="register"&&(
           <><label style={{fontSize:11,fontWeight:600,color:C.textLight,display:"block",marginBottom:5,textTransform:"uppercase",letterSpacing:0.5,fontFamily:"'DM Sans',sans-serif"}}>Confirmar contraseña</label>
           <input type="password" value={confirmPw} onChange={e=>setConfirmPw(e.target.value)} placeholder="Repite la contraseña" style={{...inp,marginBottom:0}} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.borderDark} onKeyDown={e=>e.key==="Enter"&&handleSubmit()}/></>
@@ -1771,28 +1797,33 @@ function PronosticosAdmin({setAiMsg,allTeams}){
 
   const generarDestacados=async()=>{
     if(!jKey){setAiMsg("❌ Selecciona una jornada");return;}
-    const jornada=fixture[jKey];
-    if(!jornada||(jornada.partidos||[]).length===0){setAiMsg("❌ Esta jornada no tiene partidos");return;}
+    const jornadaRaw=fixture[jKey];
+    // El fixture puede ser array [{local,visitante}] o {nombre,partidos:[...]}
+    const partidosJornada=Array.isArray(jornadaRaw)?jornadaRaw:(jornadaRaw?.partidos||[]);
+    const nombreJornada=Array.isArray(jornadaRaw)?(jKey.replace(/_/g," ")):(jornadaRaw?.nombre||jKey.replace(/_/g," "));
+    if(!jornadaRaw||partidosJornada.length===0){setAiMsg("❌ Esta jornada no tiene partidos");return;}
     setGenerando(true);
     try{
       const grupos=competenciaData?.[compId]?.grupos||[];
       const tabla=grupos[0]?.tabla||[];
-      const destacados=await elegirPartidosDestacados(jornada.partidos,tabla,4,allTeams||[]);
+      const destacados=await elegirPartidosDestacados(partidosJornada,tabla,4,allTeams||[]);
       if(destacados.length===0){setAiMsg("❌ No se pudo determinar partidos destacados");setGenerando(false);return;}
       const ref=doc(db,"config","pronosticos");
       const snap=await getDoc(ref).catch(()=>null);
       const current=snap?.exists()?snap.data():{};
       const nuevo={
-        compId,jKey,jornadaNombre:jornada.nombre||jKey,
+        compId,jKey,jornadaNombre:nombreJornada,
         destacados,predicciones:{},resultados:{},
         creado:new Date().toISOString(),
       };
       await setDoc(ref,{...current,[`${compId}_${jKey}`]:nuevo},{merge:true});
       const comp=COMPETENCIAS_AVAILABLE.find(c=>c.id===compId);
-      await addNoticia(`🔮 ¡Ya puedes pronosticar! ${jornada.nombre||jKey} de ${comp?.name||compId}: ${destacados.map(d=>`${d.local} vs ${d.visitante}`).join(", ")}`,"🔮");
+      await addNoticia(`🔮 ¡Ya puedes pronosticar! ${nombreJornada} de ${comp?.name||compId}: ${destacados.map(d=>`${d.local} vs ${d.visitante}`).join(", ")}`,"🔮");
       setAiMsg("✅ Partidos destacados generados — los presidentes ya pueden pronosticar");
     }catch(e){
-      setAiMsg("❌ Error: "+e.message);
+      const msg="❌ Error: "+e.message;
+      setAiMsg(msg);
+      alert(msg); // fallback para que sea visible siempre
     }
     setGenerando(false);
   };
@@ -5400,31 +5431,32 @@ function HomeScreen({teamData,onSelect,isAdmin,allTeams,onOpenMundial,onOpenNoti
   // Encuentra el siguiente partido sin jugar del equipo, en CUALQUIER competencia inscrita
   const siguientePartido=(()=>{
     if(!teamData?.teamName) return null;
-    // Busca en todas las competencias del equipo, toma el primer partido sin marcador de cada una
-    // y se queda con el de menor número de jornada/semana detectado (el más cercano)
     let candidatos=[];
     for(const comp of comps){
       const fixture=competenciaData?.[comp.id]?.fixture||{};
       const jornadasOrdenadas=Object.entries(fixture).sort((a,b)=>{
-        const numA=parseInt((a[1].nombre||a[0]).match(/\d+/)?.[0]||"0");
-        const numB=parseInt((b[1].nombre||b[0]).match(/\d+/)?.[0]||"0");
+        const numA=parseInt(a[0].replace(/_/g," ").match(/\d+/)?.[0]||"0");
+        const numB=parseInt(b[0].replace(/_/g," ").match(/\d+/)?.[0]||"0");
         return numA-numB;
       });
       const myName=(teamData.teamName||"").trim().toLowerCase();
-      for(const [jkey,jornada] of jornadasOrdenadas){
-        const partido=(jornada.partidos||[]).find(p=>{
+      for(const [jkey,jornadaRaw] of jornadasOrdenadas){
+        // El fixture puede ser un array [{local,visitante}] o un objeto {nombre,partidos:[...]}
+        const listaPartidos=Array.isArray(jornadaRaw)?jornadaRaw:(jornadaRaw?.partidos||[]);
+        const nombreJornada=Array.isArray(jornadaRaw)?(jkey.replace(/_/g," ")):(jornadaRaw?.nombre||jkey.replace(/_/g," "));
+        const partido=listaPartidos.find(p=>{
           const loc=(p.local||"").trim().toLowerCase();
           const vis=(p.visitante||"").trim().toLowerCase();
           return (loc===myName||vis===myName)&&!p.marcador;
         });
         if(partido){
-          const numJornada=parseInt((jornada.nombre||jkey).match(/\d+/)?.[0]||"999");
+          const numJornada=parseInt(nombreJornada.match(/\d+/)?.[0]||"999");
           candidatos.push({
             rival:partido.local.trim().toLowerCase()===myName?partido.visitante:partido.local,
             esLocal:partido.local.trim().toLowerCase()===myName,
-            jornada:jornada.nombre||jkey,liga:comp.name,numJornada
+            jornada:nombreJornada,liga:comp.name,numJornada
           });
-          break; // solo el primero sin jugar de esta competencia
+          break;
         }
       }
     }
@@ -9078,6 +9110,17 @@ function MainApp({user,isAdmin,onLogout}){
   const[showAdminMenu,setShowAdminMenu]=useState(false);
   const[showMercado,setShowMercado]=useState(false);
   const[mercadoAbierto,setMercadoAbierto]=useState(true);
+  const[myTeamDocId,setMyTeamDocId]=useState(user.uid);
+  useEffect(()=>{
+    const resolve=async()=>{
+      const direct=await getDoc(doc(db,"teams",user.uid)).catch(()=>null);
+      if(direct?.exists()&&direct.data().uid===user.uid){setMyTeamDocId(user.uid);return;}
+      const all=await getDocs(collection(db,"teams")).catch(()=>null);
+      const found=all?.docs.find(d=>d.data().uid===user.uid);
+      if(found) setMyTeamDocId(found.id);
+    };
+    resolve();
+  },[user.uid]);
   useEffect(()=>{
     const unsub=onSnapshot(doc(db,"config","settings"),snap=>{
       setMercadoAbierto(!(snap.exists()&&snap.data().mercadoAbierto===false));
@@ -9133,7 +9176,8 @@ function MainApp({user,isAdmin,onLogout}){
   const dragFromPosId=useRef(null);
 
   useEffect(()=>{
-    const ref=doc(db,"teams",user.uid);
+    if(!myTeamDocId) return;
+    const ref=doc(db,"teams",myTeamDocId);
     let saveScheduled=false;
     const unsub=onSnapshot(ref,snap=>{
       if(snap.exists()){
@@ -9178,7 +9222,7 @@ function MainApp({user,isAdmin,onLogout}){
       }
     });
     return unsub;
-  },[user.uid]);
+  },[myTeamDocId]);
 
   useEffect(()=>{
     if(!user) return;
@@ -9230,7 +9274,7 @@ function MainApp({user,isAdmin,onLogout}){
 
   const saveTeam=async patch=>{
     setSaving(true);
-    await updateDoc(doc(db,"teams",user.uid),patch);
+    await updateDoc(doc(db,"teams",myTeamDocId||user.uid),patch);
     if(patch.teamName){
       try{
         const pSnap=await getDoc(doc(db,"pool","players"));
@@ -9768,7 +9812,10 @@ function MainApp({user,isAdmin,onLogout}){
                   <div style={{marginTop:10}}><Top10ManualAdmin allTeams={allTeams} setAiMsg={setAiMsg}/></div>
                 )}
                 {seccionAdminActiva==="pronosticos"&&(
-                  <div style={{marginTop:10}}><PronosticosAdmin setAiMsg={setAiMsg} allTeams={allTeams}/></div>
+                  <div style={{marginTop:10,display:"flex",flexDirection:"column",gap:8}}>
+                    <PronosticosAdmin setAiMsg={setAiMsg} allTeams={allTeams}/>
+                    {aiMsg&&<div style={{padding:"7px 10px",borderRadius:8,background:C.inputBg,border:`1px solid ${C.border}`,fontSize:11,color:C.textMid,fontFamily:"'DM Sans',sans-serif"}}>{aiMsg}</div>}
+                  </div>
                 )}
               </div>
               {/* Collapsible teams list */}
