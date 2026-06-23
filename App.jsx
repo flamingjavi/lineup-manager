@@ -8292,10 +8292,11 @@ function CompVistaPublica({comp,competenciaData,onClose,teamData,onAbrirChatGrup
 // ─── ADMIN: Historial completo de pronósticos (solo lectura + edición de puntos) ──
 function HistorialPronosticosAdmin(){
   const[pronosticos,setPronosticos]=useState({});
-  const[expandido,setExpandido]=useState(null); // equipo expandido
-  const[editando,setEditando]=useState(null); // {clave, equipo, jornada}
+  const[expandido,setExpandido]=useState(null);
+  const[editando,setEditando]=useState(null);
   const[nuevoPts,setNuevoPts]=useState("");
   const[guardando,setGuardando]=useState(false);
+  const[seccion,setSeccion]=useState("pendientes");
 
   useEffect(()=>{
     const unsub=onSnapshot(doc(db,"config","pronosticos"),snap=>{
@@ -8304,28 +8305,7 @@ function HistorialPronosticosAdmin(){
     return unsub;
   },[]);
 
-  // Totales por equipo sumando todas las jornadas
-  const totales={};
-  const detallePorEquipo={}; // {equipo: [{clave, jornada, comp, pts, predicciones, resultados, destacados}]}
-
-  Object.entries(pronosticos).forEach(([clave,p])=>{
-    if(!p?.destacados) return;
-    Object.entries(p.puntosAcumulados||{}).forEach(([equipo,pts])=>{
-      totales[equipo]=(totales[equipo]||0)+pts;
-      if(!detallePorEquipo[equipo]) detallePorEquipo[equipo]=[];
-      detallePorEquipo[equipo].push({
-        clave,
-        jornada:p.jornadaNombre||clave,
-        compId:p.compId,
-        pts,
-        destacados:p.destacados||[],
-        predicciones:p.predicciones||{},
-        resultados:p.resultados||{},
-      });
-    });
-  });
-
-  const ranking=Object.entries(totales).map(([equipo,pts])=>({equipo,pts})).sort((a,b)=>b.pts-a.pts);
+  const COMP_LABELS={"liga1":"Neo League","liga2":"EC","ascenso":"Brave League","copa":"Copa","champions":"Champions","europa":"Europa","copaascenso":"Brave Cup"};
 
   const guardarEdicion=async()=>{
     if(!editando||nuevoPts===""||isNaN(Number(nuevoPts))) return;
@@ -8343,92 +8323,129 @@ function HistorialPronosticosAdmin(){
     setEditando(null);setNuevoPts("");setGuardando(false);
   };
 
-  const COMP_LABELS={"liga1":"Neo League","liga2":"EC","ascenso":"Brave League","copa":"Copa","champions":"Champions","europa":"Europa","copaascenso":"Brave Cup"};
+  const jornadaCompleta=(p)=>{
+    const d=p?.destacados||[];
+    if(d.length===0) return false;
+    return d.every(x=>!!(p.resultados||{})[`${x.local}__${x.visitante}`]);
+  };
+
+  const jornadaPendiente=(p)=>{
+    return Object.keys(p?.predicciones||{}).length>0&&!jornadaCompleta(p);
+  };
+
+  const entradasPendientes=Object.entries(pronosticos).filter(([,p])=>p?.destacados&&jornadaPendiente(p));
+  const entradasCompletadas=Object.entries(pronosticos).filter(([,p])=>p?.destacados&&jornadaCompleta(p));
+
+  const renderJornadas=(entradas)=>{
+    if(entradas.length===0) return(
+      <div style={{textAlign:"center",color:C.textFaint,fontSize:11,fontFamily:"'DM Sans',sans-serif",padding:"16px 0"}}>
+        Sin jornadas en esta sección
+      </div>
+    );
+    return entradas.map(([clave,p])=>{
+      const abierto=expandido===clave;
+      const comp=COMP_LABELS[p.compId]||p.compId||"";
+      const totalPredictores=new Set(Object.keys(p.predicciones||{}).map(k=>k.split("__")[0])).size;
+      const totalResultados=Object.keys(p.resultados||{}).length;
+      const totalDestacados=(p.destacados||[]).length;
+      return(
+        <div key={clave} style={{borderBottom:`1px solid ${C.border}`}}>
+          <div onClick={()=>setExpandido(abierto?null:clave)}
+            style={{display:"flex",alignItems:"center",gap:8,padding:"10px 6px",cursor:"pointer",background:abierto?C.accentLight:"transparent"}}>
+            <div style={{flex:1}}>
+              <div style={{fontSize:12,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{p.jornadaNombre||clave}</div>
+              <div style={{fontSize:9,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>{comp} · {totalPredictores} equipos · {totalResultados}/{totalDestacados} resultados</div>
+            </div>
+            <span style={{fontSize:11,color:C.textFaint}}>{abierto?"▲":"▼"}</span>
+          </div>
+          {abierto&&(
+            <div style={{padding:"6px 10px 10px",background:C.card,display:"flex",flexDirection:"column",gap:6}}>
+              {Object.entries(
+                Object.entries(p.predicciones||{}).reduce((acc,[key,pred])=>{
+                  const equipo=key.split("__")[0];
+                  if(!acc[equipo]) acc[equipo]=[];
+                  const partes=key.split("__");
+                  acc[equipo].push({local:partes[1],visitante:partes[2],pred});
+                  return acc;
+                },{})
+              ).sort((a,b)=>((p.puntosAcumulados||{})[b[0]]??-1)-((p.puntosAcumulados||{})[a[0]]??-1))
+              .map(([equipo,preds])=>{
+                const pts=(p.puntosAcumulados||{})[equipo];
+                const editandoEste=editando?.clave===clave&&editando?.equipo===equipo;
+                return(
+                  <div key={equipo} style={{background:C.inputBg,borderRadius:8,padding:"8px 10px",border:`1px solid ${C.border}`}}>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:5}}>
+                      <span style={{fontSize:11,fontWeight:800,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{equipo}</span>
+                      {editandoEste?(
+                        <div style={{display:"flex",alignItems:"center",gap:5}}>
+                          <input type="number" value={nuevoPts} onChange={e=>setNuevoPts(e.target.value)} autoFocus
+                            style={{width:46,padding:"3px 6px",borderRadius:6,border:"1.5px solid #8e44ad",background:C.card,color:C.text,fontSize:11,textAlign:"center"}}/>
+                          <button onClick={guardarEdicion} disabled={guardando}
+                            style={{padding:"3px 8px",borderRadius:6,background:"#8e44ad",color:"#fff",border:"none",fontSize:10,fontWeight:700,cursor:"pointer"}}>
+                            {guardando?"…":"✓"}
+                          </button>
+                          <button onClick={()=>{setEditando(null);setNuevoPts("");}}
+                            style={{padding:"3px 7px",borderRadius:6,background:"none",border:`1px solid ${C.border}`,color:C.textFaint,fontSize:10,cursor:"pointer"}}>✕</button>
+                        </div>
+                      ):(
+                        <div style={{display:"flex",alignItems:"center",gap:6}}>
+                          {pts!==undefined&&<span style={{fontWeight:800,fontSize:12,color:"#8e44ad"}}>{pts} pts</span>}
+                          <button onClick={e=>{e.stopPropagation();setEditando({clave,equipo});setNuevoPts(pts!==undefined?String(pts):"0");}}
+                            style={{padding:"2px 7px",borderRadius:6,background:"transparent",border:`1px solid ${C.border}`,color:C.textFaint,fontSize:10,cursor:"pointer"}}>
+                            ✏️ Editar
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    {(p.destacados||[]).map((dest,pi)=>{
+                      const predEste=preds.find(x=>x.local===dest.local&&x.visitante===dest.visitante);
+                      const res=(p.resultados||{})[`${dest.local}__${dest.visitante}`];
+                      let badge=null;
+                      if(res&&predEste){
+                        const realR=res.golesLocal>res.golesVisitante?"L":res.golesVisitante>res.golesLocal?"V":"E";
+                        const predR=predEste.pred.golesLocal>predEste.pred.golesVisitante?"L":predEste.pred.golesVisitante>predEste.pred.golesLocal?"V":"E";
+                        const aciertaM=predEste.pred.golesLocal===res.golesLocal&&predEste.pred.golesVisitante===res.golesVisitante;
+                        badge=aciertaM?(dest.especial?"⭐M+R":"✅M+R"):predR===realR?"🟡R":"❌";
+                      }
+                      return(
+                        <div key={pi} style={{display:"flex",alignItems:"center",gap:5,padding:"2px 0",borderTop:pi>0?`1px solid ${C.border}`:"none",fontSize:10,fontFamily:"'DM Sans',sans-serif"}}>
+                          <span style={{fontSize:9,minWidth:12}}>{dest.especial?"⭐":"·"}</span>
+                          <span style={{flex:1,color:C.textLight,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{dest.local} vs {dest.visitante}</span>
+                          <span style={{color:predEste?"#8e44ad":C.textFaint,fontWeight:predEste?700:400}}>
+                            {predEste?`${predEste.pred.golesLocal}-${predEste.pred.golesVisitante}`:"—"}
+                          </span>
+                          {res&&<span style={{color:"#888",fontSize:9}}>({res.golesLocal}-{res.golesVisitante})</span>}
+                          {badge&&<span style={{fontSize:9,fontWeight:800}}>{badge}</span>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+              {Object.keys(p.predicciones||{}).length===0&&(
+                <div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",textAlign:"center",padding:"8px 0"}}>Ningún equipo ha pronosticado aún</div>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    });
+  };
 
   return(
     <div style={{display:"flex",flexDirection:"column",gap:0,marginTop:8}}>
-      <div style={{fontSize:10,fontWeight:700,color:"#8e44ad",fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}}>
-        📋 Historial completo — {ranking.length} equipos
+      <div style={{display:"flex",borderBottom:`2px solid ${C.border}`,marginBottom:8}}>
+        <button onClick={()=>setSeccion("pendientes")}
+          style={{flex:1,padding:"8px 4px",background:"none",border:"none",borderBottom:seccion==="pendientes"?"3px solid #8e44ad":"3px solid transparent",cursor:"pointer",fontSize:11,fontWeight:700,color:seccion==="pendientes"?"#8e44ad":C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>
+          ⏳ Sin resultado ({entradasPendientes.length})
+        </button>
+        <button onClick={()=>setSeccion("completados")}
+          style={{flex:1,padding:"8px 4px",background:"none",border:"none",borderBottom:seccion==="completados"?"3px solid #27ae60":"3px solid transparent",cursor:"pointer",fontSize:11,fontWeight:700,color:seccion==="completados"?"#27ae60":C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>
+          ✅ Con resultado ({entradasCompletadas.length})
+        </button>
       </div>
-      {ranking.length===0&&(
-        <div style={{textAlign:"center",color:C.textFaint,fontSize:11,fontFamily:"'DM Sans',sans-serif",padding:"20px 0"}}>
-          Sin datos de pronósticos todavía
-        </div>
-      )}
-      {ranking.map((r,i)=>{
-        const detalles=detallePorEquipo[r.equipo]||[];
-        const abierto=expandido===r.equipo;
-        const medal=i===0?"🥇":i===1?"🥈":i===2?"🥉":`${i+1}.`;
-        return(
-          <div key={r.equipo} style={{borderBottom:`1px solid ${C.border}`}}>
-            {/* Fila del equipo */}
-            <div onClick={()=>setExpandido(abierto?null:r.equipo)}
-              style={{display:"flex",alignItems:"center",gap:8,padding:"9px 6px",cursor:"pointer",background:abierto?C.accentLight:"transparent"}}>
-              <span style={{fontSize:13,minWidth:22,textAlign:"center"}}>{medal}</span>
-              <span style={{flex:1,fontSize:12,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{r.equipo}</span>
-              <span style={{fontWeight:900,fontSize:14,color:"#8e44ad",fontFamily:"'Bebas Neue',sans-serif"}}>{r.pts} pts</span>
-              <span style={{fontSize:11,color:C.textFaint}}>{abierto?"▲":"▼"}</span>
-            </div>
-            {/* Desglose expandido */}
-            {abierto&&(
-              <div style={{padding:"6px 10px 10px",background:C.card,display:"flex",flexDirection:"column",gap:8}}>
-                {detalles.length===0&&<div style={{fontSize:10,color:C.textFaint,fontFamily:"'DM Sans',sans-serif"}}>Sin predicciones registradas</div>}
-                {detalles.map((d,di)=>{
-                  const editandoEste=editando?.clave===d.clave&&editando?.equipo===r.equipo;
-                  return(
-                    <div key={di} style={{background:C.inputBg,borderRadius:8,padding:"8px 10px",border:`1px solid ${C.border}`}}>
-                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
-                        <div>
-                          <span style={{fontSize:10,fontWeight:800,color:"#8e44ad",fontFamily:"'DM Sans',sans-serif"}}>{d.jornada}</span>
-                          <span style={{fontSize:9,color:C.textFaint,fontFamily:"'DM Sans',sans-serif",marginLeft:5}}>{COMP_LABELS[d.compId]||d.compId}</span>
-                        </div>
-                        {editandoEste?(
-                          <div style={{display:"flex",alignItems:"center",gap:5}}>
-                            <input type="number" value={nuevoPts} onChange={e=>setNuevoPts(e.target.value)} autoFocus
-                              style={{width:48,padding:"3px 6px",borderRadius:6,border:`1px solid #8e44ad`,background:C.card,color:C.text,fontSize:11,textAlign:"center"}}/>
-                            <button onClick={guardarEdicion} disabled={guardando}
-                              style={{padding:"3px 8px",borderRadius:6,background:"#8e44ad",color:"#fff",border:"none",fontSize:10,fontWeight:700,cursor:"pointer"}}>
-                              {guardando?"…":"✓"}
-                            </button>
-                            <button onClick={()=>{setEditando(null);setNuevoPts("");}}
-                              style={{padding:"3px 7px",borderRadius:6,background:"none",border:`1px solid ${C.border}`,color:C.textFaint,fontSize:10,cursor:"pointer"}}>
-                              ✕
-                            </button>
-                          </div>
-                        ):(
-                          <div style={{display:"flex",alignItems:"center",gap:6}}>
-                            <span style={{fontWeight:800,fontSize:13,color:"#8e44ad"}}>{d.pts} pts</span>
-                            <button onClick={e=>{e.stopPropagation();setEditando({clave:d.clave,equipo:r.equipo});setNuevoPts(String(d.pts));}}
-                              style={{padding:"2px 8px",borderRadius:6,background:"transparent",border:`1px solid ${C.border}`,color:C.textFaint,fontSize:10,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
-                              ✏️ Editar
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                      {/* Predicciones partido por partido */}
-                      {d.destacados.map((partido,pi)=>{
-                        const pKey=`${r.equipo}__${partido.local}__${partido.visitante}`;
-                        const pred=d.predicciones[pKey];
-                        const res=d.resultados[`${partido.local}__${partido.visitante}`];
-                        return(
-                          <div key={pi} style={{display:"flex",alignItems:"center",gap:6,padding:"3px 0",borderTop:pi>0?`1px solid ${C.border}`:"none",fontSize:10,fontFamily:"'DM Sans',sans-serif"}}>
-                            <span style={{fontSize:9}}>{partido.especial?"⭐":"🔵"}</span>
-                            <span style={{flex:1,color:C.textLight}}>{partido.local} vs {partido.visitante}</span>
-                            <span style={{color:pred?"#8e44ad":C.textFaint,fontWeight:pred?700:400}}>
-                              {pred?`${pred.golesLocal}-${pred.golesVisitante}`:"—"}
-                            </span>
-                            {res&&<span style={{color:"#27ae60",fontWeight:700}}>({res.golesLocal}-{res.golesVisitante})</span>}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        );
-      })}
+      {seccion==="pendientes"&&renderJornadas(entradasPendientes)}
+      {seccion==="completados"&&renderJornadas(entradasCompletadas)}
     </div>
   );
 }
