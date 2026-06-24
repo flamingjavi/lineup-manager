@@ -8830,7 +8830,18 @@ function MasPopup({isAdmin,teamColor,onClose,onOpenMundial,onOpenAjustes,onAnali
     {label:"Once ideal",sub:"Optimiza tu alineación",icon:"✨",grad:"linear-gradient(140deg,#c9a227,#a8841d)",onClick:()=>onAnalisis&&onAnalisis("ideal")},
     {label:"Radar de mercado",sub:"Joyas para tu punto débil",icon:"💎",grad:"linear-gradient(140deg,#1e8c52,#0f5b32)",onClick:()=>onAnalisis&&onAnalisis("radar")},
     {label:"Tu temporada",sub:"Resumen para compartir",icon:"🏅",grad:"linear-gradient(140deg,#b54a6b,#5a1f30)",onClick:()=>onAnalisis&&onAnalisis("temporada")},
+    {label:"Novedades",sub:"Lo que pasa en tu liga",icon:"🔔",grad:"linear-gradient(140deg,#7c4fb0,#3a1e4a)",onClick:()=>onAnalisis&&onAnalisis("novedades")},
+    {label:"Crónica IA",sub:"Resumen de la jornada",icon:"✨",grad:"linear-gradient(140deg,#3a5fa8,#16284a)",onClick:()=>onAnalisis&&onAnalisis("cronica")},
+    {label:"Scout IA",sub:"Busca fichajes en lenguaje natural",icon:"🔎",grad:"linear-gradient(140deg,#16a085,#0c4a40)",onClick:()=>onAnalisis&&onAnalisis("scout")},
+    {label:"Subastas",sub:"Pujas en vivo por libres",icon:"🔨",grad:"linear-gradient(140deg,#d67a2a,#a8641f)",onClick:()=>onAnalisis&&onAnalisis("subastas")},
+    {label:"Cuadro de Copa",sub:"Fase final y eliminatorias",icon:"🏆",grad:"linear-gradient(140deg,#8e44ad,#4c1d95)",onClick:()=>onAnalisis&&onAnalisis("copa")},
+    {label:"Récords del club",sub:"Insignias y marcas",icon:"🔥",grad:"linear-gradient(140deg,#c23b4f,#5a1f2a)",onClick:()=>onAnalisis&&onAnalisis("records")},
+    {label:"Gala de premios",sub:"Lo mejor de la temporada",icon:"🏅",grad:"linear-gradient(140deg,#c9a227,#a8841d)",onClick:()=>onAnalisis&&onAnalisis("gala")},
     {label:"Mundial",sub:"Selecciones nacionales",icon:"🌍",grad:"linear-gradient(140deg,#7c3aed,#4c1d95)",onClick:onOpenMundial},
+    ...(isAdmin?[
+      {label:"Reglas de la liga",sub:"Configura la temporada",icon:"⚙️",grad:"linear-gradient(140deg,#3a6db5,#1f5083)",onClick:()=>onAnalisis&&onAnalisis("reglas")},
+      {label:"Salud de la liga",sub:"Estado y avisos",icon:"❤️",grad:"linear-gradient(140deg,#2b3340,#14161b)",onClick:()=>onAnalisis&&onAnalisis("salud")},
+    ]:[]),
     {label:"Ajustes",sub:"Preferencias de tu cuenta",icon:"⚙️",grad:"linear-gradient(140deg,#5a6b7d,#2c3640)",onClick:onOpenAjustes},
   ];
   return(
@@ -9256,6 +9267,564 @@ function TuTemporadaModal({teamData,squad,activeLineup,onClose}){
   ));
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// ─── FUNCIONES NUEVAS · Novedades, Crónica IA, Copa, Récords, Ficha jugador,
+//     Gala, Reglas, Salud de la liga, Scout IA, Subastas. Datos reales Firebase.
+// ═══════════════════════════════════════════════════════════════════════════
+const GEMINI_KEY_IA="AIzaSyAGlxjD12k38Xu9L-8K165iJma1ZwR7tyY";
+async function geminiTexto(prompt,maxTokens=700,temp=0.85){
+  try{
+    const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY_IA}`;
+    const resp=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:temp,maxOutputTokens:maxTokens}})});
+    if(!resp.ok) throw new Error("net");
+    const j=await resp.json();
+    return j?.candidates?.[0]?.content?.parts?.[0]?.text?.trim()||"";
+  }catch(e){ return ""; }
+}
+const COMP_IDS_TODOS=["liga1","liga2","copa","champions","europa","ascenso","copaascenso","supercopa"];
+const ligaTablaOrden=(cd,id)=>{const t=(cd?.[id]?.grupos?.[0]?.tabla)||[];return [...t].sort((a,b)=>(b.pts||0)-(a.pts||0)||((b.gf-b.gc)-(a.gf-a.gc))||((b.gf||0)-(a.gf||0)));};
+const golLista=(cd,id)=>[...((cd?.[id]?.goleadores)||[])].sort((a,b)=>(b.goles||0)-(a.goles||0));
+const asiLista=(cd,id)=>[...((cd?.[id]?.asistencias)||[])].sort((a,b)=>(b.asistencias||0)-(a.asistencias||0));
+const statsJugadorLiga=(cd,nombre)=>{let goles=0,asis=0;const n=(nombre||"").toLowerCase().trim();COMP_IDS_TODOS.forEach(id=>{(cd?.[id]?.goleadores||[]).forEach(g=>{if((g.nombre||"").toLowerCase().trim()===n)goles+=Number(g.goles)||0;});(cd?.[id]?.asistencias||[]).forEach(g=>{if((g.nombre||"").toLowerCase().trim()===n)asis+=Number(g.asistencias)||0;});});return{goles,asis};};
+const iniciales=s=>(s||"").trim().split(/\s+/).map(w=>w[0]).join("").slice(0,3).toUpperCase()||"--";
+
+// ─── A · NOVEDADES (notificaciones inteligentes con datos reales) ────────────
+function NovedadesModal({teamData,squad,activeLineup,allTeams,competenciaData,mercadoAbierto,onClose,onVerJugador}){
+  const[filter,setFilter]=useState("todas");
+  const[read,setRead]=useState({});
+  const a=analizarOnce(activeLineup,squad);
+  const myName=teamData?.teamName;
+  const tabla=ligaTablaOrden(competenciaData,"liga1");
+  const myRank=tabla.findIndex(r=>r.equipo===myName);
+  const topGol=golLista(competenciaData,"liga1")[0];
+  const topAsi=asiLista(competenciaData,"liga1")[0];
+  const conOv=(squad||[]).filter(p=>p.overall);
+  const mejor=conOv.length?[...conOv].sort((x,y)=>y.overall-x.overall)[0]:null;
+  const all=[];
+  if(a.total-a.filled>0) all.push({id:"al",cat:"partido",icon:"⚠",color:"#c0392b",bg:"rgba(192,57,43,0.09)",text:`Te faltan ${a.total-a.filled} titulares por colocar en tu once.`,time:"Ahora"});
+  if(myRank>=0) all.push({id:"rk",cat:"partido",icon:"🏆",color:C.accent,bg:C.goldLight,text:`Vas ${myRank+1}º en la Neo League con ${tabla[myRank].pts} pts (${tabla[myRank].pg||0}G ${tabla[myRank].pe||0}E ${tabla[myRank].pp||0}P).`,time:"Tabla actual"});
+  all.push(mercadoAbierto
+    ?{id:"mk",cat:"mercado",icon:"⏱",color:"#e0a04a",bg:"rgba(224,160,74,0.10)",text:`El mercado está abierto. Tu saldo: ${teamData?.presupuesto!=null?fmtPresu(teamData.presupuesto):"—"}.`,time:"Hoy"}
+    :{id:"mk",cat:"mercado",icon:"🔒",color:C.textLight,bg:C.inputBg,text:"El mercado está cerrado por ahora.",time:"Hoy"});
+  if(topGol) all.push({id:"tg",cat:"jugador",icon:"🔥",color:"#e0726a",bg:"rgba(224,114,106,0.09)",text:`${topGol.nombre} lidera la tabla de goleadores con ${topGol.goles} goles.`,time:"Liga"});
+  if(topAsi) all.push({id:"ta",cat:"jugador",icon:"🎯",color:"#5C9AD6",bg:"rgba(92,154,214,0.09)",text:`${topAsi.nombre} manda en asistencias (${topAsi.asistencias}).`,time:"Liga"});
+  if(mejor) all.push({id:"mj",cat:"jugador",icon:"⭐",color:C.accent,bg:C.goldLight,text:`${mejor.name} (${mejor.overall}) es tu jugador con mejor media. Toca para ver su ficha.`,time:"Plantilla",player:mejor});
+  const f=filter;
+  const visibles=(f==="todas"?all:all.filter(x=>x.cat===f)).map(n=>({...n,unread:!read[n.id]}));
+  const unread=all.filter(x=>!read[x.id]).length;
+  const fdefs=[["todas","Todas"],["partido","Partido"],["mercado","Mercado"],["jugador","Jugadores"]];
+  return anaShell("NOVEDADES",onClose,(
+    <div>
+      <div style={{padding:"12px 16px 4px",display:"flex",alignItems:"center",gap:8}}>
+        <span style={{fontSize:11,color:C.textLight,fontWeight:700}}>{unread} sin leer</span>
+        <button onClick={()=>{const r={};all.forEach(x=>r[x.id]=true);setRead(r);}} style={{marginLeft:"auto",fontSize:11,fontWeight:700,color:C.accentDark,background:C.goldLight,border:`1px solid ${C.accent}44`,borderRadius:9,padding:"6px 11px",cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>Leer todo</button>
+      </div>
+      <div style={{display:"flex",gap:7,padding:"8px 16px 4px",overflowX:"auto"}}>
+        {fdefs.map(([id,label])=>{const act=id===f;return(
+          <button key={id} onClick={()=>setFilter(id)} style={{flexShrink:0,fontSize:11,fontWeight:700,padding:"7px 13px",borderRadius:20,cursor:"pointer",border:`1.5px solid ${act?C.accent:C.borderDark}`,background:act?C.goldLight:C.inputBg,color:act?C.accentDark:C.textMid,fontFamily:"'DM Sans',sans-serif"}}>{label}</button>
+        );})}
+      </div>
+      <div style={{padding:"8px 16px 18px",display:"flex",flexDirection:"column",gap:9}}>
+        {visibles.length===0&&<div style={{textAlign:"center",color:C.textFaint,fontSize:12,padding:24}}>Nada por aquí todavía.</div>}
+        {visibles.map(n=>(
+          <div key={n.id} onClick={()=>{setRead(r=>({...r,[n.id]:true}));if(n.player)onVerJugador&&onVerJugador(n.player);}} style={{display:"flex",gap:11,padding:"12px 13px",borderRadius:14,cursor:"pointer",background:n.unread?n.bg:C.card,border:`1px solid ${n.unread?C.accent+"33":C.border}`}}>
+            <div style={{width:38,height:38,borderRadius:11,background:C.inputBg,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:18,color:n.color}}>{n.icon}</div>
+            <div style={{flex:1,minWidth:0}}><div style={{fontSize:12.5,fontWeight:700,color:C.text,lineHeight:1.35}}>{n.text}</div><div style={{fontSize:10,color:C.textFaint,marginTop:3}}>{n.time}</div></div>
+            {n.unread&&<div style={{width:8,height:8,borderRadius:"50%",background:C.accent,flexShrink:0,marginTop:5}}/>}
+          </div>
+        ))}
+      </div>
+    </div>
+  ));
+}
+
+// ─── B · CRÓNICA DE JORNADA IA (Gemini sobre datos reales) ───────────────────
+function CronicaJornadaModal({teamData,competenciaData,onClose}){
+  const[text,setText]=useState("");const[shown,setShown]=useState(0);const[loading,setLoading]=useState(true);const[titular,setTitular]=useState("");
+  const tabla=ligaTablaOrden(competenciaData,"liga1");
+  const topGol=golLista(competenciaData,"liga1")[0];
+  const topAsi=asiLista(competenciaData,"liga1")[0];
+  const gen=async()=>{
+    setLoading(true);setShown(0);setText("");
+    const ctx=`Liga: Neo League. Clasificación (top): ${tabla.slice(0,5).map((r,i)=>`${i+1}º ${r.equipo} ${r.pts}pts`).join("; ")||"sin datos"}. Goleador líder: ${topGol?`${topGol.nombre} (${topGol.goles} goles)`:"n/d"}. Asistente líder: ${topAsi?`${topAsi.nombre} (${topAsi.asistencias})`:"n/d"}. Equipo del lector: ${teamData?.teamName||"el equipo"}.`;
+    const prompt=`Eres un cronista deportivo. Escribe en español una crónica vibrante (90-120 palabras) de la última jornada de esta liga simulada de fútbol, usando SOLO estos datos sin inventar marcadores que contradigan la clasificación. Empieza con una línea "TITULAR: <titular corto>" y debajo la crónica.\n\nDatos: ${ctx}`;
+    let out=await geminiTexto(prompt,500,0.9);
+    if(!out){
+      out=`TITULAR: La liga se aprieta en el tramo decisivo\nLa Neo League vive una jornada de máxima tensión. ${tabla[0]?`${tabla[0].equipo} manda en lo alto con ${tabla[0].pts} puntos`:"Los de arriba aprietan"}${tabla[1]?`, perseguido de cerca por ${tabla[1].equipo}`:""}. ${topGol?`${topGol.nombre} sigue imparable como goleador con ${topGol.goles} tantos`:"Los delanteros afinan la puntería"}${topAsi?` y ${topAsi.nombre} reparte magia con ${topAsi.asistencias} asistencias`:""}. Cada punto cuenta y la emoción está servida de cara al cierre.`;
+    }
+    let body=out,head="";
+    const m=out.match(/TITULAR:\s*(.*)/i);
+    if(m){head=m[1].split("\n")[0].trim();body=out.replace(/TITULAR:.*(\n)?/i,"").trim();}
+    setTitular(head||"Crónica de la jornada");setText(body);setLoading(false);
+  };
+  useEffect(()=>{gen();},[]);
+  useEffect(()=>{if(loading||shown>=text.length)return;const id=setInterval(()=>setShown(s=>Math.min(text.length,s+2)),22);return ()=>clearInterval(id);},[loading,text,shown]);
+  const typing=!loading&&shown<text.length;
+  const highlights=[];
+  if(tabla[0]) highlights.push({icon:"🏆",color:C.accent,title:"Líder de la jornada",sub:`${tabla[0].equipo} · ${tabla[0].pts} pts`});
+  if(topGol) highlights.push({icon:"🔥",color:"#e0726a",title:"Goleador en racha",sub:`${topGol.nombre} · ${topGol.goles} goles`});
+  if(topAsi) highlights.push({icon:"🎯",color:"#5C9AD6",title:"Asistente destacado",sub:`${topAsi.nombre} · ${topAsi.asistencias} asist.`});
+  return anaShell("CRÓNICA IA",onClose,(
+    <div style={{padding:16,display:"flex",flexDirection:"column",gap:13}}>
+      <div style={{background:C.dark?"linear-gradient(135deg,#16233a,#11192a)":"linear-gradient(135deg,#eef4fb,#fbfdff)",border:`1px solid ${C.dark?"#2a4163":"#cdd9e8"}`,borderRadius:16,padding:16}}>
+        <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:10}}><span style={{fontSize:14,color:"#5C9AD6"}}>✦</span><span style={{fontSize:10,fontWeight:800,color:"#5C9AD6",letterSpacing:0.5,textTransform:"uppercase"}}>{loading?"El corresponsal IA escribe…":"Crónica generada por IA"}</span></div>
+        <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:20,color:C.text,lineHeight:1.1,marginBottom:9}}>{loading?"Redactando…":`“${titular}”`}</div>
+        <div style={{fontSize:13,color:C.textMid,lineHeight:1.6}}>{loading?"":text.slice(0,shown)}{typing&&<span style={{color:"#5C9AD6"}}>▍</span>}</div>
+      </div>
+      {highlights.length>0&&<div style={{fontSize:9,fontWeight:800,color:C.textFaint,letterSpacing:1,textTransform:"uppercase"}}>Lo más destacado</div>}
+      {highlights.map((h,i)=>(
+        <div key={i} style={{display:"flex",gap:11,alignItems:"center",padding:"12px 13px",borderRadius:13,background:C.card,border:`1px solid ${C.border}`}}>
+          <div style={{width:38,height:38,borderRadius:11,background:C.inputBg,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:18,color:h.color}}>{h.icon}</div>
+          <div style={{flex:1}}><div style={{fontSize:12,fontWeight:700,color:C.text}}>{h.title}</div><div style={{fontSize:10,color:C.textLight,marginTop:1}}>{h.sub}</div></div>
+        </div>
+      ))}
+    </div>
+  ),(
+    <button onClick={gen} disabled={loading} style={{width:"100%",border:`1px solid ${C.borderDark}`,borderRadius:13,padding:13,background:C.inputBg,color:C.text,fontFamily:"'DM Sans',sans-serif",fontSize:12.5,fontWeight:800,cursor:loading?"default":"pointer",opacity:loading?0.6:1}}>↻ Regenerar crónica</button>
+  ));
+}
+
+// ─── C · CUADRO DE COPA (derivado de clasificación de grupos) ────────────────
+function CuadroCopaModal({competenciaData,teamData,onClose}){
+  const copa=competenciaData?.copa||{};
+  const grupos=copa.grupos||[];
+  const myName=teamData?.teamName;
+  // Clasificados: 1º y 2º de cada grupo por puntos
+  const seeds=grupos.map(g=>{
+    const ord=[...(g.tabla||[])].sort((a,b)=>(b.pts||0)-(a.pts||0)||((b.gf-b.gc)-(a.gf-a.gc)));
+    return {grupo:g.nombre||"Grupo",primero:ord[0]?.equipo||null,segundo:ord[1]?.equipo||null};
+  });
+  const clasificados=seeds.flatMap(s=>[s.primero,s.segundo]).filter(Boolean);
+  // Cruces de semifinal clásicos: 1A-2B, 1B-2A
+  const ties=[];
+  if(seeds.length>=2){
+    ties.push({aName:seeds[0].primero,bName:seeds[1].segundo,note:`1º ${seeds[0].grupo} vs 2º ${seeds[1].grupo}`});
+    ties.push({aName:seeds[1].primero,bName:seeds[0].segundo,note:`1º ${seeds[1].grupo} vs 2º ${seeds[0].grupo}`});
+  }else if(seeds.length===1){
+    ties.push({aName:seeds[0].primero,bName:seeds[0].segundo,note:`Final · ${seeds[0].grupo}`});
+  }
+  const hayDatos=clasificados.length>0;
+  return anaShell("CUADRO DE COPA",onClose,(
+    <div>
+      <div style={{background:"linear-gradient(160deg,#8e44ad,#3a1e4a 92%)",padding:"18px 20px",position:"relative",overflow:"hidden"}}>
+        <div style={{position:"absolute",top:-50,right:-30,width:200,height:170,background:"radial-gradient(circle,rgba(255,255,255,0.1),transparent 70%)"}}/>
+        <div style={{position:"relative",zIndex:1}}><div style={{fontSize:9,fontWeight:800,color:"rgba(255,255,255,0.7)",letterSpacing:1,textTransform:"uppercase"}}>Copa · fase final</div><div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:24,color:"#fff",lineHeight:1.05}}>CUADRO DE ELIMINATORIAS</div></div>
+      </div>
+      {!hayDatos&&<div style={{textAlign:"center",color:C.textFaint,fontSize:12,padding:"40px 24px",lineHeight:1.6}}>Aún no hay clasificación de la Copa cargada. El cuadro aparecerá automáticamente cuando el admin registre los resultados de la fase de grupos.</div>}
+      {hayDatos&&(
+        <div style={{padding:16,display:"flex",flexDirection:"column",gap:13}}>
+          <div style={{fontSize:9,fontWeight:800,color:C.textFaint,letterSpacing:1,textTransform:"uppercase"}}>Clasificados a la fase final</div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:7}}>
+            {clasificados.map((c,i)=>{const mine=c===myName;return(<span key={i} style={{fontSize:11.5,fontWeight:700,padding:"7px 12px",borderRadius:11,border:`1.5px solid ${mine?C.accent:C.borderDark}`,background:mine?C.goldLight:C.inputBg,color:mine?C.accentDark:C.textMid}}>{c}</span>);})}
+          </div>
+          <div style={{fontSize:9,fontWeight:800,color:C.textFaint,letterSpacing:1,textTransform:"uppercase",marginTop:4}}>Cruces de semifinal</div>
+          {ties.map((t,i)=>(
+            <div key={i} style={{borderRadius:14,background:C.card,border:`1px solid ${C.border}`,overflow:"hidden"}}>
+              {[["a",t.aName],["b",t.bName]].map(([k,nm],j)=>{const mine=nm===myName;return(
+                <div key={k} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",background:mine?C.goldLight:"transparent",borderTop:j===1?`1px solid ${C.border}`:"none"}}>
+                  <div style={{width:30,height:30,borderRadius:9,background:C.accentGrad,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontFamily:"'Bebas Neue',sans-serif",fontSize:12,color:C.accentInk}}>{iniciales(nm)}</div>
+                  <span style={{flex:1,fontSize:12.5,fontWeight:mine?800:700,color:mine?C.accentDark:C.text}}>{nm||"Por definir"}</span>
+                </div>
+              );})}
+              <div style={{padding:"7px 14px",background:C.inputBg,fontSize:9.5,color:C.textLight,textAlign:"center"}}>{t.note} · cruce derivado de la clasificación</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  ));
+}
+
+// ─── D · RÉCORDS DEL CLUB ─────────────────────────────────────────────────────
+function RecordsClubModal({teamData,squad,competenciaData,onClose,onVerJugador}){
+  const conOv=(squad||[]).filter(p=>p.overall);
+  const mejor=conOv.length?[...conOv].sort((x,y)=>y.overall-x.overall)[0]:null;
+  const oro=conOv.filter(p=>Number(p.overall)>=80).length;
+  const maxOv=conOv.length?Math.max(...conOv.map(p=>Number(p.overall))):0;
+  const valor=conOv.reduce((s,p)=>s+anaValM(p.price),0);
+  const myName=teamData?.teamName;
+  const tabla=ligaTablaOrden(competenciaData,"liga1");
+  const myRow=tabla.find(r=>r.equipo===myName);
+  const myRank=tabla.findIndex(r=>r.equipo===myName);
+  // Goleador del club en la liga
+  const golesClub=golLista(competenciaData,"liga1").filter(g=>g.equipo===myName);
+  const topClubGol=golesClub[0];
+  const badges=[
+    {icon:"🛡️",title:"Plantilla de oro",sub:"11+ jugadores ≥80",on:oro>=11},
+    {icon:"⭐",title:"Estrella mundial",sub:"Un jugador ≥88",on:maxOv>=88},
+    {icon:"💰",title:"Club millonario",sub:"Plantilla ≥300M",on:valor>=300},
+    {icon:"🏆",title:"Pelea por el título",sub:"Top 3 de la liga",on:myRank>=0&&myRank<3},
+  ];
+  const records=[];
+  if(maxOv) records.push({icon:"⭐",label:"Mejor media de plantilla",detail:mejor?mejor.name:"—",value:maxOv,player:mejor});
+  records.push({icon:"💰",label:"Valor de plantilla",detail:`${conOv.length} jugadores`,value:anaFmtM(valor)});
+  records.push({icon:"🥇",label:"Titulares de oro (≥80)",detail:"En tu plantilla",value:oro});
+  if(myRow) records.push({icon:"🏆",label:"Puesto actual en liga",detail:`${myRow.pts} pts · ${myRow.gf||0} GF`,value:`${myRank+1}º`});
+  if(topClubGol) records.push({icon:"⚽",label:"Goleador del club",detail:topClubGol.nombre,value:topClubGol.goles});
+  return anaShell("RÉCORDS DEL CLUB",onClose,(
+    <div>
+      <div style={{background:"linear-gradient(160deg,#c23b4f,#4a1620 92%)",padding:"18px 20px",position:"relative",overflow:"hidden"}}>
+        <div style={{position:"absolute",top:-50,right:-30,width:200,height:170,background:"radial-gradient(circle,rgba(255,255,255,0.1),transparent 70%)"}}/>
+        <div style={{position:"relative",zIndex:1}}><div style={{fontSize:9,fontWeight:800,color:"rgba(255,255,255,0.7)",letterSpacing:1,textTransform:"uppercase"}}>{myName||"Tu club"} · histórico</div><div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:24,color:"#fff",lineHeight:1.05}}>RÉCORDS DEL CLUB</div></div>
+      </div>
+      <div style={{padding:16,display:"flex",flexDirection:"column",gap:14}}>
+        <div>
+          <div style={{fontSize:9,fontWeight:800,color:C.textFaint,letterSpacing:1,textTransform:"uppercase",marginBottom:10}}>Insignias</div>
+          <div style={{display:"flex",gap:9,flexWrap:"wrap"}}>
+            {badges.map((b,i)=>(
+              <div key={i} style={{flex:1,minWidth:"46%",background:b.on?C.goldLight:C.inputBg,border:`1px solid ${b.on?C.accent+"55":C.border}`,borderRadius:13,padding:12,display:"flex",alignItems:"center",gap:10,opacity:b.on?1:0.55}}>
+                <div style={{width:38,height:38,borderRadius:11,background:C.card,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:19,filter:b.on?"none":"grayscale(1)"}}>{b.icon}</div>
+                <div style={{minWidth:0}}><div style={{fontSize:11.5,fontWeight:800,color:C.text,lineHeight:1.2}}>{b.title}</div><div style={{fontSize:9.5,color:C.textLight,marginTop:1}}>{b.on?b.sub:"Bloqueada"}</div></div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div>
+          <div style={{fontSize:9,fontWeight:800,color:C.textFaint,letterSpacing:1,textTransform:"uppercase",marginBottom:10}}>Marcas del club</div>
+          {records.map((r,i)=>(
+            <div key={i} onClick={()=>r.player&&onVerJugador&&onVerJugador(r.player)} style={{display:"flex",alignItems:"center",gap:12,padding:"11px 13px",borderRadius:12,background:C.card,border:`1px solid ${C.border}`,marginBottom:8,cursor:r.player?"pointer":"default"}}>
+              <span style={{fontSize:18}}>{r.icon}</span>
+              <div style={{flex:1,minWidth:0}}><div style={{fontSize:12,fontWeight:700,color:C.text}}>{r.label}</div><div style={{fontSize:9.5,color:C.textFaint,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.detail}</div></div>
+              <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:20,color:C.accent}}>{r.value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  ));
+}
+
+// ─── E · FICHA / HISTORIAL DEL JUGADOR ───────────────────────────────────────
+function HistorialJugadorModal({player,teamData,competenciaData,onClose}){
+  const p=player||{};
+  const TC=getTeamColor(teamData?.teamColor);
+  const st=statsJugadorLiga(competenciaData,p.name);
+  const stats=[{v:st.goles,l:"Goles"},{v:st.asis,l:"Asist."},{v:p.overall||"—",l:"Media"}];
+  const enClub=(teamData?.squad||[]).some(s=>(s.name||"").toLowerCase()===(p.name||"").toLowerCase());
+  const timeline=[];
+  if(enClub) timeline.push({icon:"🟢",title:`En la plantilla de ${teamData?.teamName||"tu club"}`,date:p.price?`Valor ${anaFmtM(anaValM(p.price))}`:"Jugador actual"});
+  if(st.goles>0) timeline.push({icon:"⚽",title:`${st.goles} goles registrados esta temporada`,date:"Competiciones oficiales"});
+  if(st.asis>0) timeline.push({icon:"🎯",title:`${st.asis} asistencias registradas`,date:"Competiciones oficiales"});
+  if(timeline.length===0) timeline.push({icon:"📋",title:"Sin estadísticas registradas todavía",date:"Aparecerán al cargar resultados"});
+  return anaShell("FICHA DEL JUGADOR",onClose,(
+    <div>
+      <div style={{background:`linear-gradient(160deg,${TC.bg},${TC.dark} 92%)`,padding:"18px 18px 22px",position:"relative",overflow:"hidden"}}>
+        <div style={{position:"absolute",top:-50,right:-30,width:200,height:170,background:"radial-gradient(circle,rgba(255,255,255,0.1),transparent 70%)"}}/>
+        <div style={{display:"flex",alignItems:"center",gap:13,position:"relative",zIndex:1}}>
+          <div style={{width:62,height:62,borderRadius:18,background:"rgba(255,255,255,0.15)",border:"1.5px solid rgba(255,255,255,0.25)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontFamily:"'Bebas Neue',sans-serif",fontSize:24,color:"#fff"}}>{iniciales(p.name)}</div>
+          <div style={{flex:1,minWidth:0}}><div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:24,color:"#fff",lineHeight:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.name||"Jugador"}</div><div style={{fontSize:11,color:"rgba(255,255,255,0.8)",marginTop:3}}>{[anaGetP(p),p.age?`${p.age} años`:null,p.country].filter(Boolean).join(" · ")||"—"}</div></div>
+          <div style={{textAlign:"center"}}><div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:30,color:"#fff",lineHeight:0.9}}>{p.overall||"—"}</div><div style={{fontSize:8,color:"rgba(255,255,255,0.65)",letterSpacing:1}}>MEDIA</div></div>
+        </div>
+      </div>
+      <div style={{padding:16,display:"flex",flexDirection:"column",gap:15}}>
+        <div style={{display:"flex",gap:9}}>
+          {stats.map((s,i)=>(<div key={i} style={{flex:1,background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:13,padding:"12px 6px",textAlign:"center"}}><div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:24,color:C.text,lineHeight:1}}>{s.v}</div><div style={{fontSize:9,color:C.textLight,marginTop:2}}>{s.l}</div></div>))}
+        </div>
+        {p.price!=null&&(
+          <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"14px 15px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <div><div style={{fontSize:9,fontWeight:800,color:C.textFaint,letterSpacing:0.5,textTransform:"uppercase"}}>Valor de mercado</div><div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:26,color:C.accent,lineHeight:1.1}}>{anaFmtM(anaValM(p.price))}</div></div>
+            <div style={{textAlign:"right"}}><div style={{fontSize:9,color:C.textFaint}}>Posiciones</div><div style={{fontSize:12,fontWeight:700,color:C.textMid}}>{p.pos||anaGetP(p)}</div></div>
+          </div>
+        )}
+        <div>
+          <div style={{fontSize:9,fontWeight:800,color:C.textFaint,letterSpacing:1,textTransform:"uppercase",marginBottom:10}}>Trayectoria</div>
+          {timeline.map((t,i)=>(
+            <div key={i} style={{display:"flex",gap:11,alignItems:"flex-start",marginBottom:11}}><span style={{fontSize:16,marginTop:1}}>{t.icon}</span><div style={{flex:1}}><div style={{fontSize:12,fontWeight:700,color:C.text}}>{t.title}</div><div style={{fontSize:10,color:C.textFaint,marginTop:1}}>{t.date}</div></div></div>
+          ))}
+        </div>
+      </div>
+    </div>
+  ));
+}
+
+// ─── F · GALA DE PREMIOS (premios de liga + votación persistida) ─────────────
+function GalaPremiosModal({competenciaData,user,teamData,onClose,onVerJugador}){
+  const[votos,setVotos]=useState({});const[loaded,setLoaded]=useState(false);
+  useEffect(()=>{
+    const unsub=onSnapshot(doc(db,"config","galaVotos"),snap=>{setVotos(snap.exists()?snap.data():{});setLoaded(true);});
+    return unsub;
+  },[]);
+  const goles=golLista(competenciaData,"liga1");
+  const asis=asiLista(competenciaData,"liga1");
+  const porteros=[...((competenciaData?.liga1?.porteros)||[])];
+  const mvp=goles[0];
+  const awards=[];
+  if(goles[0]) awards.push({icon:"⚽",color:"#e0a04a",title:"Bota de oro",player:goles[0].nombre,stat:`${goles[0].goles} goles`,playerObj:{name:goles[0].nombre}});
+  if(asis[0]) awards.push({icon:"🅰️",color:"#5C9AD6",title:"Mago asist.",player:asis[0].nombre,stat:`${asis[0].asistencias} asist.`});
+  if(porteros[0]) awards.push({icon:"🧤",color:"#3fb27f",title:"Guante de oro",player:porteros[0].nombre||porteros[0].equipo,stat:porteros[0].vallas!=null?`${porteros[0].vallas} vallas`:""});
+  if(goles[1]) awards.push({icon:"📈",color:"#AE82E9",title:"2º goleador",player:goles[1].nombre,stat:`${goles[1].goles} goles`});
+  // Votación: candidatos = top 3 goleadores
+  const cands=goles.slice(0,3).map(g=>({id:(g.nombre||"").toLowerCase(),text:g.nombre,base:g.goles}));
+  const myVote=votos[`v_${user?.uid}`];
+  const totalVotos=Object.keys(votos).filter(k=>k.startsWith("v_")).length||0;
+  const conteo={};Object.keys(votos).filter(k=>k.startsWith("v_")).forEach(k=>{conteo[votos[k]]=(conteo[votos[k]]||0)+1;});
+  const votar=async(id)=>{await setDoc(doc(db,"config","galaVotos"),{[`v_${user?.uid}`]:id},{merge:true});};
+  return anaShell("GALA DE PREMIOS",onClose,(
+    <div>
+      <div style={{background:"radial-gradient(circle at 50% 0%,#5a4410,#1c1505 80%)",padding:"22px 20px 24px",textAlign:"center",position:"relative",overflow:"hidden"}}>
+        <div style={{position:"relative",zIndex:1}}><div style={{fontSize:34}}>🏆</div><div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:26,letterSpacing:1,color:"#fff",lineHeight:1,marginTop:6}}>GALA DE PREMIOS</div><div style={{fontSize:10.5,color:"#cabb8d",marginTop:4}}>Neo League · premios de la temporada</div></div>
+      </div>
+      <div style={{padding:16,display:"flex",flexDirection:"column",gap:12}}>
+        {mvp&&(
+          <div onClick={()=>onVerJugador&&onVerJugador({name:mvp.nombre})} style={{background:C.dark?"linear-gradient(135deg,#3a2c08,#1a1408)":"linear-gradient(135deg,#fff8e6,#fbefc9)",border:`1px solid ${C.accent}66`,borderRadius:18,padding:16,display:"flex",alignItems:"center",gap:14,cursor:"pointer"}}>
+            <div style={{width:56,height:56,borderRadius:16,background:C.accentGrad,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:26,color:C.accentInk,boxShadow:C.accentShadow}}>🏅</div>
+            <div style={{flex:1,minWidth:0}}><div style={{fontSize:9,fontWeight:800,color:C.accentDark,letterSpacing:1,textTransform:"uppercase"}}>Jugador de la temporada</div><div style={{fontSize:17,fontWeight:800,color:C.text,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{mvp.nombre}</div><div style={{fontSize:11,color:C.textLight,marginTop:1}}>{mvp.equipo||""} · {mvp.goles} goles</div></div>
+          </div>
+        )}
+        {awards.length>0&&(
+          <div style={{display:"flex",gap:11,flexWrap:"wrap"}}>
+            {awards.map((a,i)=>(
+              <div key={i} style={{flex:1,minWidth:"44%",background:C.card,border:`1px solid ${C.border}`,borderRadius:15,padding:"14px 10px",textAlign:"center"}}>
+                <div style={{fontSize:24,color:a.color}}>{a.icon}</div>
+                <div style={{fontSize:9,fontWeight:800,color:C.textFaint,letterSpacing:0.5,textTransform:"uppercase",marginTop:7}}>{a.title}</div>
+                <div style={{fontSize:13,fontWeight:800,color:C.text,marginTop:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.player}</div>
+                <div style={{fontSize:10,color:C.textLight,marginTop:1}}>{a.stat}</div>
+              </div>
+            ))}
+          </div>
+        )}
+        {cands.length>0&&(
+          <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:15}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}><span style={{fontSize:16}}>🗳️</span><span style={{fontSize:12,fontWeight:800,color:C.text}}>Vota al MVP de la temporada</span></div>
+            {cands.map(v=>{const sel=myVote===v.id;const n=conteo[v.id]||0;const pct=totalVotos?Math.round(n/totalVotos*100):0;return(
+              <div key={v.id} onClick={()=>votar(v.id)} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 11px",borderRadius:11,background:sel?C.goldLight:C.inputBg,border:`1px solid ${sel?C.accent+"66":C.border}`,marginBottom:7,cursor:"pointer"}}>
+                <span style={{width:20,height:20,borderRadius:"50%",border:`2px solid ${sel?C.accent:C.borderDark}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{sel&&<span style={{width:10,height:10,borderRadius:"50%",background:C.accent}}/>}</span>
+                <span style={{flex:1,fontSize:12,fontWeight:600,color:C.text}}>{v.text}</span>
+                <span style={{fontSize:11,color:C.textLight,fontFamily:"'Bebas Neue',sans-serif"}}>{pct}%</span>
+              </div>
+            );})}
+            <div style={{fontSize:9.5,color:C.textFaint,textAlign:"center",marginTop:4}}>{totalVotos} voto{totalVotos===1?"":"s"} de la liga</div>
+          </div>
+        )}
+        {awards.length===0&&<div style={{textAlign:"center",color:C.textFaint,fontSize:12,padding:20,lineHeight:1.6}}>Los premios aparecerán cuando se registren goleadores y asistencias en la liga.</div>}
+      </div>
+    </div>
+  ));
+}
+
+// ─── G · REGLAS DE TEMPORADA (admin, persistido en config/reglas) ────────────
+function ReglasTemporadaModal({onClose,setAiMsg}){
+  const[r,setR]=useState({topePlantilla:26,presupuestoInicial:180,maxExtranjeros:7,limiteExt:true,topeEdad:false,topeSalarial:true,mercadoLibre:true});
+  const[saving,setSaving]=useState(false);
+  useEffect(()=>{
+    const unsub=onSnapshot(doc(db,"config","reglas"),snap=>{if(snap.exists())setR(prev=>({...prev,...snap.data()}));});
+    return unsub;
+  },[]);
+  const sliders=[
+    {k:"topePlantilla",icon:"👥",label:"Tope de plantilla",min:18,max:36,unit:""},
+    {k:"presupuestoInicial",icon:"💰",label:"Presupuesto inicial",min:50,max:400,unit:"M"},
+    {k:"maxExtranjeros",icon:"🌍",label:"Máx. extranjeros en el XI",min:0,max:14,unit:""},
+  ];
+  const toggles=[
+    {k:"limiteExt",icon:"🚫",label:"Límite de extranjeros",sub:"Aplica el máximo en el once titular"},
+    {k:"topeEdad",icon:"🎂",label:"Tope de edad",sub:"Sin jugadores mayores de 35"},
+    {k:"topeSalarial",icon:"⚖️",label:"Tope salarial (FFP)",sub:"Sanción si se supera el presupuesto"},
+    {k:"mercadoLibre",icon:"🔁",label:"Mercado de fichajes libres",sub:"Permitir pujas por jugadores del pool"},
+  ];
+  const save=async()=>{setSaving(true);await setDoc(doc(db,"config","reglas"),r,{merge:true});setSaving(false);setAiMsg&&setAiMsg("✅ Reglas de la temporada guardadas");onClose();};
+  return anaShell("REGLAS DE LA LIGA",onClose,(
+    <div style={{padding:16,display:"flex",flexDirection:"column",gap:12}}>
+      <div style={{fontSize:9,fontWeight:800,color:C.textFaint,letterSpacing:1,textTransform:"uppercase"}}>Plantilla y fichajes</div>
+      {sliders.map(s=>(
+        <div key={s.k} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:14}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}><span style={{fontSize:18}}>{s.icon}</span><span style={{flex:1,fontSize:12.5,fontWeight:700,color:C.text}}>{s.label}</span><span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:20,color:C.accent}}>{r[s.k]}{s.unit}</span></div>
+          <input type="range" min={s.min} max={s.max} value={r[s.k]} onChange={e=>setR(p=>({...p,[s.k]:Number(e.target.value)}))} style={{width:"100%",accentColor:C.accent}}/>
+          <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}><span style={{fontSize:9,color:C.textFaint}}>{s.min}{s.unit}</span><span style={{fontSize:9,color:C.textFaint}}>{s.max}{s.unit}</span></div>
+        </div>
+      ))}
+      <div style={{fontSize:9,fontWeight:800,color:C.textFaint,letterSpacing:1,textTransform:"uppercase",marginTop:4}}>Restricciones activas</div>
+      {toggles.map(t=>(
+        <div key={t.k} onClick={()=>setR(p=>({...p,[t.k]:!p[t.k]}))} style={{display:"flex",alignItems:"center",gap:11,padding:13,borderRadius:13,background:C.card,border:`1px solid ${C.border}`,cursor:"pointer"}}>
+          <span style={{fontSize:19,opacity:r[t.k]?1:0.5}}>{t.icon}</span>
+          <div style={{flex:1,minWidth:0}}><div style={{fontSize:12.5,fontWeight:700,color:C.text}}>{t.label}</div><div style={{fontSize:10,color:C.textLight,marginTop:1}}>{t.sub}</div></div>
+          <div style={{width:42,height:24,borderRadius:14,flexShrink:0,position:"relative",background:r[t.k]?"#1f8a5b":C.border,transition:"background .2s"}}><div style={{position:"absolute",top:2,width:20,height:20,borderRadius:"50%",background:"#fff",transition:"left .2s",left:r[t.k]?20:2}}/></div>
+        </div>
+      ))}
+    </div>
+  ),(
+    <button onClick={save} disabled={saving} style={{width:"100%",border:"none",borderRadius:14,padding:14,background:C.accentGrad,color:C.accentInk,boxShadow:C.accentShadow,fontFamily:"'DM Sans',sans-serif",fontSize:13,fontWeight:800,cursor:"pointer",opacity:saving?0.6:1}}>{saving?"Guardando…":"💾 Guardar reglas de la temporada"}</button>
+  ));
+}
+
+// ─── H · SALUD DE LA LIGA (admin) ─────────────────────────────────────────────
+function SaludLigaModal({allTeams,mercadoAbierto,competenciaData,onClose,setAiMsg}){
+  const conDueno=(allTeams||[]).filter(t=>t.uid);
+  const sinLineup=conDueno.filter(t=>{
+    const lu=(t.lineups||[]).find(l=>Object.values(l.starters||{}).filter(Boolean).length>=11);
+    return !lu;
+  });
+  const kpis=[
+    {v:conDueno.length,l:"Equipos activos",color:C.accent},
+    {v:sinLineup.length,l:"Sin once completo",color:"#e0a04a"},
+    {v:mercadoAbierto?"Abierto":"Cerrado",l:"Mercado",color:mercadoAbierto?"#3fb27f":C.textLight},
+  ];
+  const issues=[];
+  if(sinLineup.length>0) issues.push({icon:"📋",color:"#e0a04a",bg:"rgba(224,160,74,0.08)",title:`${sinLineup.length} equipos sin once completo`,sub:"No tienen 11 titulares colocados",cta:"Avisar a todos",act:async()=>{await addNoticia(`📢 Recordatorio: ${sinLineup.length} equipos aún no tienen su once completo. ¡Revisa tu alineación!`,"📋");setAiMsg&&setAiMsg("✅ Recordatorio publicado en el feed");}});
+  if(mercadoAbierto) issues.push({icon:"🏪",color:"#3fb27f",bg:"rgba(63,178,127,0.08)",title:"Mercado abierto",sub:"Los equipos pueden fichar ahora mismo",cta:"OK",act:()=>setAiMsg&&setAiMsg("ℹ️ Ciérralo desde el panel de mercado")});
+  const tabla=ligaTablaOrden(competenciaData,"liga1");
+  if(tabla.length===0) issues.push({icon:"📅",color:"#e0726a",bg:"rgba(224,114,106,0.08)",title:"Sin clasificación cargada",sub:"La Neo League no tiene resultados aún",cta:"OK",act:()=>{}});
+  return anaShell("SALUD DE LA LIGA",onClose,(
+    <div style={{padding:16,display:"flex",flexDirection:"column",gap:14}}>
+      <div style={{display:"flex",gap:9}}>
+        {kpis.map((k,i)=>(<div key={i} style={{flex:1,background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"13px 8px",textAlign:"center"}}><div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:k.l==="Mercado"?18:26,color:k.color,lineHeight:1}}>{k.v}</div><div style={{fontSize:9,color:C.textLight,marginTop:3,lineHeight:1.2}}>{k.l}</div></div>))}
+      </div>
+      {issues.length>0&&<div style={{fontSize:9,fontWeight:800,color:C.textFaint,letterSpacing:1,textTransform:"uppercase"}}>Requiere tu atención</div>}
+      {issues.map((it,i)=>(
+        <div key={i} style={{display:"flex",alignItems:"center",gap:11,padding:"12px 13px",borderRadius:13,background:it.bg,border:`1px solid ${it.color}44`}}>
+          <span style={{fontSize:19}}>{it.icon}</span>
+          <div style={{flex:1,minWidth:0}}><div style={{fontSize:12,fontWeight:700,color:C.text}}>{it.title}</div><div style={{fontSize:10,color:C.textLight,marginTop:1}}>{it.sub}</div></div>
+          <button onClick={it.act} style={{fontSize:10.5,fontWeight:700,color:it.color,border:`1px solid ${it.color}55`,borderRadius:8,padding:"6px 10px",cursor:"pointer",background:"transparent",whiteSpace:"nowrap",fontFamily:"'DM Sans',sans-serif"}}>{it.cta}</button>
+        </div>
+      ))}
+      {sinLineup.length>0&&(<>
+        <div style={{fontSize:9,fontWeight:800,color:C.textFaint,letterSpacing:1,textTransform:"uppercase"}}>Equipos sin once completo</div>
+        {sinLineup.slice(0,20).map((t,i)=>(
+          <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:11,background:C.card,border:`1px solid ${C.border}`}}>
+            <div style={{width:30,height:30,borderRadius:9,background:`linear-gradient(135deg,${getTeamColor(t.teamColor).bg},${getTeamColor(t.teamColor).dark})`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontFamily:"'Bebas Neue',sans-serif",fontSize:12,color:"#fff"}}>{iniciales(t.teamName)}</div>
+            <span style={{flex:1,fontSize:12,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.teamName||t.email}</span>
+            <button onClick={async()=>{await addNoticia(`📢 ${t.teamName||"Un equipo"}: recuerda completar tu once titular.`,"📋");setAiMsg&&setAiMsg(`✅ Aviso enviado a ${t.teamName||"equipo"}`);}} style={{fontSize:16,background:"none",border:"none",cursor:"pointer"}}>🔔</button>
+          </div>
+        ))}
+      </>)}
+    </div>
+  ));
+}
+
+// ─── I · SCOUT IA (búsqueda en lenguaje natural sobre el pool, Gemini) ───────
+function ScoutIAModal({teamData,squad,pool,activeLineup,onClose,onVerJugador}){
+  const[query,setQuery]=useState("");const[results,setResults]=useState([]);const[loading,setLoading]=useState(false);const[msg,setMsg]=useState("");
+  const presupuesto=anaValM(teamData?.presupuesto);
+  const misNombres=new Set((squad||[]).map(p=>(p.name||"").toLowerCase()));
+  const disponibles=Object.values(pool||{}).filter(p=>p&&p.overall&&p.name&&!misNombres.has((p.name||"").toLowerCase()));
+  const buscar=async(q)=>{
+    const texto=(q??query).trim();if(!texto){return;}
+    setLoading(true);setResults([]);setMsg("");
+    const cands=[...disponibles].sort((a,b)=>b.overall-a.overall).slice(0,40)
+      .map(p=>`${p.name} | ${anaGetP(p)} | media ${p.overall} | ${p.age||"?"} años | ${p.country||"?"} | ${anaFmtM(anaValM(p.price))}`);
+    const prompt=`Eres un ojeador de fútbol. El usuario busca: "${texto}". Presupuesto del usuario: ${presupuesto?anaFmtM(presupuesto):"sin límite"}.\nElige de esta lista los 3 jugadores que MEJOR encajan con la petición (respeta presupuesto si lo menciona). Devuelve SOLO un JSON array: [{"name":"<nombre exacto de la lista>","why":"<razón breve en español, máx 14 palabras>"}].\n\nLista:\n${cands.join("\n")}`;
+    const out=await geminiTexto(prompt,500,0.4);
+    let picks=[];
+    try{const j=JSON.parse(out.replace(/```json|```/g,"").trim());if(Array.isArray(j))picks=j;}catch(e){}
+    let res=picks.map(pk=>{const p=disponibles.find(d=>(d.name||"").toLowerCase()===(pk.name||"").toLowerCase());return p?{...p,why:pk.why}:null;}).filter(Boolean);
+    if(res.length===0){
+      // Fallback: mejores por media dentro de presupuesto
+      res=[...disponibles].filter(p=>presupuesto===0||anaValM(p.price)<=presupuesto).sort((a,b)=>b.overall-a.overall).slice(0,3).map(p=>({...p,why:`Top media disponible dentro de tu presupuesto.`}));
+      setMsg("Sugerencias por media (la IA no respondió).");
+    }else{setMsg(`La IA encontró ${res.length} fichaje${res.length>1?"s":""} que encajan.`);}
+    setResults(res);setLoading(false);
+  };
+  const chips=["un MC joven y barato con +80 de media","un DFC zurdo sólido","un delantero goleador menor de 24","un portero de relevo económico"];
+  return anaShell("SCOUT IA",onClose,(
+    <div>
+      <div style={{background:"linear-gradient(160deg,#16a085,#0a3a30 92%)",padding:"16px 18px",position:"relative",overflow:"hidden"}}>
+        <div style={{position:"absolute",top:-50,right:-30,width:200,height:170,background:"radial-gradient(circle,rgba(255,255,255,0.1),transparent 70%)"}}/>
+        <div style={{position:"relative",zIndex:1}}><div style={{fontSize:9,fontWeight:800,color:"rgba(255,255,255,0.7)",letterSpacing:1,textTransform:"uppercase"}}>Búsqueda en lenguaje natural</div><div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:22,color:"#fff",lineHeight:1.05}}>SCOUT IA</div></div>
+      </div>
+      <div style={{padding:"14px 16px 6px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:9,background:C.inputBg,border:`1.5px solid ${C.borderDark}`,borderRadius:14,padding:"4px 6px 4px 14px"}}>
+          <span style={{fontSize:16,color:"#16a085"}}>🔎</span>
+          <input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")buscar();}} placeholder="Describe el jugador que buscas…" style={{flex:1,border:"none",background:"transparent",outline:"none",fontSize:12.5,color:C.text,fontFamily:"'DM Sans',sans-serif",padding:"9px 0"}}/>
+          <button onClick={()=>buscar()} disabled={loading} style={{border:"none",borderRadius:10,padding:"9px 13px",background:C.accentGrad,color:C.accentInk,fontWeight:800,fontSize:12,cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>{loading?"…":"Buscar"}</button>
+        </div>
+        <div style={{display:"flex",gap:7,marginTop:9,flexWrap:"wrap"}}>
+          {chips.map((c,i)=>(<span key={i} onClick={()=>{setQuery(c);buscar(c);}} style={{fontSize:10.5,fontWeight:600,color:C.textMid,background:C.inputBg,border:`1px solid ${C.border}`,borderRadius:18,padding:"6px 11px",cursor:"pointer"}}>{c}</span>))}
+        </div>
+      </div>
+      <div style={{padding:"12px 16px 18px",display:"flex",flexDirection:"column",gap:11}}>
+        {disponibles.length===0&&<div style={{textAlign:"center",color:C.textFaint,fontSize:12,padding:20}}>No hay jugadores libres en el pool para buscar.</div>}
+        {loading&&<div style={{textAlign:"center",color:C.textLight,fontSize:12,padding:16}}>El ojeador IA está analizando el mercado…</div>}
+        {!loading&&msg&&<div style={{display:"flex",alignItems:"center",gap:7}}><span style={{fontSize:13,color:"#16a085"}}>✦</span><span style={{fontSize:10.5,color:C.textLight,fontWeight:600}}>{msg}</span></div>}
+        {results.map((r,i)=>(
+          <div key={i} onClick={()=>onVerJugador&&onVerJugador(r)} style={{borderRadius:15,background:C.card,border:`1px solid ${C.border}`,overflow:"hidden",cursor:"pointer"}}>
+            <div style={{display:"flex",alignItems:"center",gap:11,padding:"13px 14px"}}>
+              <div style={{width:44,height:44,borderRadius:13,background:C.accentGrad,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontFamily:"'Bebas Neue',sans-serif",fontSize:17,color:C.accentInk,boxShadow:C.accentShadow}}>{r.overall}</div>
+              <div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:800,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.name}</div><div style={{fontSize:10,color:C.textLight}}>{[anaGetP(r),r.age?`${r.age} años`:null,r.country].filter(Boolean).join(" · ")}</div></div>
+              <div style={{textAlign:"right",flexShrink:0}}><div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:18,color:C.accent,lineHeight:1}}>{anaFmtM(anaValM(r.price))}</div></div>
+            </div>
+            {r.why&&<div style={{padding:"9px 14px",background:C.inputBg,borderTop:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:7}}><span style={{fontSize:13,color:"#16a085"}}>✔</span><span style={{fontSize:10.5,color:C.textMid,lineHeight:1.3}}>{r.why}</span></div>}
+          </div>
+        ))}
+      </div>
+    </div>
+  ));
+}
+
+// ─── J · SUBASTAS (colección Firebase "subastas", pujas en vivo) ─────────────
+function SubastasModal({teamData,pool,user,isAdmin,onClose,setAiMsg}){
+  const[subastas,setSubastas]=useState([]);const[now,setNow]=useState(Date.now());const[toast,setToast]=useState("");
+  const myName=teamData?.teamName||"Mi equipo";
+  const saldo=anaValM(teamData?.presupuesto);
+  useEffect(()=>{
+    const unsub=onSnapshot(collection(db,"subastas"),snap=>{setSubastas(snap.docs.map(d=>({id:d.id,...d.data()})));});
+    return unsub;
+  },[]);
+  useEffect(()=>{const id=setInterval(()=>setNow(Date.now()),1000);return ()=>clearInterval(id);},[]);
+  const showToast=(m)=>{setToast(m);setTimeout(()=>setToast(""),2200);};
+  const fmtCd=(ms)=>{let s=Math.max(0,Math.floor((ms-now)/1000));const h=Math.floor(s/3600);s-=h*3600;const m=Math.floor(s/60);s-=m*60;return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;};
+  const activas=subastas.filter(a=>!a.cerrada&&(!a.closesAt||a.closesAt>now)).sort((a,b)=>(a.closesAt||0)-(b.closesAt||0));
+  const pujar=async(a)=>{
+    const next=(Number(a.topBid)||0)+1;
+    if(saldo&&next>saldo){showToast("Saldo insuficiente para esa puja");return;}
+    await updateDoc(doc(db,"subastas",a.id),{topBid:next,topBidTeam:myName,topBidUid:user?.uid||""});
+    showToast(`¡Vas en cabeza con ${next}M! 🔝`);
+  };
+  const crearSubasta=async()=>{
+    const libres=Object.values(pool||{}).filter(p=>p&&p.name&&p.overall);
+    if(libres.length===0){alert("No hay jugadores libres en el pool.");return;}
+    const nombre=window.prompt("Nombre del jugador del pool a subastar:");
+    if(!nombre) return;
+    const p=libres.find(x=>(x.name||"").toLowerCase().includes(nombre.toLowerCase()));
+    if(!p){alert("No se encontró ese jugador en el pool.");return;}
+    const horas=Number(window.prompt("¿En cuántas horas cierra la subasta?","24"))||24;
+    const base=Math.max(1,Math.round(anaValM(p.price)*0.5));
+    await addDoc(collection(db,"subastas"),{playerName:p.name,pos:anaGetP(p),overall:p.overall,age:p.age||null,country:p.country||null,topBid:base,topBidTeam:"",closesAt:Date.now()+horas*3600*1000,cerrada:false,creada:serverTimestamp()});
+    setAiMsg&&setAiMsg("✅ Subasta creada");
+  };
+  const destacada=activas[0];
+  const otras=activas.slice(1);
+  return anaShell("SUBASTAS",onClose,(
+    <div>
+      <div style={{background:"linear-gradient(160deg,#d67a2a,#4a2a0e 92%)",padding:"16px 20px",position:"relative",overflow:"hidden",display:"flex",alignItems:"center",gap:10}}>
+        <div style={{position:"absolute",top:-50,right:-30,width:200,height:170,background:"radial-gradient(circle,rgba(255,255,255,0.12),transparent 70%)"}}/>
+        <div style={{flex:1,position:"relative",zIndex:1}}><div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:22,color:"#fff",lineHeight:1.05}}>SUBASTAS</div><div style={{fontSize:10,color:"rgba(255,255,255,0.75)"}}>Jugadores libres del pool · pujas en vivo</div></div>
+        <div style={{textAlign:"right",position:"relative",zIndex:1}}><div style={{fontSize:8,color:"rgba(255,255,255,0.65)",letterSpacing:0.5}}>TU SALDO</div><div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:18,color:"#fff"}}>{teamData?.presupuesto!=null?fmtPresu(teamData.presupuesto):"—"}</div></div>
+      </div>
+      <div style={{padding:16,display:"flex",flexDirection:"column",gap:13}}>
+        {activas.length===0&&<div style={{textAlign:"center",color:C.textFaint,fontSize:12,padding:"36px 24px",lineHeight:1.6}}>No hay subastas abiertas ahora mismo.{isAdmin?" Crea una desde el botón de abajo.":" Vuelve pronto."}</div>}
+        {destacada&&(
+          <div style={{borderRadius:17,overflow:"hidden",background:C.card,border:`1px solid ${C.accent}66`}}>
+            <div style={{background:C.dark?"linear-gradient(135deg,#3a2410,#1a1108)":"linear-gradient(135deg,#fdf3e3,#fbe9cf)",padding:"13px 15px",display:"flex",alignItems:"center",gap:11}}>
+              <div style={{width:46,height:46,borderRadius:13,background:"linear-gradient(135deg,#e0a04a,#a8641f)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontFamily:"'Bebas Neue',sans-serif",fontSize:18,color:"#fff"}}>{iniciales(destacada.playerName)}</div>
+              <div style={{flex:1,minWidth:0}}><div style={{fontSize:15,fontWeight:800,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{destacada.playerName}</div><div style={{fontSize:10,color:C.textLight}}>{[destacada.pos,destacada.age?`${destacada.age} años`:null,destacada.overall?`Media ${destacada.overall}`:null].filter(Boolean).join(" · ")}</div></div>
+              <span style={{fontSize:9,fontWeight:800,color:"#e0726a",background:"rgba(224,114,106,0.16)",padding:"4px 8px",borderRadius:8}}>● EN VIVO</span>
+            </div>
+            <div style={{padding:"14px 15px"}}>
+              <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",marginBottom:10}}>
+                <div><div style={{fontSize:9,color:C.textFaint,letterSpacing:0.5,textTransform:"uppercase"}}>Puja actual</div><div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:30,color:C.accent,lineHeight:1}}>{destacada.topBid||0}M</div></div>
+                <div style={{textAlign:"right"}}><div style={{fontSize:9,color:C.textFaint}}>Cierra en</div><div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:20,color:"#e0726a",lineHeight:1.1}}>{destacada.closesAt?fmtCd(destacada.closesAt):"—"}</div></div>
+              </div>
+              <div style={{fontSize:10.5,color:C.textLight,marginBottom:12}}>{destacada.topBidTeam?<>Máxima puja de <b style={{color:C.textMid}}>{destacada.topBidTeam}</b></>:"Sé el primero en pujar"}</div>
+              <button onClick={()=>pujar(destacada)} style={{width:"100%",border:"none",borderRadius:12,padding:13,background:C.accentGrad,color:C.accentInk,boxShadow:C.accentShadow,fontFamily:"'DM Sans',sans-serif",fontSize:13,fontWeight:800,cursor:"pointer"}}>+ Pujar {(Number(destacada.topBid)||0)+1}M</button>
+            </div>
+          </div>
+        )}
+        {otras.length>0&&<div style={{fontSize:9,fontWeight:800,color:C.textFaint,letterSpacing:1,textTransform:"uppercase"}}>Otras subastas abiertas</div>}
+        {otras.map(o=>(
+          <div key={o.id} style={{display:"flex",alignItems:"center",gap:11,padding:"12px 13px",borderRadius:13,background:C.card,border:`1px solid ${C.border}`}}>
+            <div style={{width:38,height:38,borderRadius:11,background:C.accentGrad,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontFamily:"'Bebas Neue',sans-serif",fontSize:14,color:C.accentInk}}>{iniciales(o.playerName)}</div>
+            <div style={{flex:1,minWidth:0}}><div style={{fontSize:12.5,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{o.playerName}</div><div style={{fontSize:10,color:C.textLight}}>{[o.pos,o.overall?`Media ${o.overall}`:null].filter(Boolean).join(" · ")}</div></div>
+            <div style={{textAlign:"right",flexShrink:0}}><div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:16,color:C.accent,lineHeight:1}}>{o.topBid||0}M</div><div style={{fontSize:9,color:C.textFaint}}>{o.closesAt?fmtCd(o.closesAt):""}</div></div>
+            <button onClick={()=>pujar(o)} style={{border:`1px solid ${C.accent}66`,borderRadius:9,padding:"7px 10px",background:C.goldLight,color:C.accentDark,fontSize:11,fontWeight:800,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",flexShrink:0}}>Pujar</button>
+          </div>
+        ))}
+      </div>
+      {toast&&<div style={{position:"fixed",bottom:90,left:"50%",transform:"translateX(-50%)",background:C.text,color:C.bg,borderRadius:12,padding:"11px 18px",fontSize:12,fontWeight:700,boxShadow:"0 10px 30px rgba(0,0,0,0.3)",zIndex:1900,whiteSpace:"nowrap"}}>{toast}</div>}
+    </div>
+  ),isAdmin?(
+    <button onClick={crearSubasta} style={{width:"100%",border:`1px dashed ${C.accent}`,borderRadius:14,padding:13,background:C.inputBg,color:C.accentDark,fontFamily:"'DM Sans',sans-serif",fontSize:12.5,fontWeight:800,cursor:"pointer"}}>＋ Crear subasta (admin)</button>
+  ):null);
+}
+
 function MainApp({user,isAdmin,onLogout}){
   const[teamData,setTeamData]=useState(null);
   const[allTeams,setAllTeams]=useState([]);
@@ -9314,7 +9883,8 @@ function MainApp({user,isAdmin,onLogout}){
   const[showHome,setShowHome]=useState(true);
   const[showNoticiasGlobal,setShowNoticiasGlobal]=useState(false);
   const[showMasPopup,setShowMasPopup]=useState(false);
-  const[analisisView,setAnalisisView]=useState(""); // "" | partido | caracara | ideal | radar | temporada
+  const[analisisView,setAnalisisView]=useState(""); // "" | partido | caracara | ideal | radar | temporada | novedades | cronica | scout | subastas | copa | records | gala | reglas | salud
+  const[verJugador,setVerJugador]=useState(null); // ficha de jugador
   const[showChatGlobal,setShowChatGlobal]=useState(false);
   const[chatEquipoObjetivo,setChatEquipoObjetivo]=useState(null);
   const[chatGrupoApuesta,setChatGrupoApuesta]=useState(null);
@@ -11004,6 +11574,16 @@ function MainApp({user,isAdmin,onLogout}){
       {analisisView==="ideal"&&<OnceIdealModal squad={squad} lineups={lineups} activeLineup={activeLineup} saveTeam={saveTeam} onClose={()=>setAnalisisView("")}/>}
       {analisisView==="radar"&&<RadarMercadoModal teamData={teamData} squad={squad} activeLineup={activeLineup} pool={pool} onClose={()=>setAnalisisView("")} onMercado={()=>{setAnalisisView("");setShowMercado(true);}} onAbrirChat={nombre=>{setAnalisisView("");setChatEquipoObjetivo(nombre);setShowChatGlobal(true);}}/>}
       {analisisView==="temporada"&&<TuTemporadaModal teamData={teamData} squad={squad} activeLineup={activeLineup} onClose={()=>setAnalisisView("")}/>}
+      {analisisView==="novedades"&&<NovedadesModal teamData={teamData} squad={squad} activeLineup={activeLineup} allTeams={allTeams} competenciaData={competenciaData} mercadoAbierto={mercadoAbierto} onClose={()=>setAnalisisView("")} onVerJugador={p=>setVerJugador(p)}/>}
+      {analisisView==="cronica"&&<CronicaJornadaModal teamData={teamData} competenciaData={competenciaData} onClose={()=>setAnalisisView("")}/>}
+      {analisisView==="scout"&&<ScoutIAModal teamData={teamData} squad={squad} pool={pool} activeLineup={activeLineup} onClose={()=>setAnalisisView("")} onVerJugador={p=>setVerJugador(p)}/>}
+      {analisisView==="subastas"&&<SubastasModal teamData={teamData} pool={pool} user={user} isAdmin={isAdmin} onClose={()=>setAnalisisView("")} setAiMsg={setAiMsg}/>}
+      {analisisView==="copa"&&<CuadroCopaModal competenciaData={competenciaData} teamData={teamData} onClose={()=>setAnalisisView("")}/>}
+      {analisisView==="records"&&<RecordsClubModal teamData={teamData} squad={squad} competenciaData={competenciaData} onClose={()=>setAnalisisView("")} onVerJugador={p=>setVerJugador(p)}/>}
+      {analisisView==="gala"&&<GalaPremiosModal competenciaData={competenciaData} user={user} teamData={teamData} onClose={()=>setAnalisisView("")} onVerJugador={p=>setVerJugador(p)}/>}
+      {analisisView==="reglas"&&isAdmin&&<ReglasTemporadaModal onClose={()=>setAnalisisView("")} setAiMsg={setAiMsg}/>}
+      {analisisView==="salud"&&isAdmin&&<SaludLigaModal allTeams={allTeams} mercadoAbierto={mercadoAbierto} competenciaData={competenciaData} onClose={()=>setAnalisisView("")} setAiMsg={setAiMsg}/>}
+      {verJugador&&<HistorialJugadorModal player={verJugador} teamData={teamData} competenciaData={competenciaData} onClose={()=>setVerJugador(null)}/>}
 
       <BottomTabBar
         active={showMundial?"mundial":showNoticiasGlobal?"noticias":showChatGlobal?"chat":showCompVista?"liga":(showHome?"inicio":"equipo")}
