@@ -9812,6 +9812,8 @@ LISTA:
 ${cands.join("\n")}`;
 
     const out=await geminiTexto(prompt,600,0.2);
+    // DEBUG TEMPORAL: muestra respuesta cruda
+    setMsg(`🔧 Respuesta IA (${out.length} chars): ${out.slice(0,200)||"(VACÍA — API no respondió)"}`);
     let picks=[];
     if(out){
       // Estrategia 1: JSON limpio directo
