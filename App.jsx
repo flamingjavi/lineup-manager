@@ -6010,6 +6010,48 @@ function CrearNoticiaModal({teamData,allTeams,onClose}){
       texto:texto.trim(),estado:"aprobada",fecha:new Date().toISOString(),reacciones:{},comentarios:[]
     };
     await setDoc(ref,{lista:[...(current.lista||[]),nueva]},{merge:true});
+
+    // Si hay beef (menciona a un equipo con temática de confrontación), genera chisme IA automático
+    const TEMATICAS_BEEF=["tirarle","provocar","rivalidad","critica","beef","challenge"];
+    const esBeef=equipoMencionado&&(TEMATICAS_BEEF.some(t=>tematicaSel.id?.includes(t)||tematicaSel.label?.toLowerCase().includes(t))||tematicaSel.id==="tirarle");
+    if(esBeef){
+      // Busca noticias previas entre estos dos equipos para dar contexto
+      const listaExistente=current.lista||[];
+      const antecedentes=listaExistente.filter(n=>
+        n.estado==="aprobada"&&((n.equipoAutor===equipoMencionado&&n.equipoMencionado===teamData?.teamName)||(n.equipoAutor===teamData?.teamName&&n.equipoMencionado===equipoMencionado))
+      ).slice(-3).map(n=>`${n.equipoAutor}: "${n.texto}"`).join("\n");
+
+      const promptChisme=`Eres un periodista deportivo de chismes y rivalidades. Dos equipos de una liga simulada se están tirando hate.
+Equipo A: ${teamData?.teamName||"Equipo A"}
+Equipo B: ${equipoMencionado}
+Último provocación de A: "${texto.trim()}"
+${antecedentes?`Contexto previo:\n${antecedentes}`:""}
+
+Escribe un titular y una nota de chisme corta (60-80 palabras) en estilo tabloide deportivo, dramático y con humor. 
+Empieza con "TITULAR: <titular sensacionalista corto>" y luego el texto.
+No uses emojis en el titular.`;
+
+      geminiTexto(promptChisme,400,0.95).then(async(out)=>{
+        if(!out) return;
+        let head="",body=out;
+        const m=out.match(/TITULAR:\s*(.*)/i);
+        if(m){head=m[1].split("\n")[0].trim();body=out.replace(/TITULAR:.*(\n)?/i,"").trim();}
+        const refN=doc(db,"config","noticias");
+        const snapN=await getDoc(refN).catch(()=>null);
+        const listaN=snapN?.exists()?(snapN.data().lista||[]):[];
+        listaN.push({
+          id:`chisme_${Date.now()}`,
+          texto:`🔥 ${head||"Chisme de la liga"}\n\n${body}`,
+          icono:"🔥",
+          fecha:new Date().toISOString(),
+          reacciones:{},comentarios:[],
+          autor:"Chisme IA",
+          equiposInvolucrados:[teamData?.teamName,equipoMencionado]
+        });
+        await setDoc(refN,{lista:listaN.slice(-100)},{merge:true});
+      }).catch(()=>{});
+    }
+
     setEnviando(false);
     setEnviado(true);
   };
@@ -9279,10 +9321,19 @@ async function geminiTexto(prompt,maxTokens=700,temp=0.85){
   try{
     const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY_IA}`;
     const resp=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:temp,maxOutputTokens:maxTokens}})});
-    if(!resp.ok) throw new Error("net");
+    if(!resp.ok){
+      const errBody=await resp.text().catch(()=>"");
+      console.error("Gemini API error",resp.status,errBody);
+      return "";
+    }
     const j=await resp.json();
-    return j?.candidates?.[0]?.content?.parts?.[0]?.text?.trim()||"";
-  }catch(e){ return ""; }
+    const text=j?.candidates?.[0]?.content?.parts?.[0]?.text?.trim()||"";
+    if(!text) console.warn("Gemini returned empty text",JSON.stringify(j).slice(0,200));
+    return text;
+  }catch(e){
+    console.error("geminiTexto fetch error:",e.message);
+    return "";
+  }
 }
 const COMP_IDS_TODOS=["liga1","liga2","copa","champions","europa","ascenso","copaascenso","supercopa"];
 const ligaTablaOrden=(cd,id)=>{const t=(cd?.[id]?.grupos?.[0]?.tabla)||[];return [...t].sort((a,b)=>(b.pts||0)-(a.pts||0)||((b.gf-b.gc)-(a.gf-a.gc))||((b.gf||0)-(a.gf||0)));};
@@ -9762,8 +9813,18 @@ ${cands.join("\n")}`;
 
     const out=await geminiTexto(prompt,600,0.2);
     let picks=[];
-    try{const cleaned=out.replace(/```json|```/g,"").trim();const j=JSON.parse(cleaned);if(Array.isArray(j))picks=j;}
-    catch(e){const match=out.match(/\[[\s\S]*?\]/);if(match){try{picks=JSON.parse(match[0]);}catch(e2){}}}
+    if(out){
+      // Estrategia 1: JSON limpio directo
+      try{const j=JSON.parse(out.replace(/```json|```/g,"").trim());if(Array.isArray(j))picks=j;}catch(e1){
+        // Estrategia 2: extrae el array aunque venga con texto alrededor
+        const match=out.match(/\[[\s\S]*\]/);
+        if(match){try{const j=JSON.parse(match[0]);if(Array.isArray(j))picks=j;}catch(e2){
+          // Estrategia 3: extrae objetos individuales con regex
+          const objMatches=[...out.matchAll(/\{\s*"name"\s*:\s*"([^"]+)"\s*,\s*"why"\s*:\s*"([^"]+)"\s*\}/g)];
+          picks=objMatches.map(m=>({name:m[1],why:m[2]}));
+        }}
+      }
+    }
     let res=picks.map(pk=>{const p=disponibles.find(d=>(d.name||"").toLowerCase()===(pk.name||"").toLowerCase());return p?{...p,why:pk.why}:null;}).filter(Boolean);
 
     if(res.length===0){
