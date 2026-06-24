@@ -5977,7 +5977,7 @@ function NoticiasModal({teamData,allTeams,isAdmin,onClose,competenciaData}){
         </div>
       </div>
       {showCrear&&<CrearNoticiaModal teamData={teamData} allTeams={allTeams} onClose={()=>setShowCrear(false)}/>}
-      {showCronica&&<CronicaJornadaModal teamData={teamData} competenciaData={competenciaData||{}} onClose={()=>setShowCronica(false)}/>}
+      {showCronica&&<CronicaJornadaModal teamData={teamData} competenciaData={competenciaData||{}} isAdmin={isAdmin} onClose={()=>setShowCronica(false)}/>}
     </div>
   );
 }
@@ -9342,8 +9342,9 @@ function NovedadesModal({teamData,squad,activeLineup,allTeams,competenciaData,me
 }
 
 // ─── B · CRÓNICA DE JORNADA IA (Gemini sobre datos reales) ───────────────────
-function CronicaJornadaModal({teamData,competenciaData,onClose}){
+function CronicaJornadaModal({teamData,competenciaData,onClose,isAdmin}){
   const[text,setText]=useState("");const[shown,setShown]=useState(0);const[loading,setLoading]=useState(true);const[titular,setTitular]=useState("");
+  const[publicando,setPublicando]=useState(false);const[publicada,setPublicada]=useState(false);
   const tabla=ligaTablaOrden(competenciaData,"liga1");
   const topGol=golLista(competenciaData,"liga1")[0];
   const topAsi=asiLista(competenciaData,"liga1")[0];
@@ -9359,6 +9360,23 @@ function CronicaJornadaModal({teamData,competenciaData,onClose}){
     const m=out.match(/TITULAR:\s*(.*)/i);
     if(m){head=m[1].split("\n")[0].trim();body=out.replace(/TITULAR:.*(\n)?/i,"").trim();}
     setTitular(head||"Crónica de la jornada");setText(body);setLoading(false);
+  };
+  const publicarEnNoticias=async()=>{
+    if(!text||!titular||publicando||publicada) return;
+    setPublicando(true);
+    const ref=doc(db,"config","noticias");
+    const snap=await getDoc(ref).catch(()=>null);
+    const lista=snap?.exists()?(snap.data().lista||[]):[];
+    lista.push({
+      id:`cronica_${Date.now()}`,
+      texto:`📰 ${titular}\n\n${text}`,
+      icono:"✨",
+      fecha:new Date().toISOString(),
+      reacciones:{},comentarios:[],
+      autor:"Crónica IA"
+    });
+    await setDoc(ref,{lista:lista.slice(-100)},{merge:true});
+    setPublicando(false);setPublicada(true);
   };
   useEffect(()=>{gen();},[]);
   useEffect(()=>{if(loading||shown>=text.length)return;const id=setInterval(()=>setShown(s=>Math.min(text.length,s+2)),22);return ()=>clearInterval(id);},[loading,text,shown]);
@@ -9383,7 +9401,15 @@ function CronicaJornadaModal({teamData,competenciaData,onClose}){
       ))}
     </div>
   ),(
-    <button onClick={gen} disabled={loading} style={{width:"100%",border:`1px solid ${C.borderDark}`,borderRadius:13,padding:13,background:C.inputBg,color:C.text,fontFamily:"'DM Sans',sans-serif",fontSize:12.5,fontWeight:800,cursor:loading?"default":"pointer",opacity:loading?0.6:1}}>↻ Regenerar crónica</button>
+    <div style={{display:"flex",flexDirection:"column",gap:8}}>
+      <button onClick={gen} disabled={loading} style={{width:"100%",border:`1px solid ${C.borderDark}`,borderRadius:13,padding:13,background:C.inputBg,color:C.text,fontFamily:"'DM Sans',sans-serif",fontSize:12.5,fontWeight:800,cursor:loading?"default":"pointer",opacity:loading?0.6:1}}>↻ Regenerar crónica</button>
+      {isAdmin&&!loading&&text&&(
+        <button onClick={publicarEnNoticias} disabled={publicando||publicada}
+          style={{width:"100%",border:"none",borderRadius:13,padding:13,background:publicada?"#27ae60":"#1a3a5c",color:"#fff",fontFamily:"'DM Sans',sans-serif",fontSize:12.5,fontWeight:800,cursor:(publicando||publicada)?"default":"pointer",opacity:(publicando||publicada)?0.85:1}}>
+          {publicada?"✅ Publicada en noticias":publicando?"Publicando…":"📤 Publicar en noticias (visible para todos)"}
+        </button>
+      )}
+    </div>
   ));
 }
 
@@ -9703,53 +9729,50 @@ function ScoutIAModal({teamData,squad,pool,activeLineup,onClose,onVerJugador}){
     const texto=(q??query).trim();if(!texto){return;}
     setLoading(true);setResults([]);setMsg("");
 
-    // Pre-filtra inteligentemente según palabras clave en la query antes de enviar a IA
     const qLower=texto.toLowerCase();
-    const edadMatch=qLower.match(/menor(?:es)? de (\d+)|sub[-\s]?(\d+)|(\d+) años/);
+    const edadMatch=qLower.match(/menor(?:es)? de (\d+)|sub[-\s]?(\d+)|(\d+) a[ñn]os/);
     const edadMax=edadMatch?Number(edadMatch[1]||edadMatch[2]||edadMatch[3]):null;
-    const presMatch=qLower.match(/(\d+)m|barato|económico/);
-    const esBarato=qLower.includes("barato")||qLower.includes("económico")||qLower.includes("economico");
+    const esBarato=qLower.includes("barato")||qLower.includes("económico")||qLower.includes("economico")||qLower.includes("bajo precio");
+    const overallMatch=qLower.match(/\+(\d+) de media|media (\d+)|(\d+) de media/);
+    const overallMin=overallMatch?Number(overallMatch[1]||overallMatch[2]||overallMatch[3]):null;
+    // Detecta posición mencionada para usarla en el fallback
+    const posKeywords={MC:["mc","centrocampista","mediocampista","mediocentro"],DFC:["dfc","defensa central","central","zaguero"],LB:["lb","lateral izquierdo"],RB:["rb","lateral derecho"],ST:["st","delantero","punta","goleador"],GK:["portero","gk","guardameta"],CAM:["cam","mediapunta","enganche"],CDM:["cdm","pivote"],LW:["lw","extremo izquierdo"],RW:["rw","extremo derecho"]};
+    let posDetectada=null;
+    for(const[pos,keys] of Object.entries(posKeywords)){if(keys.some(k=>qLower.includes(k))){posDetectada=pos;break;}}
 
     let prefiltered=[...disponibles];
     if(edadMax) prefiltered=prefiltered.filter(p=>p.age&&Number(p.age)<edadMax);
+    if(overallMin) prefiltered=prefiltered.filter(p=>Number(p.overall)>=overallMin);
     if(presupuesto>0) prefiltered=prefiltered.filter(p=>presupuesto===0||anaValM(p.price)<=presupuesto);
-    if(esBarato) prefiltered=prefiltered.sort((a,b)=>anaValM(a.price)-anaValM(b.price));
+    if(esBarato) prefiltered=prefiltered.sort((a,b)=>anaValM(a.price)-anaValM(b.price)||b.overall-a.overall);
     else prefiltered=prefiltered.sort((a,b)=>b.overall-a.overall);
 
-    // Toma hasta 60 candidatos para dar más variedad a la IA
-    const cands=prefiltered.slice(0,60)
-      .map(p=>`${p.name} | ${anaGetP(p)} | overall:${p.overall} | ${p.age||"?"}a | ${p.country||"?"} | ${anaFmtM(anaValM(p.price))} | pie:${p.foot||"?"}`);
+    const cands=prefiltered.slice(0,80).map(p=>`${p.name} | ${anaGetP(p)} | overall:${p.overall} | ${p.age||"?"}a | ${p.country||"?"} | precio:${anaFmtM(anaValM(p.price))}`);
 
-    const prompt=`Eres un ojeador de fútbol experto. El usuario busca: "${texto}".
-Presupuesto disponible: ${presupuesto?anaFmtM(presupuesto):"sin límite"}.
-Selecciona exactamente 3 jugadores de la lista que MEJOR encajen con la petición del usuario — respeta edad, posición, precio y cualquier criterio mencionado.
-Devuelve SOLO un JSON array sin markdown: [{"name":"<nombre exacto>","why":"<razón concreta en español, máx 15 palabras>"}]
+    if(cands.length===0){setResults([]);setMsg("No hay jugadores que cumplan los criterios.");setLoading(false);return;}
 
-Lista de candidatos:
+    const prompt=`Eres un ojeador de fútbol. El usuario busca: "${texto}".
+Presupuesto: ${presupuesto?anaFmtM(presupuesto):"sin límite"}.
+REGLAS: respeta EXACTAMENTE posición, edad, overall y precio mencionados. Elige 3 jugadores de la lista.
+Devuelve ÚNICAMENTE este JSON, sin texto adicional, sin markdown:
+[{"name":"NOMBRE_EXACTO","why":"razón breve en español"}]
+
+LISTA:
 ${cands.join("\n")}`;
 
-    const out=await geminiTexto(prompt,600,0.3);
+    const out=await geminiTexto(prompt,600,0.2);
     let picks=[];
-    try{
-      const cleaned=out.replace(/```json|```/g,"").trim();
-      const j=JSON.parse(cleaned);
-      if(Array.isArray(j)) picks=j;
-    }catch(e){
-      // Intenta extraer array si viene con texto extra
-      const match=out.match(/\[[\s\S]*\]/);
-      if(match){try{picks=JSON.parse(match[0]);}catch(e2){}}
-    }
-    let res=picks.map(pk=>{
-      const p=disponibles.find(d=>(d.name||"").toLowerCase()===(pk.name||"").toLowerCase());
-      return p?{...p,why:pk.why}:null;
-    }).filter(Boolean);
+    try{const cleaned=out.replace(/```json|```/g,"").trim();const j=JSON.parse(cleaned);if(Array.isArray(j))picks=j;}
+    catch(e){const match=out.match(/\[[\s\S]*?\]/);if(match){try{picks=JSON.parse(match[0]);}catch(e2){}}}
+    let res=picks.map(pk=>{const p=disponibles.find(d=>(d.name||"").toLowerCase()===(pk.name||"").toLowerCase());return p?{...p,why:pk.why}:null;}).filter(Boolean);
 
     if(res.length===0){
-      res=prefiltered.slice(0,3).map(p=>({...p,why:`Mejor encaje disponible para "${texto}".`}));
-      setMsg("Sugerencias por criterios (la IA no respondió con formato válido).");
-    }else{
-      setMsg(`La IA encontró ${res.length} fichaje${res.length>1?"s":""} que encajan con tu búsqueda.`);
-    }
+      let fallback=[...prefiltered];
+      if(posDetectada) fallback=fallback.filter(p=>anaGetP(p).toUpperCase().includes(posDetectada));
+      if(fallback.length===0) fallback=prefiltered;
+      res=fallback.slice(0,3).map(p=>({...p,why:`Mejor opción: ${anaGetP(p)}, ${p.age||"?"}a, ${p.overall} OVR.`}));
+      setMsg(out?"La IA no devolvió formato válido — mejores opciones por criterios.":"Scout IA no disponible — mejores opciones por criterios.");
+    }else{setMsg(`Scout IA: ${res.length} fichaje${res.length>1?"s":""} encontrado${res.length>1?"s":""}.`);}
     setResults(res);setLoading(false);
   };
   const chips=["un MC joven y barato con +80 de media","un DFC zurdo sólido","un delantero goleador menor de 24","un portero de relevo económico"];
@@ -11614,7 +11637,7 @@ function MainApp({user,isAdmin,onLogout}){
       {analisisView==="radar"&&<RadarMercadoModal teamData={teamData} squad={squad} activeLineup={activeLineup} pool={pool} onClose={()=>setAnalisisView("")} onMercado={()=>{setAnalisisView("");setShowMercado(true);}} onAbrirChat={nombre=>{setAnalisisView("");setChatEquipoObjetivo(nombre);setShowChatGlobal(true);}}/>}
       {analisisView==="temporada"&&<TuTemporadaModal teamData={teamData} squad={squad} activeLineup={activeLineup} onClose={()=>setAnalisisView("")}/>}
       {analisisView==="novedades"&&<NovedadesModal teamData={teamData} squad={squad} activeLineup={activeLineup} allTeams={allTeams} competenciaData={competenciaData} mercadoAbierto={mercadoAbierto} onClose={()=>setAnalisisView("")} onVerJugador={p=>setVerJugador(p)}/>}
-      {analisisView==="cronica"&&<CronicaJornadaModal teamData={teamData} competenciaData={competenciaData} onClose={()=>setAnalisisView("")}/>}
+      {analisisView==="cronica"&&<CronicaJornadaModal teamData={teamData} competenciaData={competenciaData} isAdmin={isAdmin} onClose={()=>setAnalisisView("")}/>}
       {analisisView==="scout"&&<ScoutIAModal teamData={teamData} squad={squad} pool={pool} activeLineup={activeLineup} onClose={()=>setAnalisisView("")} onVerJugador={p=>setVerJugador(p)}/>}
       {analisisView==="subastas"&&<SubastasModal teamData={teamData} pool={pool} user={user} isAdmin={isAdmin} onClose={()=>setAnalisisView("")} setAiMsg={setAiMsg}/>}
       {analisisView==="copa"&&<CuadroCopaModal competenciaData={competenciaData} teamData={teamData} onClose={()=>setAnalisisView("")}/>}
