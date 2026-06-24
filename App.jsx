@@ -5871,10 +5871,11 @@ function ComentariosNoticia({noticia,coleccion,myTeamName}){
 }
 
 
-function NoticiasModal({teamData,allTeams,isAdmin,onClose}){
+function NoticiasModal({teamData,allTeams,isAdmin,onClose,competenciaData}){
   const[noticias,setNoticias]=useState([]);
   const[noticiasUsuario,setNoticiasUsuario]=useState([]);
   const[showCrear,setShowCrear]=useState(false);
+  const[showCronica,setShowCronica]=useState(false);
   const[tab,setTab]=useState("general"); // general | equipos
   useEffect(()=>{
     const unsub=onSnapshot(doc(db,"config","noticias"),snap=>{
@@ -5915,7 +5916,8 @@ function NoticiasModal({teamData,allTeams,isAdmin,onClose}){
           {teamData?.teamName&&(
             <button onClick={()=>setShowCrear(true)} style={{marginLeft:"auto",background:"rgba(255,255,255,0.15)",border:"none",borderRadius:14,padding:"5px 10px",color:"#fff",cursor:"pointer",fontSize:10,fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>✍️ Crear noticia</button>
           )}
-          <button onClick={onClose} style={{background:"rgba(255,255,255,0.15)",border:"none",borderRadius:"50%",width:28,height:28,color:"#fff",cursor:"pointer",fontSize:15,display:"flex",alignItems:"center",justifyContent:"center",marginLeft:teamData?.teamName?0:"auto"}}>×</button>
+          <button onClick={()=>setShowCronica(true)} style={{background:"rgba(255,255,255,0.15)",border:"none",borderRadius:14,padding:"5px 10px",color:"#fff",cursor:"pointer",fontSize:10,fontWeight:700,fontFamily:"'DM Sans',sans-serif"}}>✨ Crónica IA</button>
+          <button onClick={onClose} style={{background:"rgba(255,255,255,0.15)",border:"none",borderRadius:"50%",width:28,height:28,color:"#fff",cursor:"pointer",fontSize:15,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
         </div>
         <div style={{display:"flex",borderBottom:`2px solid ${C.border}`,background:C.card,flexShrink:0}}>
           <button onClick={()=>setTab("general")}
@@ -5975,6 +5977,7 @@ function NoticiasModal({teamData,allTeams,isAdmin,onClose}){
         </div>
       </div>
       {showCrear&&<CrearNoticiaModal teamData={teamData} allTeams={allTeams} onClose={()=>setShowCrear(false)}/>}
+      {showCronica&&<CronicaJornadaModal teamData={teamData} competenciaData={competenciaData||{}} onClose={()=>setShowCronica(false)}/>}
     </div>
   );
 }
@@ -6004,7 +6007,7 @@ function CrearNoticiaModal({teamData,allTeams,onClose}){
       equipoAutor:teamData?.teamName||"",
       tematicaId:tematicaSel.id,tematicaLabel:tematicaSel.label,icono:tematicaSel.icono,
       equipoMencionado:equipoMencionado||"",
-      texto:texto.trim(),estado:"pendiente",fecha:new Date().toISOString(),reacciones:{},comentarios:[]
+      texto:texto.trim(),estado:"aprobada",fecha:new Date().toISOString(),reacciones:{},comentarios:[]
     };
     await setDoc(ref,{lista:[...(current.lista||[]),nueva]},{merge:true});
     setEnviando(false);
@@ -9699,18 +9702,54 @@ function ScoutIAModal({teamData,squad,pool,activeLineup,onClose,onVerJugador}){
   const buscar=async(q)=>{
     const texto=(q??query).trim();if(!texto){return;}
     setLoading(true);setResults([]);setMsg("");
-    const cands=[...disponibles].sort((a,b)=>b.overall-a.overall).slice(0,40)
-      .map(p=>`${p.name} | ${anaGetP(p)} | media ${p.overall} | ${p.age||"?"} años | ${p.country||"?"} | ${anaFmtM(anaValM(p.price))}`);
-    const prompt=`Eres un ojeador de fútbol. El usuario busca: "${texto}". Presupuesto del usuario: ${presupuesto?anaFmtM(presupuesto):"sin límite"}.\nElige de esta lista los 3 jugadores que MEJOR encajan con la petición (respeta presupuesto si lo menciona). Devuelve SOLO un JSON array: [{"name":"<nombre exacto de la lista>","why":"<razón breve en español, máx 14 palabras>"}].\n\nLista:\n${cands.join("\n")}`;
-    const out=await geminiTexto(prompt,500,0.4);
+
+    // Pre-filtra inteligentemente según palabras clave en la query antes de enviar a IA
+    const qLower=texto.toLowerCase();
+    const edadMatch=qLower.match(/menor(?:es)? de (\d+)|sub[-\s]?(\d+)|(\d+) años/);
+    const edadMax=edadMatch?Number(edadMatch[1]||edadMatch[2]||edadMatch[3]):null;
+    const presMatch=qLower.match(/(\d+)m|barato|económico/);
+    const esBarato=qLower.includes("barato")||qLower.includes("económico")||qLower.includes("economico");
+
+    let prefiltered=[...disponibles];
+    if(edadMax) prefiltered=prefiltered.filter(p=>p.age&&Number(p.age)<edadMax);
+    if(presupuesto>0) prefiltered=prefiltered.filter(p=>presupuesto===0||anaValM(p.price)<=presupuesto);
+    if(esBarato) prefiltered=prefiltered.sort((a,b)=>anaValM(a.price)-anaValM(b.price));
+    else prefiltered=prefiltered.sort((a,b)=>b.overall-a.overall);
+
+    // Toma hasta 60 candidatos para dar más variedad a la IA
+    const cands=prefiltered.slice(0,60)
+      .map(p=>`${p.name} | ${anaGetP(p)} | overall:${p.overall} | ${p.age||"?"}a | ${p.country||"?"} | ${anaFmtM(anaValM(p.price))} | pie:${p.foot||"?"}`);
+
+    const prompt=`Eres un ojeador de fútbol experto. El usuario busca: "${texto}".
+Presupuesto disponible: ${presupuesto?anaFmtM(presupuesto):"sin límite"}.
+Selecciona exactamente 3 jugadores de la lista que MEJOR encajen con la petición del usuario — respeta edad, posición, precio y cualquier criterio mencionado.
+Devuelve SOLO un JSON array sin markdown: [{"name":"<nombre exacto>","why":"<razón concreta en español, máx 15 palabras>"}]
+
+Lista de candidatos:
+${cands.join("\n")}`;
+
+    const out=await geminiTexto(prompt,600,0.3);
     let picks=[];
-    try{const j=JSON.parse(out.replace(/```json|```/g,"").trim());if(Array.isArray(j))picks=j;}catch(e){}
-    let res=picks.map(pk=>{const p=disponibles.find(d=>(d.name||"").toLowerCase()===(pk.name||"").toLowerCase());return p?{...p,why:pk.why}:null;}).filter(Boolean);
+    try{
+      const cleaned=out.replace(/```json|```/g,"").trim();
+      const j=JSON.parse(cleaned);
+      if(Array.isArray(j)) picks=j;
+    }catch(e){
+      // Intenta extraer array si viene con texto extra
+      const match=out.match(/\[[\s\S]*\]/);
+      if(match){try{picks=JSON.parse(match[0]);}catch(e2){}}
+    }
+    let res=picks.map(pk=>{
+      const p=disponibles.find(d=>(d.name||"").toLowerCase()===(pk.name||"").toLowerCase());
+      return p?{...p,why:pk.why}:null;
+    }).filter(Boolean);
+
     if(res.length===0){
-      // Fallback: mejores por media dentro de presupuesto
-      res=[...disponibles].filter(p=>presupuesto===0||anaValM(p.price)<=presupuesto).sort((a,b)=>b.overall-a.overall).slice(0,3).map(p=>({...p,why:`Top media disponible dentro de tu presupuesto.`}));
-      setMsg("Sugerencias por media (la IA no respondió).");
-    }else{setMsg(`La IA encontró ${res.length} fichaje${res.length>1?"s":""} que encajan.`);}
+      res=prefiltered.slice(0,3).map(p=>({...p,why:`Mejor encaje disponible para "${texto}".`}));
+      setMsg("Sugerencias por criterios (la IA no respondió con formato válido).");
+    }else{
+      setMsg(`La IA encontró ${res.length} fichaje${res.length>1?"s":""} que encajan con tu búsqueda.`);
+    }
     setResults(res);setLoading(false);
   };
   const chips=["un MC joven y barato con +80 de media","un DFC zurdo sólido","un delantero goleador menor de 24","un portero de relevo económico"];
@@ -11560,7 +11599,7 @@ function MainApp({user,isAdmin,onLogout}){
       {showMundial&&<MundialModal onClose={()=>setShowMundial(false)} user={user} isAdmin={isAdmin} allSels={allSels} pool={pool} teamData={teamData} initialTab={mundialInitialTab}/>}
       {!showMundial&&<AvisoBanner onOpen={()=>setShowMundial(true)}/>}
 
-      {showNoticiasGlobal&&<NoticiasModal teamData={teamData} allTeams={allTeams} isAdmin={isAdmin} onClose={()=>setShowNoticiasGlobal(false)}/>}
+      {showNoticiasGlobal&&<NoticiasModal teamData={teamData} allTeams={allTeams} isAdmin={isAdmin} competenciaData={competenciaData} onClose={()=>setShowNoticiasGlobal(false)}/>}
       {showChatGlobal&&<ChatModal teamData={teamData} allTeams={allTeams} initialEquipoSel={chatEquipoObjetivo?allTeams.find(t=>t.teamName===chatEquipoObjetivo):null} onClose={()=>{setShowChatGlobal(false);setChatEquipoObjetivo(null);}}/>}
       {chatGrupoApuesta&&<ChatGrupoApuesta apuesta={chatGrupoApuesta} teamData={teamData} onClose={()=>setChatGrupoApuesta(null)}/>}
 
