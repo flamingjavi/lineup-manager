@@ -9318,22 +9318,27 @@ function TuTemporadaModal({teamData,squad,activeLineup,onClose}){
 // ═══════════════════════════════════════════════════════════════════════════
 const GEMINI_KEY_IA="AIzaSyAGlxjD12k38Xu9L-8K165iJma1ZwR7tyY";
 async function geminiTexto(prompt,maxTokens=700,temp=0.85){
-  try{
-    const url=`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY_IA}`;
-    const resp=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:temp,maxOutputTokens:maxTokens}})});
-    if(!resp.ok){
-      const errBody=await resp.text().catch(()=>"");
-      console.error("Gemini API error",resp.status,errBody);
-      return "";
+  // Intenta varios modelos en orden — si uno agota cuota, prueba el siguiente
+  const MODELS=["gemini-1.5-flash-8b","gemini-1.5-flash","gemini-2.0-flash"];
+  for(const model of MODELS){
+    try{
+      const url=`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_KEY_IA}`;
+      const resp=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:temp,maxOutputTokens:maxTokens}})});
+      if(!resp.ok){
+        const errBody=await resp.json().catch(()=>({}));
+        const code=errBody?.error?.code;
+        console.warn(`Gemini ${model} error ${code}`);
+        if(code===429||code===503) continue; // cuota agotada o no disponible → prueba siguiente modelo
+        return "";
+      }
+      const j=await resp.json();
+      const text=j?.candidates?.[0]?.content?.parts?.[0]?.text?.trim()||"";
+      if(text) return text;
+    }catch(e){
+      console.warn(`Gemini ${model} fetch error:`,e.message);
     }
-    const j=await resp.json();
-    const text=j?.candidates?.[0]?.content?.parts?.[0]?.text?.trim()||"";
-    if(!text) console.warn("Gemini returned empty text",JSON.stringify(j).slice(0,200));
-    return text;
-  }catch(e){
-    console.error("geminiTexto fetch error:",e.message);
-    return "";
   }
+  return ""; // todos los modelos fallaron
 }
 const COMP_IDS_TODOS=["liga1","liga2","copa","champions","europa","ascenso","copaascenso","supercopa"];
 const ligaTablaOrden=(cd,id)=>{const t=(cd?.[id]?.grupos?.[0]?.tabla)||[];return [...t].sort((a,b)=>(b.pts||0)-(a.pts||0)||((b.gf-b.gc)-(a.gf-a.gc))||((b.gf||0)-(a.gf||0)));};
@@ -9812,8 +9817,6 @@ LISTA:
 ${cands.join("\n")}`;
 
     const out=await geminiTexto(prompt,600,0.2);
-    // DEBUG TEMPORAL: muestra respuesta cruda
-    setMsg(`🔧 Respuesta IA (${out.length} chars): ${out.slice(0,200)||"(VACÍA — API no respondió)"}`);
     let picks=[];
     if(out){
       // Estrategia 1: JSON limpio directo
